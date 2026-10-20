@@ -7,6 +7,7 @@ cp .env.example .env
 docker compose up --build
 # backend  http://localhost:8000/docs
 # frontend http://localhost:3000
+docker compose exec backend python /seed/seed.py   # synthetic demo org + cases
 ```
 
 Backend tests need a Postgres database:

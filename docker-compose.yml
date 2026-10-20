@@ -23,7 +23,7 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/oncoready
       REDIS_URL: redis://redis:6379/0
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-    volumes: [./backend:/app]
+    volumes: [./backend:/app, ./seed:/seed]
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
