@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth
+from app.api import auth, cases
 
 app = FastAPI(title="Ritu OncoReady")
 app.add_middleware(
@@ -12,6 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth.router)
+app.include_router(cases.router)
 
 
 @app.get("/health")
