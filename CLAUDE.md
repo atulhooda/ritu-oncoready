@@ -17,7 +17,21 @@ docker compose up --build                       # full stack
 cd backend && .venv/bin/alembic upgrade head    # migrate (DATABASE_URL env)
 cd backend && .venv/bin/pytest                  # tests (TEST_DATABASE_URL env, Postgres required)
 cd backend && .venv/bin/alembic check           # models and migrations must agree
+backend/.venv/bin/python seed/render.py         # re-render seed PDFs + REVIEW_FOR_DOCTOR.md
+docker compose exec backend python /seed/seed.py [--reprocess]   # load cases, enqueue pipeline
+docker compose exec backend python /seed/recall.py               # extraction recall vs answer keys
 ```
+
+## Document pipeline (`app/pipeline/`, Celery)
+
+`ocr_document -> extract_document -> derive_case`, all org-scoped via repositories.
+- OCR: PaddleOCR, Tesseract fallback; per-page text + confidence + engine. `paddlepaddle==3.0.0`
+  is pinned (3.2+ segfaults on linux/aarch64).
+- Extraction: LLM returns candidates (page number + span). Spans are aligned to the page OCR text
+  with rapidfuzz (>= `span_match_threshold`, 0.85) and the **aligned OCR substring** is stored.
+  Anything failing validation goes to `rejected_extractions` with a reason, never the timeline.
+- Dates are parsed in `dates.py` (US MM/DD/YYYY). The LLM only copies date text.
+- Pending tests, discrepancies, and lab flags (LVEF drop >= 10 points) are code in `derive.py`.
 
 ## Non-negotiable rules
 

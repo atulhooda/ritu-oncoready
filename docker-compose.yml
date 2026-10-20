@@ -24,7 +24,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:${FRONTEND_HOST_PORT:-3000}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-    volumes: [./backend:/app, ./seed:/seed]
+    volumes: [./backend:/app, ./seed:/seed, storage:/data/storage]
     ports: ["${BACKEND_HOST_PORT:-8000}:8000"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -36,8 +36,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/oncoready
       REDIS_URL: redis://redis:6379/0
-    command: celery -A app.worker.celery_app worker --loglevel=info
-    volumes: [./backend:/app]
+    # PaddleOCR loads models per process; keep concurrency low to bound memory.
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
+    volumes: [./backend:/app, storage:/data/storage, paddlex-models:/home/app/.paddlex]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
@@ -55,3 +56,5 @@ services:
 
 volumes:
   pgdata:
+  storage:
+  paddlex-models:

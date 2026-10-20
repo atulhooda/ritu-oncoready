@@ -14,6 +14,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
+    # Uploaded PDFs and rendered page images (shared by backend and worker)
+    storage_dir: str = "./.storage"
+
+    # Document pipeline
+    ocr_engines: str = "paddleocr,tesseract"  # tried in order; later ones are fallbacks
+    ocr_dpi: int = 200
+    span_match_threshold: float = 0.85  # rapidfuzz partial ratio, 0..1
+
     # LLM (extraction only, see app/llm/client.py)
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"

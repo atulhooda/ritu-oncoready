@@ -1,14 +1,18 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app import storage
 from app.auth.deps import CurrentUser, get_current_user, require_role
 from app.db import get_db
 from app.models import Role
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
+from app.services.timeline import build_timeline
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -38,6 +42,8 @@ class DocumentOut(BaseModel):
     filename: str
     mime_type: str
     page_count: int | None
+    status: str
+    error: str | None
 
 
 def _get_case_or_404(repo: CaseRepository, case_id: uuid.UUID):
@@ -74,3 +80,44 @@ def list_case_documents(
 ):
     _get_case_or_404(CaseRepository(db, user.org_id), case_id)
     return SourceDocumentRepository(db, user.org_id).for_case(case_id)
+
+
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+@router.post("/{case_id}/documents", response_model=DocumentOut, status_code=status.HTTP_202_ACCEPTED)
+def upload_document(
+    case_id: uuid.UUID,
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(require_role(Role.FACULTY, Role.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Upload a synthetic case PDF; OCR -> extraction -> derivation runs in the worker."""
+    from app.pipeline.tasks import enqueue_document  # keeps celery import out of app startup
+
+    _get_case_or_404(CaseRepository(db, user.org_id), case_id)
+    data = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "PDF too large")
+    if not data.startswith(b"%PDF"):
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only PDF uploads are supported")
+    doc_id = uuid.uuid4()
+    key = f"{user.org_id}/{case_id}/{doc_id}.pdf"
+    storage.write_bytes(key, data)
+    doc = SourceDocumentRepository(db, user.org_id).add(
+        id=doc_id, case_id=case_id, filename=(file.filename or "upload.pdf")[:300], mime_type="application/pdf",
+        storage_key=key, uploaded_by_user_id=user.id,
+    )
+    db.commit()
+    enqueue_document(user.org_id, doc.id, case_id)
+    return doc
+
+
+@router.get("/{case_id}/timeline")
+def get_timeline(
+    case_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    """Events in date order (undated under "Date unclear"), with source page links,
+    pending tests, discrepancies, and lab change flags."""
+    _get_case_or_404(CaseRepository(db, user.org_id), case_id)
+    return build_timeline(db, user.org_id, case_id)

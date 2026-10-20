@@ -6,7 +6,8 @@ instance of it; output that fails validation from both providers raises `Extract
 
 import json
 import logging
-from typing import TypeVar
+from dataclasses import dataclass
+from typing import Generic, TypeVar
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -25,6 +26,12 @@ SYSTEM_PROMPT = (
 
 class ExtractionFailed(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class Extraction(Generic[T]):
+    data: T
+    model: str  # "<provider>:<model id>", stored as extracted_by
 
 
 def _gemini(prompt: str, timeout: float) -> str:
@@ -59,16 +66,19 @@ def _groq(prompt: str, timeout: float) -> str:
     return r.json()["choices"][0]["message"]["content"]
 
 
-def extract(text: str, schema: type[T], instructions: str = "", timeout: float = 60) -> T:
+def extract(text: str, schema: type[T], instructions: str = "", timeout: float = 60) -> Extraction[T]:
     s = get_settings()
     prompt = f"{SYSTEM_PROMPT}{json.dumps(schema.model_json_schema())}\n\n{instructions}\n\nDOCUMENT:\n{text}"
-    providers = [("gemini", _gemini, s.gemini_api_key), ("groq", _groq, s.groq_api_key)]
+    providers = [
+        ("gemini", s.gemini_model, _gemini, s.gemini_api_key),
+        ("groq", s.groq_model, _groq, s.groq_api_key),
+    ]
     errors = []
-    for name, call, key in providers:
+    for name, model, call, key in providers:
         if not key:
             continue
         try:
-            return schema.model_validate_json(call(prompt, timeout))
+            return Extraction(schema.model_validate_json(call(prompt, timeout)), f"{name}:{model}")
         except (httpx.HTTPError, KeyError, IndexError, ValidationError) as e:
             log.warning("llm extraction via %s failed: %s", name, e)
             errors.append(f"{name}: {e}")

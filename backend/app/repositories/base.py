@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any, ClassVar, Generic, TypeVar
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session
 
 from app.models.base import TenantMixin
@@ -42,3 +42,6 @@ class TenantRepository(Generic[M]):
         self.session.add(obj)
         self.session.flush()
         return obj
+
+    def delete_where(self, *where: Any) -> None:
+        self.session.execute(delete(self.model).where(self.model.org_id == self.org_id, *where))

@@ -10,3 +10,12 @@ pyjwt>=2.8
 bcrypt>=4.1
 celery[redis]>=5.4
 httpx>=0.27
+python-multipart>=0.0.9
+pymupdf>=1.24
+pillow>=10.1
+numpy>=1.26
+rapidfuzz>=3.9
+pytesseract>=0.3.10
+# 3.0.0 pinned: 3.2.x+ segfaults on linux/aarch64 (Docker on Apple Silicon)
+paddlepaddle==3.0.0
+paddleocr>=3.0
