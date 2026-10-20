@@ -112,6 +112,13 @@ def test_pending_tests_rule():
     assert [t for t, _ in pending_tests(facts)] == ["echocardiogram", "her2_fish"]
 
 
+def test_pending_uses_test_name_over_description():
+    # As Gemini extracted SYN-002: the specimen mention must not create a pending "biopsy".
+    order = _fact(1, date(2026, 2, 16), kind="test_ordered", test_name="molecular panel",
+                  description="Molecular panel ordered on biopsy tissue")
+    assert [t for t, _ in pending_tests([order])] == ["molecular_panel"]
+
+
 def test_discrepancy_rule():
     facts = [
         _fact(1, date(2026, 1, 9), kind="test_result", analyte="lesion_size", value=2.1, unit="cm"),
@@ -121,6 +128,13 @@ def test_discrepancy_rule():
     ]
     found = discrepancies(facts)
     assert len(found) == 1 and found[0][2] == "lesion_size"
+
+
+def test_discrepancy_requires_same_unit():
+    # As Gemini extracted SYN-002: "FEV1 1.9 L (68% predicted)" -> two FEV1 facts, not a conflict.
+    facts = [_fact(1, date(2026, 2, 10), kind="test_result", analyte="fev1", value=1.9, unit="L"),
+             _fact(2, date(2026, 2, 10), kind="test_result", analyte="fev1", value=68, unit="%")]
+    assert discrepancies(facts) == []
 
 
 def test_lvef_drop_flag():

@@ -72,6 +72,15 @@ class Fact:
     def kind(self) -> str | None:
         return self.payload.get("kind")
 
+    def normalized_unit(self) -> str:
+        unit = (self.payload.get("unit") or "").strip().lower()
+        return "cm" if self.payload.get("analyte") == "lesion_size" and unit == "mm" else unit
+
+    def tests(self) -> set[str]:
+        """Canonical tests named by this fact. The test name wins; the description is a fallback
+        (so "molecular panel on biopsy tissue" is not also a pending biopsy)."""
+        return canonical_tests(self.payload.get("test_name")) or canonical_tests(self.payload.get("description"))
+
     def normalized_value(self) -> float | None:
         v = self.payload.get("value")
         if v is None:
@@ -82,7 +91,7 @@ class Fact:
 
 
 def _result_tests(f: Fact) -> set[str]:
-    keys = canonical_tests(f.payload.get("test_name"), f.payload.get("description"))
+    keys = f.tests()
     if f.payload.get("analyte") in ANALYTE_TEST:
         keys.add(ANALYTE_TEST[f.payload["analyte"]])
     return keys
@@ -93,7 +102,7 @@ def pending_tests(facts: list[Fact]) -> list[tuple[str, Fact]]:
     results = [f for f in facts if f.kind == "test_result"]
     pending: dict[str, Fact] = {}
     for order in (f for f in facts if f.kind == "test_ordered"):
-        for test in canonical_tests(order.payload.get("test_name"), order.payload.get("description")):
+        for test in order.tests():
             resolved = any(
                 test in _result_tests(r)
                 and (r.event_date is None or order.event_date is None or r.event_date >= order.event_date)
@@ -115,19 +124,21 @@ def _measurements(facts: list[Fact], analyte: str | None = None) -> list[Fact]:
 
 
 def discrepancies(facts: list[Fact]) -> list[tuple[Fact, Fact, str, str]]:
-    """Same analyte measured on the same date with different values."""
+    """Same analyte, same unit, measured on the same date with different values."""
     out, seen = [], set()
     ms = sorted(_measurements(facts), key=lambda f: (f.event_date, str(f.id)))
     for i, a in enumerate(ms):
         for b in ms[i + 1 :]:
-            if a.payload["analyte"] != b.payload["analyte"] or a.event_date != b.event_date:
-                continue
+            if (a.payload["analyte"], a.event_date, a.normalized_unit()) != (
+                b.payload["analyte"], b.event_date, b.normalized_unit()
+            ):
+                continue  # e.g. "FEV1 1.9 L" vs "68 % predicted" are different measures
             va, vb = a.normalized_value(), b.normalized_value()
             key = (a.payload["analyte"], a.event_date, frozenset((va, vb)))
             if va == vb or key in seen:
                 continue
             seen.add(key)
-            unit = a.payload.get("unit") or ""
+            unit = a.normalized_unit()
             out.append((a, b, a.payload["analyte"],
                         f"{a.payload['analyte']} on {a.event_date.isoformat()}: {va:g}{unit} vs {vb:g}{unit}"))
     return out

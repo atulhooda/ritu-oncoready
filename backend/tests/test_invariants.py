@@ -176,6 +176,14 @@ def test_field_rules(attribute, a, b, conflict):
     assert bool(invariant_conflicts(facts)) is conflict
 
 
+def test_one_discrepancy_per_document_pair():
+    # As Gemini extracted SYN-002's in-house line: TNM and stage group as two facts.
+    facts = [fact(1, date(2026, 2, 2), "stage", "cT1c NO MO (stage IA3)", DOC_A),
+             fact(2, date(2026, 2, 18), "stage", "cT1c N2 M0", DOC_B),
+             fact(3, date(2026, 2, 18), "stage", "stage IIA", DOC_B)]
+    assert len(invariant_conflicts(facts)) == 1
+
+
 def test_same_document_is_not_compared():
     facts = [fact(1, date(2026, 1, 1), "stage", "cT2 N0 M0"), fact(2, date(2026, 1, 1), "stage", "cT2 N1 M0")]
     assert invariant_conflicts(facts) == []

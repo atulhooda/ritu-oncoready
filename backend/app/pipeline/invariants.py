@@ -172,13 +172,13 @@ def sites_conflict(a: dict, b: dict) -> bool:
 
 # --- comparison ------------------------------------------------------------------------
 
-NORMALIZERS: dict[str, tuple[Callable[[str], Any], Callable[[Any, Any], bool], Callable[[Any], str]]] = {
-    "her2": (lambda t: normalize_receptor("her2", t), receptors_conflict, str),
-    "er": (lambda t: normalize_receptor("er", t), receptors_conflict, str),
-    "pr": (lambda t: normalize_receptor("pr", t), receptors_conflict, str),
-    "stage": (normalize_stage, stages_conflict, lambda s: " ".join(x for x in (s["tnm"], s["group"]) if x)),
-    "histology": (normalize_histology, histology_conflict, str),
-    "primary_site": (normalize_site, sites_conflict, lambda s: " ".join(s.values())),
+NORMALIZERS: dict[str, tuple[Callable[[str], Any], Callable[[Any, Any], bool]]] = {
+    "her2": (lambda t: normalize_receptor("her2", t), receptors_conflict),
+    "er": (lambda t: normalize_receptor("er", t), receptors_conflict),
+    "pr": (lambda t: normalize_receptor("pr", t), receptors_conflict),
+    "stage": (normalize_stage, stages_conflict),
+    "histology": (normalize_histology, histology_conflict),
+    "primary_site": (normalize_site, sites_conflict),
 }
 
 
@@ -212,8 +212,9 @@ def invariant_conflicts(facts: list, doc_names: dict | None = None) -> list[tupl
                 continue
             if attr == "stage" and _excused_by_response(a, b, responses):
                 continue
-            show = NORMALIZERS[attr][2]
-            key = (attr, frozenset((a.document_id, b.document_id)), frozenset((show(na), show(nb))))
+            # One discrepancy per field per document pair, even if a document states the
+            # value in several facts (e.g. "cT1c N2 M0" and "stage IIIA" extracted separately).
+            key = (attr, frozenset((a.document_id, b.document_id)))
             if key in seen:
                 continue
             seen.add(key)
