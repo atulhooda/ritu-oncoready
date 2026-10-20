@@ -34,7 +34,12 @@ class TimelineEventRepository(ExtractedFactRepository[TimelineEvent]):
     model = TimelineEvent
 
     def for_case(self, case_id: uuid.UUID) -> Sequence[TimelineEvent]:
-        stmt = self.select().where(TimelineEvent.case_id == case_id).order_by(TimelineEvent.event_date)
+        """Dated events in date order, then undated ("Date unclear") events."""
+        stmt = (
+            self.select()
+            .where(TimelineEvent.case_id == case_id)
+            .order_by(TimelineEvent.event_date.asc().nulls_last(), TimelineEvent.created_at)
+        )
         return self.session.scalars(stmt).all()
 
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
 
+DATE_PRECISIONS = ("exact", "month", "year", "inferred", "unknown")
 EVENT_CATEGORIES = ("presentation", "imaging", "pathology", "lab", "procedure", "treatment", "consult", "other")
 
 
@@ -32,10 +33,14 @@ class TimelineEvent(ProvenanceMixin, TenantMixin, Base):
         *provenance_args(),
         tenant_fk("case_id", "patient_cases"),
         CheckConstraint(f"category IN {EVENT_CATEGORIES}", name="category"),
+        CheckConstraint(f"date_precision IN {DATE_PRECISIONS}", name="date_precision"),
+        # Undated <=> 'unknown'. month/year precision store the first day of the period.
+        CheckConstraint("(event_date IS NULL) = (date_precision = 'unknown')", name="date_matches_precision"),
     )
 
     case_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    event_date: Mapped[date] = mapped_column(Date)
+    event_date: Mapped[date | None] = mapped_column(Date)
+    date_precision: Mapped[str] = mapped_column(String(16), server_default="exact")
     category: Mapped[str] = mapped_column(String(32))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
 
