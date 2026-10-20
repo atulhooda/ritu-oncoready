@@ -1,0 +1,65 @@
+# Ritu OncoReady
+
+Training tool: residents read a **synthetic** oncology case, write a readiness brief, and get a
+deterministic score against a faculty answer key.
+
+## Layout
+
+- `backend/` — FastAPI, Python 3.12, SQLAlchemy 2 (sync, psycopg 3), Alembic, Pydantic v2, Celery
+- `frontend/` — Next.js (App Router), TypeScript, Tailwind
+- `seed/` — synthetic cases only
+- `docker-compose.yml` — postgres, redis, backend, worker, frontend
+
+## Commands
+
+```bash
+docker compose up --build                       # full stack
+cd backend && .venv/bin/alembic upgrade head    # migrate (DATABASE_URL env)
+cd backend && .venv/bin/pytest                  # tests (TEST_DATABASE_URL env, Postgres required)
+cd backend && .venv/bin/alembic check           # models and migrations must agree
+```
+
+## Non-negotiable rules
+
+### 1. Multi-tenant
+- Every table has `org_id` (`orgs.id` is the tenant itself). No exceptions for new tables.
+- Child tables reference parents with **composite FKs** `(org_id, parent_id) -> parent(org_id, id)`,
+  so the database rejects cross-org links. Every table therefore has `UNIQUE (org_id, id)`.
+- **All** queries go through `app/repositories/`. Repositories are constructed with an `org_id`
+  and add `WHERE org_id = :org_id` to every read and set `org_id` on every write.
+- Never call `session.execute(select(...))` / `session.get(...)` on tenant data from routes,
+  services, or tasks. If a repository method is missing, add one.
+- `org_id` comes from the verified JWT (`app/auth/deps.py`), never from the request body or path.
+- Cross-org access returns 404, not 403 (don't leak existence).
+- `tests/test_tenant_isolation.py` must keep passing; add a case for every new repository.
+
+### 2. No real patient data, no clinical advice
+- Only synthetic cases. `patient_cases.is_synthetic` has a `CHECK (is_synthetic)`; do not remove it.
+- Do not add features that ingest real PHI (EHR connectors, real uploads in prod, etc.).
+- The product never outputs diagnosis or treatment recommendations. It scores a resident's
+  brief against a faculty answer key. Copy, prompts, and LLM outputs must not give clinical advice.
+
+### 3. LLM use is extraction only
+- One module: `app/llm/client.py`. Gemini primary, Groq fallback. Nothing else imports a provider.
+- Every call passes a Pydantic schema; output is validated before it is used. Invalid output
+  -> try fallback -> raise. Never store unvalidated LLM output.
+- LLMs are **not** used for scoring, matching, grading, or generating clinical content.
+
+### 4. Scoring is deterministic
+- `scores`, `brief_item_matches` are produced by plain code: same inputs -> same outputs.
+- Store `scoring_version` with every score. No LLM, no randomness, no wall-clock dependence.
+
+### 5. Provenance on every extracted fact
+- Every extracted fact (`timeline_events`, `pending_tests`) stores `source_page_id` (NOT NULL)
+  and `source_text_span` (NOT NULL, non-empty), the **verbatim** text from that page's
+  `ocr_text`. Repositories reject spans not found in the page text.
+- Derived records (e.g. `discrepancies`) reference the facts they derive from.
+
+### 6. Migrations
+- **One Alembic migration per commit.** Don't squash or edit a committed migration; add a new one.
+- Migrations are hand-reviewed; `alembic check` must report no drift.
+- Enums are stored as `VARCHAR` + `CHECK` (non-native) so up/down migrations stay clean.
+
+### 7. Voice
+- Voice is handled by the existing **Ritu voice server**. Integrate later via its API only.
+  Do not build STT/TTS/telephony/voice pipelines in this repo.
