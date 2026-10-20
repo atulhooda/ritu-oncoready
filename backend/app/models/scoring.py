@@ -10,6 +10,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
 
 
+# draft -> submitted -> scored (or scoring_failed; see scoring_error)
+BRIEF_STATUSES = ("draft", "submitted", "scored", "scoring_failed")
+
+
 class AnswerKey(TenantMixin, Base):
     """Faculty-authored expected findings for a case. Versioned; scores pin a version."""
 
@@ -52,7 +56,8 @@ class ReadinessBrief(TenantMixin, Base):
     __table_args__ = tenant_args(
         tenant_fk("case_id", "patient_cases"),
         tenant_fk("author_user_id", "users", ondelete=None),
-        CheckConstraint("status IN ('draft', 'submitted')", name="status"),
+        UniqueConstraint("case_id", "author_user_id"),  # one brief per resident per case
+        CheckConstraint(f"status IN {BRIEF_STATUSES}", name="status"),
     )
 
     case_id: Mapped[uuid.UUID] = mapped_column(index=True)
@@ -60,6 +65,7 @@ class ReadinessBrief(TenantMixin, Base):
     content: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     status: Mapped[str] = mapped_column(String(16), server_default="draft")
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    scoring_error: Mapped[str | None] = mapped_column(Text)
 
 
 class BriefItemMatch(TenantMixin, Base):
@@ -68,14 +74,32 @@ class BriefItemMatch(TenantMixin, Base):
         UniqueConstraint("brief_id", "rubric_item_id"),
         tenant_fk("brief_id", "readiness_briefs"),
         tenant_fk("rubric_item_id", "rubric_items"),
-        CheckConstraint("method IN ('deterministic', 'faculty_override')", name="method"),
+        tenant_fk("overridden_by_user_id", "users", ondelete=None),
+        CheckConstraint("method IN ('deterministic', 'llm', 'faculty_override')", name="method"),
+        CheckConstraint(
+            "override_matched IS NULL OR length(btrim(coalesce(override_comment, ''))) > 0",
+            name="override_needs_comment",
+        ),
     )
 
     brief_id: Mapped[uuid.UUID] = mapped_column(index=True)
     rubric_item_id: Mapped[uuid.UUID]
+    # Matcher's verdict. `matched_text` is the resident's verbatim quote (verified in code).
     matched: Mapped[bool] = mapped_column(Boolean)
     matched_text: Mapped[str | None] = mapped_column(Text)
-    method: Mapped[str] = mapped_column(String(32), server_default="deterministic")
+    evidence_section: Mapped[str | None] = mapped_column(String(40))
+    method: Mapped[str] = mapped_column(String(32), server_default="llm")
+    # Matcher proposals for this item whose quote was not in the brief: [{section, quote, reason}]
+    rejected_evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    # Faculty override; when set it wins over `matched`. A comment is required.
+    override_matched: Mapped[bool | None] = mapped_column(Boolean)
+    override_comment: Mapped[str | None] = mapped_column(Text)
+    overridden_by_user_id: Mapped[uuid.UUID | None]
+    overridden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def effective_matched(self) -> bool:
+        return self.matched if self.override_matched is None else self.override_matched
 
 
 class Score(TenantMixin, Base):
