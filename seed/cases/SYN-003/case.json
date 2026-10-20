@@ -1,0 +1,79 @@
+{
+  "_notice": "SYNTHETIC. Fictional patient and facilities, invented for training. Not real data.",
+  "case_code": "SYN-003",
+  "title": "Synthetic case: HER2-positive breast cancer on trastuzumab, falling LVEF",
+  "summary": "Fictional 54-year-old on trastuzumab-based therapy with serial echocardiograms; repeat echo outstanding.",
+  "documents": [
+    {
+      "filename": "syn-003_pathology.pdf",
+      "source": "internal",
+      "facility": "Synthetic General Hospital - Pathology",
+      "pages": [
+        [
+          "SURGICAL PATHOLOGY REPORT",
+          "Patient: Maria Placeholder        Accession: SYN-P-25-0210",
+          "Procedure date: 2025-02-10",
+          "",
+          "Specimen: right breast, core biopsy.",
+          "Diagnosis: invasive ductal carcinoma, grade 3.",
+          "Estrogen receptor: negative (<1%). Progesterone receptor: negative (<1%).",
+          "HER2 by IHC: 3+ (positive)."
+        ]
+      ]
+    },
+    {
+      "filename": "syn-003_outside_echo.pdf",
+      "source": "outside",
+      "facility": "Synthetic Heart Associates (outside cardiology)",
+      "pages": [
+        [
+          "TRANSTHORACIC ECHOCARDIOGRAM REPORT",
+          "Patient: Maria Placeholder        DOB: 1971-09-30",
+          "Study date: 03/03/2025",
+          "",
+          "Left ventricular ejection fraction: 62%.",
+          "No regional wall motion abnormality."
+        ],
+        [
+          "TRANSTHORACIC ECHOCARDIOGRAM REPORT",
+          "Patient: Maria Placeholder        DOB: 1971-09-30",
+          "Study date: 06/09/2025",
+          "",
+          "Left ventricular ejection fraction: 56%.",
+          "Mild global hypokinesis."
+        ],
+        [
+          "TRANSTHORACIC ECHOCARDIOGRAM REPORT",
+          "Patient: Maria Placeholder        DOB: 1971-09-30",
+          "Study date: 09/08/2025",
+          "",
+          "Left ventricular ejection fraction: 48%.",
+          "Global hypokinesis."
+        ]
+      ]
+    },
+    {
+      "filename": "syn-003_oncology_notes.pdf",
+      "source": "internal",
+      "facility": "Synthetic General Hospital - Medical Oncology",
+      "pages": [
+        [
+          "MEDICAL ONCOLOGY NOTE",
+          "Patient: Maria Placeholder        MRN: SYN-0003",
+          "Date of service: 2025-03-17",
+          "",
+          "Cycle 1 of weekly paclitaxel with trastuzumab given today.",
+          "Family history: mother with breast cancer, age at diagnosis unknown."
+        ],
+        [
+          "MEDICAL ONCOLOGY NOTE",
+          "Patient: Maria Placeholder        MRN: SYN-0003",
+          "Date of service: 2025-09-15",
+          "",
+          "Trastuzumab held today pending cardiology review.",
+          "Repeat echocardiogram ordered for October 2025."
+        ]
+      ]
+    }
+  ]
+}

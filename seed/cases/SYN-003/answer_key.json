@@ -1,0 +1,24 @@
+{
+  "case_code": "SYN-003",
+  "events": [
+    {"id": "E1", "document": "syn-003_pathology.pdf", "page": 1, "category": "pathology", "date": "2025-02-10", "span": "invasive ductal carcinoma, grade 3", "fact": "Core biopsy: invasive ductal carcinoma, grade 3"},
+    {"id": "E2", "document": "syn-003_pathology.pdf", "page": 1, "category": "pathology", "date": "2025-02-10", "span": "Estrogen receptor: negative (<1%)", "fact": "ER negative (<1%), PR negative (<1%)"},
+    {"id": "E3", "document": "syn-003_pathology.pdf", "page": 1, "category": "pathology", "date": "2025-02-10", "span": "HER2 by IHC: 3+ (positive)", "fact": "HER2 IHC 3+ (positive)"},
+    {"id": "E4", "document": "syn-003_outside_echo.pdf", "page": 1, "category": "imaging", "date": "2025-03-03", "span": "Left ventricular ejection fraction: 62%", "fact": "Baseline echo: LVEF 62%, no regional wall motion abnormality"},
+    {"id": "E5", "document": "syn-003_outside_echo.pdf", "page": 2, "category": "imaging", "date": "2025-06-09", "span": "Left ventricular ejection fraction: 56%", "fact": "Echo: LVEF 56%, mild global hypokinesis"},
+    {"id": "E6", "document": "syn-003_outside_echo.pdf", "page": 3, "category": "imaging", "date": "2025-09-08", "span": "Left ventricular ejection fraction: 48%", "fact": "Echo: LVEF 48%, global hypokinesis"},
+    {"id": "E7", "document": "syn-003_oncology_notes.pdf", "page": 1, "category": "treatment", "date": "2025-03-17", "span": "Cycle 1 of weekly paclitaxel with trastuzumab given today", "fact": "Cycle 1 weekly paclitaxel + trastuzumab given"},
+    {"id": "E8", "document": "syn-003_oncology_notes.pdf", "page": 1, "category": "other", "date": null, "date_precision": "unknown", "span": "mother with breast cancer, age at diagnosis unknown", "fact": "Family history: mother with breast cancer (age unknown)"},
+    {"id": "E9", "document": "syn-003_oncology_notes.pdf", "page": 2, "category": "treatment", "date": "2025-09-15", "span": "Trastuzumab held today pending cardiology review", "fact": "Trastuzumab held pending cardiology review"},
+    {"id": "E10", "document": "syn-003_oncology_notes.pdf", "page": 2, "category": "imaging", "date": "2025-10-01", "alt_dates": ["2025-09-15"], "date_precision": "month", "span": "Repeat echocardiogram ordered for October 2025", "fact": "Repeat echocardiogram ordered for October 2025; no result in packet"}
+  ],
+  "pending_tests": [{"test": "echocardiogram", "fact": "Repeat echocardiogram ordered, no result in packet"}],
+  "discrepancies": [],
+  "flags": [{"rule": "lvef_drop", "analyte": "lvef", "from": 62, "to": 48, "fact": "LVEF fell 62% -> 48% (14 points) across serial echos"}],
+  "rubric": [
+    {"category": "flags", "description": "Recognizes LVEF decline from 62% to 48%", "weight": 3, "is_critical": true, "match_criteria": {"all_terms": ["lvef", "48"]}},
+    {"category": "pending_tests", "description": "Identifies repeat echocardiogram as outstanding", "weight": 3, "is_critical": true, "match_criteria": {"all_terms": ["echo"], "any_terms": ["repeat", "pending", "outstanding"]}},
+    {"category": "pathology", "description": "States HER2-positive, hormone-receptor-negative status", "weight": 2, "is_critical": false, "match_criteria": {"all_terms": ["her2"]}},
+    {"category": "treatment", "description": "Notes trastuzumab is currently held", "weight": 2, "is_critical": false, "match_criteria": {"all_terms": ["trastuzumab", "held"]}}
+  ]
+}

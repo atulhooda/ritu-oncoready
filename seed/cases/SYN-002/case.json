@@ -1,0 +1,51 @@
+{
+  "_notice": "SYNTHETIC. Fictional patient and facilities, invented for training. Not real data.",
+  "case_code": "SYN-002",
+  "title": "Synthetic case: right upper lobe nodule, staging incomplete",
+  "summary": "Fictional 66-year-old former smoker with a lung nodule; biopsy done, staging studies outstanding.",
+  "documents": [
+    {
+      "filename": "syn-002_outside_ct.pdf",
+      "source": "outside",
+      "facility": "Synthetic County Hospital - Radiology",
+      "pages": [
+        [
+          "CT CHEST WITH CONTRAST",
+          "Patient: John Placeholder        DOB: 1959-07-22",
+          "Exam date: 2 Feb 2026",
+          "",
+          "Findings: 2.8 cm spiculated nodule in the right upper lobe.",
+          "No pleural effusion. No enlarged mediastinal lymph nodes.",
+          "Comparison: chest x-ray from 2024, no nodule seen."
+        ]
+      ]
+    },
+    {
+      "filename": "syn-002_pulm_note.pdf",
+      "source": "internal",
+      "facility": "Synthetic General Hospital - Pulmonology",
+      "pages": [
+        [
+          "PULMONOLOGY CLINIC NOTE",
+          "Patient: John Placeholder        MRN: SYN-0002",
+          "Date of service: 2026-02-16",
+          "",
+          "History: former smoker, 30 pack-years, quit in June 2015.",
+          "Past history: right knee replacement, date not documented.",
+          "Procedure today: EBUS-guided biopsy of the right upper lobe nodule.",
+          "Preliminary pathology: adenocarcinoma.",
+          "Orders: molecular panel on biopsy tissue, ordered 2026-02-16.",
+          "Orders: PET-CT, scheduled for 2026-02-24."
+        ],
+        [
+          "PULMONOLOGY CLINIC NOTE (continued)",
+          "Patient: John Placeholder        MRN: SYN-0002",
+          "",
+          "Pulmonary function tests 2026-02-10: FEV1 1.9 L (68% predicted).",
+          "Hemoglobin 2026-02-10: 13.1 g/dL.",
+          "Hemoglobin 2026-02-16: 12.8 g/dL."
+        ]
+      ]
+    }
+  ]
+}

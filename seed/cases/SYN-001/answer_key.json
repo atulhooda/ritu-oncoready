@@ -1,0 +1,24 @@
+{
+  "case_code": "SYN-001",
+  "events": [
+    {"id": "E1", "document": "syn-001_referral.pdf", "page": 1, "category": "presentation", "date": "2026-01-05", "span": "palpable left breast mass, about 2 cm", "fact": "Palpable left breast mass, about 2 cm, at referral visit"},
+    {"id": "E2", "document": "syn-001_referral.pdf", "page": 1, "category": "presentation", "date": "2025-11-01", "date_precision": "month", "span": "first noticed the mass in November 2025", "fact": "Patient first noticed the mass in November 2025"},
+    {"id": "E3", "document": "syn-001_referral.pdf", "page": 1, "category": "imaging", "date": "2026-01-05", "span": "diagnostic mammogram and left breast ultrasound", "fact": "Diagnostic mammogram and left breast ultrasound ordered"},
+    {"id": "E4", "document": "syn-001_outside_imaging.pdf", "page": 1, "category": "imaging", "date": "2026-01-09", "span": "irregular mass measuring 2.1 cm, BI-RADS 5", "fact": "Mammogram: irregular 2.1 cm mass, BI-RADS 5"},
+    {"id": "E5", "document": "syn-001_outside_imaging.pdf", "page": 1, "category": "imaging", "date": "2026-01-09", "span": "hypoechoic mass measuring 1.9 cm", "fact": "Ultrasound (same day): hypoechoic 1.9 cm mass"},
+    {"id": "E6", "document": "syn-001_outside_imaging.pdf", "page": 1, "category": "imaging", "date": "2026-01-09", "span": "No suspicious axillary lymph nodes seen", "fact": "No suspicious axillary lymph nodes on imaging"},
+    {"id": "E7", "document": "syn-001_pathology.pdf", "page": 1, "category": "pathology", "date": "2026-01-14", "span": "invasive ductal carcinoma, grade 2", "fact": "Core biopsy: invasive ductal carcinoma, grade 2"},
+    {"id": "E8", "document": "syn-001_pathology.pdf", "page": 1, "category": "pathology", "date": "2026-01-14", "span": "Estrogen receptor: positive (90%)", "fact": "ER positive (90%), PR positive (60%)"},
+    {"id": "E9", "document": "syn-001_pathology.pdf", "page": 1, "category": "pathology", "date": "2026-01-14", "span": "HER2 by IHC: 2+ (equivocal)", "fact": "HER2 IHC 2+ (equivocal)"},
+    {"id": "E10", "document": "syn-001_pathology.pdf", "page": 1, "category": "pathology", "date": "2026-01-15", "alt_dates": ["2026-01-14"], "span": "HER2 FISH: sent 2026-01-15, result pending", "fact": "HER2 FISH sent 2026-01-15; no result in packet"}
+  ],
+  "pending_tests": [{"test": "her2_fish", "fact": "HER2 FISH sent, no result in packet"}],
+  "discrepancies": [{"analyte": "lesion_size", "events": ["E4", "E5"], "fact": "Same-day lesion size differs: mammogram 2.1 cm vs ultrasound 1.9 cm"}],
+  "flags": [],
+  "rubric": [
+    {"category": "pending_tests", "description": "Identifies HER2 FISH as outstanding", "weight": 3, "is_critical": true, "match_criteria": {"all_terms": ["her2", "fish"]}},
+    {"category": "pathology", "description": "States histology and grade", "weight": 2, "is_critical": false, "match_criteria": {"all_terms": ["ductal", "grade 2"]}},
+    {"category": "pathology", "description": "States receptor status", "weight": 2, "is_critical": false, "match_criteria": {"all_terms": ["er", "pr"]}},
+    {"category": "discrepancies", "description": "Notes imaging size discrepancy", "weight": 1, "is_critical": false, "match_criteria": {"any_terms": ["discrepan", "differ"]}}
+  ]
+}

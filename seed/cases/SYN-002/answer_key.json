@@ -1,0 +1,28 @@
+{
+  "case_code": "SYN-002",
+  "events": [
+    {"id": "E1", "document": "syn-002_outside_ct.pdf", "page": 1, "category": "imaging", "date": "2026-02-02", "span": "2.8 cm spiculated nodule in the right upper lobe", "fact": "CT chest: 2.8 cm spiculated right upper lobe nodule"},
+    {"id": "E2", "document": "syn-002_outside_ct.pdf", "page": 1, "category": "imaging", "date": "2026-02-02", "span": "No pleural effusion. No enlarged mediastinal lymph nodes", "fact": "CT chest: no pleural effusion, no enlarged mediastinal nodes"},
+    {"id": "E3", "document": "syn-002_outside_ct.pdf", "page": 1, "category": "imaging", "date": "2024-01-01", "date_precision": "year", "span": "chest x-ray from 2024, no nodule seen", "fact": "Prior chest x-ray (2024): no nodule seen"},
+    {"id": "E4", "document": "syn-002_pulm_note.pdf", "page": 1, "category": "other", "date": "2015-06-01", "date_precision": "month", "span": "former smoker, 30 pack-years, quit in June 2015", "fact": "Former smoker, 30 pack-years, quit June 2015"},
+    {"id": "E5", "document": "syn-002_pulm_note.pdf", "page": 1, "category": "procedure", "date": null, "date_precision": "unknown", "span": "right knee replacement, date not documented", "fact": "Past right knee replacement, date not documented"},
+    {"id": "E6", "document": "syn-002_pulm_note.pdf", "page": 1, "category": "procedure", "date": "2026-02-16", "span": "EBUS-guided biopsy of the right upper lobe nodule", "fact": "EBUS-guided biopsy of the RUL nodule"},
+    {"id": "E7", "document": "syn-002_pulm_note.pdf", "page": 1, "category": "pathology", "date": "2026-02-16", "alt_dates": [null], "span": "Preliminary pathology: adenocarcinoma", "fact": "Preliminary pathology: adenocarcinoma"},
+    {"id": "E8", "document": "syn-002_pulm_note.pdf", "page": 1, "category": "lab", "date": "2026-02-16", "span": "molecular panel on biopsy tissue, ordered 2026-02-16", "fact": "Molecular panel on biopsy tissue ordered; no result in packet"},
+    {"id": "E9", "document": "syn-002_pulm_note.pdf", "page": 1, "category": "imaging", "date": "2026-02-24", "alt_dates": ["2026-02-16"], "span": "PET-CT, scheduled for 2026-02-24", "fact": "PET-CT scheduled for 2026-02-24; no result in packet"},
+    {"id": "E10", "document": "syn-002_pulm_note.pdf", "page": 2, "category": "lab", "date": "2026-02-10", "span": "FEV1 1.9 L (68% predicted)", "fact": "PFTs: FEV1 1.9 L (68% predicted)"},
+    {"id": "E11", "document": "syn-002_pulm_note.pdf", "page": 2, "category": "lab", "date": "2026-02-10", "span": "Hemoglobin 2026-02-10: 13.1 g/dL", "fact": "Hemoglobin 13.1 g/dL"},
+    {"id": "E12", "document": "syn-002_pulm_note.pdf", "page": 2, "category": "lab", "date": "2026-02-16", "span": "Hemoglobin 2026-02-16: 12.8 g/dL", "fact": "Hemoglobin 12.8 g/dL"}
+  ],
+  "pending_tests": [
+    {"test": "molecular_panel", "fact": "Molecular panel ordered, no result in packet"},
+    {"test": "pet_ct", "fact": "PET-CT scheduled, no result in packet"}
+  ],
+  "discrepancies": [],
+  "flags": [],
+  "rubric": [
+    {"category": "pending_tests", "description": "Identifies molecular panel as outstanding", "weight": 3, "is_critical": true, "match_criteria": {"all_terms": ["molecular"]}},
+    {"category": "pending_tests", "description": "Identifies PET-CT as not yet done", "weight": 3, "is_critical": true, "match_criteria": {"all_terms": ["pet"]}},
+    {"category": "pathology", "description": "States histology", "weight": 2, "is_critical": false, "match_criteria": {"all_terms": ["adenocarcinoma"]}}
+  ]
+}

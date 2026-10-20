@@ -1,0 +1,59 @@
+{
+  "_notice": "SYNTHETIC. Fictional patient and facilities, invented for training. Not real data.",
+  "case_code": "SYN-001",
+  "title": "Synthetic case: new left breast mass, HER2 equivocal",
+  "summary": "Fictional 57-year-old referred with a palpable left breast mass; workup partly complete.",
+  "documents": [
+    {
+      "filename": "syn-001_referral.pdf",
+      "source": "internal",
+      "facility": "Synthetic General Hospital - Breast Clinic",
+      "pages": [
+        [
+          "OUTPATIENT REFERRAL NOTE",
+          "Patient: Jane Placeholder        MRN: SYN-0001        DOB: 1968-03-14",
+          "Date of service: 2026-01-05",
+          "",
+          "Reason for referral: palpable left breast mass, about 2 cm.",
+          "Patient first noticed the mass in November 2025.",
+          "No prior breast imaging on file.",
+          "Orders: diagnostic mammogram and left breast ultrasound."
+        ]
+      ]
+    },
+    {
+      "filename": "syn-001_outside_imaging.pdf",
+      "source": "outside",
+      "facility": "Synthetic Valley Imaging Center",
+      "pages": [
+        [
+          "DIAGNOSTIC IMAGING REPORT",
+          "Patient: Jane Placeholder        DOB: 1968-03-14",
+          "Exam date: 01/09/2026",
+          "",
+          "Left diagnostic mammogram: irregular mass measuring 2.1 cm, BI-RADS 5.",
+          "Left breast ultrasound, same day: hypoechoic mass measuring 1.9 cm.",
+          "No suspicious axillary lymph nodes seen."
+        ]
+      ]
+    },
+    {
+      "filename": "syn-001_pathology.pdf",
+      "source": "internal",
+      "facility": "Synthetic General Hospital - Pathology",
+      "pages": [
+        [
+          "SURGICAL PATHOLOGY REPORT",
+          "Patient: Jane Placeholder        Accession: SYN-P-26-0114",
+          "Procedure date: 2026-01-14",
+          "",
+          "Specimen: left breast, ultrasound-guided core biopsy.",
+          "Diagnosis: invasive ductal carcinoma, grade 2.",
+          "Estrogen receptor: positive (90%). Progesterone receptor: positive (60%).",
+          "HER2 by IHC: 2+ (equivocal).",
+          "HER2 FISH: sent 2026-01-15, result pending."
+        ]
+      ]
+    }
+  ]
+}
