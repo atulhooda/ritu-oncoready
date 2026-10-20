@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/oncoready"
     redis_url: str = "redis://localhost:6379/0"
+    cors_origins: str = "http://localhost:3000"  # comma-separated
 
     jwt_secret: str = "dev-only-insecure-secret-change-me-0123456789"
     jwt_algorithm: str = "HS256"
