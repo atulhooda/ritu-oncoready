@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from app.models import Discrepancy, PendingTest, TimelineEvent
+from app.models import Discrepancy, PendingTest, RejectedExtraction, TimelineEvent
 from app.repositories.base import M, TenantRepository
 from app.repositories.cases import DocumentPageRepository, SourceDocumentRepository
 
@@ -52,3 +52,10 @@ class DiscrepancyRepository(TenantRepository[Discrepancy]):
 
     def for_case(self, case_id: uuid.UUID) -> Sequence[Discrepancy]:
         return self.list(Discrepancy.case_id == case_id)
+
+
+class RejectedExtractionRepository(TenantRepository[RejectedExtraction]):
+    model = RejectedExtraction
+
+    def for_case(self, case_id: uuid.UUID) -> Sequence[RejectedExtraction]:
+        return self.list(RejectedExtraction.case_id == case_id, limit=1000)

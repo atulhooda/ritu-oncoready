@@ -20,6 +20,7 @@ from app.repositories.timeline import (
     DiscrepancyRepository,
     PendingTestRepository,
     ProvenanceError,
+    RejectedExtractionRepository,
     TimelineEventRepository,
 )
 from app.repositories.users import UserRepository
@@ -167,6 +168,17 @@ def test_span_must_be_verbatim(db, org_a):
             case_id=case_a.id, event_date=date(2026, 1, 5), category="lab",
             source_page_id=page_a.id, source_text_span="text that is not on the page",
         )
+
+
+def test_rejected_extractions_are_scoped(db, org_a, org_b):
+    case_a, doc_a, _ = make_case(db, org_a)
+    rej = RejectedExtractionRepository(db, org_a.org.id).add(
+        case_id=case_a.id, document_id=doc_a.id, page_number=1, reason="span_not_found",
+        candidate={"source_text_span": "not on page"},
+    )
+    assert RejectedExtractionRepository(db, org_b.org.id).get(rej.id) is None
+    assert RejectedExtractionRepository(db, org_b.org.id).for_case(case_a.id) == []
+    assert RejectedExtractionRepository(db, org_a.org.id).get(rej.id) is not None
 
 
 # --- answer keys, rubric, briefs, matches, scores, reviews ------------------------------

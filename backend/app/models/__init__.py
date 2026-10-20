@@ -1,5 +1,6 @@
 from app.models.base import Base
 from app.models.case import DocumentPage, PatientCase, SourceDocument
+from app.models.extraction import RejectedExtraction
 from app.models.org import Org, Role, User
 from app.models.scoring import AnswerKey, BriefItemMatch, FacultyReview, ReadinessBrief, RubricItem, Score
 from app.models.timeline import Discrepancy, PendingTest, TimelineEvent
@@ -15,6 +16,7 @@ __all__ = [
     "PatientCase",
     "PendingTest",
     "ReadinessBrief",
+    "RejectedExtraction",
     "Role",
     "RubricItem",
     "Score",
