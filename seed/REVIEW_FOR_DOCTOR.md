@@ -41,7 +41,7 @@ Reviewer notes:
 
 ## SYN-002: right upper lobe nodule, staging incomplete
 
-Fictional 66-year-old former smoker with a lung nodule; biopsy done, staging studies outstanding.
+Fictional 66-year-old former smoker with a lung nodule; biopsy done, outside and in-house staging disagree, staging studies outstanding.
 
 | OK | ID | Date | Category | Fact | Source (doc p.page) |
 |---|---|---|---|---|---|
@@ -57,17 +57,22 @@ Fictional 66-year-old former smoker with a lung nodule; biopsy done, staging stu
 | [ ] | E10 | 2026-02-10 | lab | PFTs: FEV1 1.9 L (68% predicted) | syn-002_pulm_note.pdf p.2 |
 | [ ] | E11 | 2026-02-10 | lab | Hemoglobin 13.1 g/dL | syn-002_pulm_note.pdf p.2 |
 | [ ] | E12 | 2026-02-16 | lab | Hemoglobin 12.8 g/dL | syn-002_pulm_note.pdf p.2 |
+| [ ] | E13 | 2026-02-02 | imaging | Outside CT: radiographic stage cT1c N0 M0 (stage IA3) | syn-002_outside_ct.pdf p.1 |
+| [ ] | E14 | 2026-02-16 | pathology | EBUS station 4R lymph node positive for adenocarcinoma | syn-002_pulm_note.pdf p.1 |
+| [ ] | E15 | 2026-02-18 | other | In-house clinical stage (tumor board): cT1c N2 M0, stage IIIA | syn-002_pulm_note.pdf p.2 |
 
 Derived findings (computed in code from the facts above):
 
 - [ ] Pending test: Molecular panel ordered, no result in packet
 - [ ] Pending test: PET-CT scheduled, no result in packet
+- [ ] Discrepancy: Outside staging cT1c N0 M0 (IA3) conflicts with in-house cT1c N2 M0 (IIIA); no treatment response in between
 
 Rubric items (what a resident's brief should mention):
 
 - [ ] Identifies molecular panel as outstanding (weight 3, critical)
 - [ ] Identifies PET-CT as not yet done (weight 3, critical)
 - [ ] States histology (weight 2)
+- [ ] Notes outside vs in-house staging conflict (N0 vs N2 after positive 4R node) (weight 2)
 
 Reviewer notes:
 

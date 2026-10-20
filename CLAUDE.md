@@ -32,6 +32,10 @@ docker compose exec backend python /seed/recall.py               # extraction re
   Anything failing validation goes to `rejected_extractions` with a reason, never the timeline.
 - Dates are parsed in `dates.py` (US MM/DD/YYYY). The LLM only copies date text.
 - Pending tests, discrepancies, and lab flags (LVEF drop >= 10 points) are code in `derive.py`.
+- Invariant fields (histology, primary site, stage, HER2/ER/PR) are compared across documents
+  regardless of date in `invariants.py`. A stage change is excused only by a dated
+  `response_assessment` event between the two stages; c/p/y stages are compared within their
+  own system only.
 
 ## Non-negotiable rules
 

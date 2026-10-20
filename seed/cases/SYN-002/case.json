@@ -2,7 +2,7 @@
   "_notice": "SYNTHETIC. Fictional patient and facilities, invented for training. Not real data.",
   "case_code": "SYN-002",
   "title": "Synthetic case: right upper lobe nodule, staging incomplete",
-  "summary": "Fictional 66-year-old former smoker with a lung nodule; biopsy done, staging studies outstanding.",
+  "summary": "Fictional 66-year-old former smoker with a lung nodule; biopsy done, outside and in-house staging disagree, staging studies outstanding.",
   "documents": [
     {
       "filename": "syn-002_outside_ct.pdf",
@@ -16,7 +16,8 @@
           "",
           "Findings: 2.8 cm spiculated nodule in the right upper lobe.",
           "No pleural effusion. No enlarged mediastinal lymph nodes.",
-          "Comparison: chest x-ray from 2024, no nodule seen."
+          "Comparison: chest x-ray from 2024, no nodule seen.",
+          "Impression: radiographic stage cT1c N0 M0 (stage IA3)."
         ]
       ]
     },
@@ -34,6 +35,7 @@
           "Past history: right knee replacement, date not documented.",
           "Procedure today: EBUS-guided biopsy of the right upper lobe nodule.",
           "Preliminary pathology: adenocarcinoma.",
+          "EBUS station 4R lymph node: adenocarcinoma.",
           "Orders: molecular panel on biopsy tissue, ordered 2026-02-16.",
           "Orders: PET-CT, scheduled for 2026-02-24."
         ],
@@ -43,7 +45,8 @@
           "",
           "Pulmonary function tests 2026-02-10: FEV1 1.9 L (68% predicted).",
           "Hemoglobin 2026-02-10: 13.1 g/dL.",
-          "Hemoglobin 2026-02-16: 12.8 g/dL."
+          "Hemoglobin 2026-02-16: 12.8 g/dL.",
+          "Clinical stage (tumor board 2026-02-18): cT1c N2 M0, stage IIIA."
         ]
       ]
     }

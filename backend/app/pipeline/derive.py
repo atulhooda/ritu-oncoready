@@ -1,5 +1,6 @@
-"""Deterministic derivations from validated timeline events: pending tests, discrepancies,
-and lab change flags. Pure code; no LLM. Same events in -> same output.
+"""Deterministic derivations from validated timeline events: pending tests, discrepancies
+(same-day measurement conflicts here; invariant-field conflicts in invariants.py), and lab
+change flags. Pure code; no LLM. Same events in -> same output.
 """
 
 import re
@@ -10,7 +11,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.repositories.cases import CaseRepository
+from app.repositories.cases import CaseRepository, DocumentPageRepository, SourceDocumentRepository
+from app.pipeline.invariants import invariant_conflicts
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository, TimelineEventRepository
 
 # Test name keywords -> canonical test. A name can map to several tests ("mammogram and ultrasound").
@@ -64,6 +66,7 @@ class Fact:
     payload: dict[str, Any]
     source_page_id: uuid.UUID
     source_text_span: str
+    document_id: uuid.UUID | None = None
 
     @property
     def kind(self) -> str | None:
@@ -160,8 +163,9 @@ def lab_flags(facts: list[Fact]) -> list[dict[str, Any]]:
 
 
 def facts_for_case(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> list[Fact]:
+    page_doc = {p.id: p.document_id for p in DocumentPageRepository(db, org_id).for_case(case_id)}
     return [
-        Fact(e.id, e.event_date, e.payload or {}, e.source_page_id, e.source_text_span)
+        Fact(e.id, e.event_date, e.payload or {}, e.source_page_id, e.source_text_span, page_doc.get(e.source_page_id))
         for e in TimelineEventRepository(db, org_id).for_case(case_id)
     ]
 
@@ -182,7 +186,8 @@ def run_derive(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> dict[str, 
             source_page_id=order.source_page_id, source_text_span=order.source_text_span,
             extracted_by="derived", payload={"order_event_id": str(order.id)},
         )
-    disc = discrepancies(facts)
+    doc_names = {d.id: d.filename for d in SourceDocumentRepository(db, org_id).for_case(case_id)}
+    disc = discrepancies(facts) + invariant_conflicts(facts, doc_names)
     for a, b, analyte, description in disc:
         disc_repo.add(case_id=case_id, event_a_id=a.id, event_b_id=b.id, field=analyte, description=description)
     db.flush()
