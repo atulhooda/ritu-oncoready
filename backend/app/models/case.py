@@ -6,6 +6,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
 
 
+# Pipeline: uploaded -> ocr_done -> extracted (or failed at any step, see `error`)
+DOCUMENT_STATUSES = ("uploaded", "ocr_done", "extracted", "failed")
+
+
 class PatientCase(TenantMixin, Base):
     """A synthetic teaching case. Real patient data is not allowed (CHECK is_synthetic)."""
 
@@ -30,6 +34,7 @@ class SourceDocument(TenantMixin, Base):
     __table_args__ = tenant_args(
         tenant_fk("case_id", "patient_cases"),
         tenant_fk("uploaded_by_user_id", "users", ondelete=None),
+        CheckConstraint(f"status IN {DOCUMENT_STATUSES}", name="status"),
     )
 
     case_id: Mapped[uuid.UUID] = mapped_column(index=True)
@@ -38,6 +43,8 @@ class SourceDocument(TenantMixin, Base):
     storage_key: Mapped[str] = mapped_column(String(500))
     page_count: Mapped[int | None] = mapped_column(Integer)
     uploaded_by_user_id: Mapped[uuid.UUID]
+    status: Mapped[str] = mapped_column(String(16), server_default="uploaded")
+    error: Mapped[str | None] = mapped_column(Text)
 
 
 class DocumentPage(TenantMixin, Base):
@@ -53,3 +60,4 @@ class DocumentPage(TenantMixin, Base):
     page_number: Mapped[int] = mapped_column(Integer)
     ocr_text: Mapped[str] = mapped_column(Text)
     confidence: Mapped[float | None] = mapped_column(Float)
+    ocr_engine: Mapped[str | None] = mapped_column(String(32))  # "paddleocr" | "tesseract" | "seed"
