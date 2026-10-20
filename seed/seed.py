@@ -60,11 +60,58 @@ def load_case(db, org, faculty_id, case_dir: Path) -> list[tuple]:
     return todo
 
 
+def submit_demo_briefs(sync: bool) -> None:
+    from datetime import UTC, datetime
+
+    from app.repositories.scoring import ReadinessBriefRepository
+    from app.scoring.matching import SECTIONS
+
+    with SessionLocal() as db:
+        org = OrgRepository(db).get_by_slug("demo")
+        resident = UserRepository(db, org.id).get_by_email("resident@demo.example.com")
+        cases = CaseRepository(db, org.id)
+        briefs = ReadinessBriefRepository(db, org.id)
+        todo = []
+        for path in sorted((HERE / "briefs").glob("*.json")):
+            data = json.loads(path.read_text())
+            case = cases.list(cases.model.case_code == path.stem)[0]
+            if briefs.get_for(case.id, resident.id):
+                print(f"  {path.stem}: brief already exists")
+                continue
+            brief = briefs.add(
+                case_id=case.id, author_user_id=resident.id, content={k: data[k] for k in SECTIONS},
+                status="submitted", submitted_at=datetime.now(UTC),
+            )
+            todo.append(brief.id)
+            print(f"  {path.stem}: submitted demo brief")
+        db.commit()
+        org_id = org.id
+    for brief_id in todo:
+        if sync:
+            from app.scoring.service import match_and_score
+
+            with SessionLocal() as db:
+                s = match_and_score(db, org_id, brief_id)
+                db.commit()
+                print(f"  scored {brief_id}: {s.details['percent']}% critical_missed={s.critical_missed}")
+        else:
+            from app.scoring.tasks import enqueue_scoring
+
+            enqueue_scoring(org_id, brief_id)
+    if todo and not sync:
+        print(f"enqueued scoring for {len(todo)} brief(s)")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sync", action="store_true", help="run the pipeline in this process instead of Celery")
     ap.add_argument("--reprocess", action="store_true", help="re-run the pipeline for documents already loaded")
+    ap.add_argument("--demo-briefs", action="store_true",
+                    help="submit seed/briefs/*.json as the demo resident and score them (needs an LLM key)")
     args = ap.parse_args()
+    if args.demo_briefs:
+        submit_demo_briefs(sync=args.sync)
+        return
 
     with SessionLocal() as db:
         orgs = OrgRepository(db)

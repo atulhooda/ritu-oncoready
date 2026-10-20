@@ -1,10 +1,17 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+import { api } from "@/lib/api";
+import type { Me } from "@/lib/types";
+
 export default function Home() {
-  return (
-    <main className="mx-auto max-w-2xl p-8">
-      <h1 className="text-2xl font-semibold">Ritu OncoReady</h1>
-      <p className="mt-2 text-sm text-gray-600">
-        Case-readiness training on synthetic oncology cases. Not for clinical use.
-      </p>
-    </main>
-  );
+  const router = useRouter();
+  useEffect(() => {
+    api<Me>("/auth/me")
+      .then((me) => router.replace(me.role === "resident" ? "/cases" : "/faculty"))
+      .catch(() => router.replace("/login"));
+  }, [router]);
+  return null;
 }

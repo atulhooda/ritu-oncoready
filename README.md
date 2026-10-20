@@ -9,6 +9,8 @@ docker compose up --build
 # frontend http://localhost:3000
 docker compose exec backend python /seed/seed.py   # synthetic demo org + cases, runs pipeline
 docker compose exec backend python /seed/recall.py # extraction recall vs answer keys
+docker compose exec backend python /seed/seed.py --demo-briefs  # demo resident briefs, scored
+# sign in at the frontend: org "demo", resident@ / faculty@demo.example.com, password synthetic-demo-pass
 ```
 
 Backend tests need a Postgres database:

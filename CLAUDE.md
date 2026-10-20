@@ -20,6 +20,7 @@ cd backend && .venv/bin/alembic check           # models and migrations must agr
 backend/.venv/bin/python seed/render.py         # re-render seed PDFs + REVIEW_FOR_DOCTOR.md
 docker compose exec backend python /seed/seed.py [--reprocess]   # load cases, enqueue pipeline
 docker compose exec backend python /seed/recall.py               # extraction recall vs answer keys
+docker compose exec backend python /seed/seed.py --demo-briefs   # submit + score demo resident briefs
 ```
 
 ## Document pipeline (`app/pipeline/`, Celery)
