@@ -3,9 +3,19 @@
 from datetime import date
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from app.models import Base
 from app.repositories.cases import CaseRepository, DocumentPageRepository, SourceDocumentRepository
+from app.repositories.scoring import (
+    AnswerKeyRepository,
+    BriefItemMatchRepository,
+    FacultyReviewRepository,
+    ReadinessBriefRepository,
+    RubricItemRepository,
+    ScoreRepository,
+)
 from app.repositories.timeline import (
     DiscrepancyRepository,
     PendingTestRepository,
@@ -157,3 +167,81 @@ def test_span_must_be_verbatim(db, org_a):
             case_id=case_a.id, event_date=date(2026, 1, 5), category="lab",
             source_page_id=page_a.id, source_text_span="text that is not on the page",
         )
+
+
+# --- answer keys, rubric, briefs, matches, scores, reviews ------------------------------
+
+
+def make_scoring(db, tenant, case):
+    org_id = tenant.org.id
+    key = AnswerKeyRepository(db, org_id).add(case_id=case.id, authored_by_user_id=tenant.faculty.id)
+    item = RubricItemRepository(db, org_id).add(
+        answer_key_id=key.id, category="pending_tests", description="Notes the outstanding marker panel",
+        weight=2, is_critical=True,
+    )
+    brief = ReadinessBriefRepository(db, org_id).add(
+        case_id=case.id, author_user_id=tenant.resident.id, content={"text": "Marker panel pending."}
+    )
+    match = BriefItemMatchRepository(db, org_id).add(
+        brief_id=brief.id, rubric_item_id=item.id, matched=True, matched_text="Marker panel pending."
+    )
+    score = ScoreRepository(db, org_id).add(
+        brief_id=brief.id, answer_key_id=key.id, scoring_version="v1", points_earned=2, points_possible=2
+    )
+    review = FacultyReviewRepository(db, org_id).add(
+        brief_id=brief.id, reviewer_user_id=tenant.faculty.id, score_id=score.id, status="approved"
+    )
+    return {
+        AnswerKeyRepository: key,
+        RubricItemRepository: item,
+        ReadinessBriefRepository: brief,
+        BriefItemMatchRepository: match,
+        ScoreRepository: score,
+        FacultyReviewRepository: review,
+    }
+
+
+def test_scoring_repositories_are_scoped(db, org_a, org_b):
+    case_a, _, _ = make_case(db, org_a)
+    rows_a = make_scoring(db, org_a, case_a)
+    case_b, _, _ = make_case(db, org_b)
+    make_scoring(db, org_b, case_b)
+
+    for repo_cls, row_a in rows_a.items():
+        assert repo_cls(db, org_b.org.id).get(row_a.id) is None, repo_cls.__name__
+        assert row_a.id not in {r.id for r in repo_cls(db, org_b.org.id).list()}, repo_cls.__name__
+        assert repo_cls(db, org_a.org.id).get(row_a.id) is not None, repo_cls.__name__
+
+    brief_a = rows_a[ReadinessBriefRepository]
+    assert BriefItemMatchRepository(db, org_b.org.id).for_brief(brief_a.id) == []
+    assert ScoreRepository(db, org_b.org.id).for_brief(brief_a.id) == []
+    assert RubricItemRepository(db, org_b.org.id).for_answer_key(rows_a[AnswerKeyRepository].id) == []
+
+
+def test_db_rejects_cross_org_score_link(db, org_a, org_b):
+    case_a, _, _ = make_case(db, org_a)
+    rows_a = make_scoring(db, org_a, case_a)
+    case_b, _, _ = make_case(db, org_b)
+    brief_b = ReadinessBriefRepository(db, org_b.org.id).add(case_id=case_b.id, author_user_id=org_b.resident.id)
+    with pytest.raises(IntegrityError):
+        ScoreRepository(db, org_b.org.id).add(
+            brief_id=brief_b.id, answer_key_id=rows_a[AnswerKeyRepository].id,
+            scoring_version="v1", points_earned=0, points_possible=1,
+        )
+
+
+# --- schema-wide guard ------------------------------------------------------------------
+
+
+def test_every_table_is_tenant_scoped(db):
+    tables = db.scalars(text(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name NOT IN ('orgs', 'alembic_version')"
+    )).all()
+    assert set(tables) == set(Base.metadata.tables) - {"orgs"}
+    for table in tables:
+        nullable = db.scalar(text(
+            "SELECT is_nullable FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = :t AND column_name = 'org_id'"
+        ), {"t": table})
+        assert nullable == "NO", f"{table} is missing a NOT NULL org_id"
