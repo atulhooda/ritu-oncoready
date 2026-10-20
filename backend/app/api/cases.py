@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app import storage
-from app.auth.deps import CurrentUser, get_current_user, require_role
+from app.auth.deps import CurrentUser, ensure_case_unlocked, get_current_user, require_role
 from app.db import get_db
 from app.models import Role
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
@@ -118,6 +118,7 @@ def get_timeline(
     case_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
     """Events in date order (undated under "Date unclear"), with source page links,
-    pending tests, discrepancies, and lab change flags."""
+    pending tests, discrepancies, and lab change flags. Locked for residents until they submit."""
     _get_case_or_404(CaseRepository(db, user.org_id), case_id)
+    ensure_case_unlocked(db, user, case_id)
     return build_timeline(db, user.org_id, case_id)

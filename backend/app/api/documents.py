@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import storage
-from app.auth.deps import CurrentUser, get_current_user
+from app.auth.deps import CurrentUser, ensure_case_unlocked, get_current_user
 from app.db import get_db
 from app.repositories.cases import DocumentPageRepository, SourceDocumentRepository
 
@@ -37,6 +37,7 @@ def get_page(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     doc, page = _page_or_404(db, user.org_id, document_id, page_number)
+    ensure_case_unlocked(db, user, doc.case_id)  # OCR text is machine output; the image is always viewable
     return PageOut(
         document_id=doc.id, filename=doc.filename, page_number=page.page_number, ocr_text=page.ocr_text,
         confidence=page.confidence, ocr_engine=page.ocr_engine,

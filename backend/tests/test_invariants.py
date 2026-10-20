@@ -107,7 +107,7 @@ def test_syn_002_outside_vs_in_house_staging_is_a_discrepancy(client, db, org_a)
     # Same histology in both pulm-note facts, and the CT states none: no histology conflict.
     assert [d.field for d in DiscrepancyRepository(db, org_a.org.id).for_case(case.id)] == ["stage"]
 
-    body = client.get(f"/cases/{case.id}/timeline", headers=login(client, org_a, org_a.resident)).json()
+    body = client.get(f"/cases/{case.id}/timeline", headers=login(client, org_a, org_a.faculty)).json()
     assert [d["field"] for d in body["discrepancies"]] == ["stage"]
 
 

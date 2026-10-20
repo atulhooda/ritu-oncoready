@@ -61,11 +61,17 @@ docker compose exec backend python /seed/recall.py               # extraction re
 - One module: `app/llm/client.py`. Gemini primary, Groq fallback. Nothing else imports a provider.
 - Every call passes a Pydantic schema; output is validated before it is used. Invalid output
   -> try fallback -> raise. Never store unvalidated LLM output.
-- LLMs are **not** used for scoring, matching, grading, or generating clinical content.
+- Allowed uses: extracting facts from documents, and **proposing** brief-to-rubric matches. A
+  match is accepted only with a quote verified verbatim in the brief (`app/scoring/matching.py`).
+- LLMs are **not** used for scoring, grading, or generating clinical content.
 
 ### 4. Scoring is deterministic
-- `scores`, `brief_item_matches` are produced by plain code: same inputs -> same outputs.
-- Store `scoring_version` with every score. No LLM, no randomness, no wall-clock dependence.
+- `app/scoring/engine.py` is a pure function: same rubric + verdicts -> same score and `details`.
+- Store `scoring_version` (= `ENGINE_VERSION`) with every score. No LLM, no randomness, no clock.
+- Rules live in `BEHAVIOR_SPEC.md` ("Scoring"). Changing them means bumping `ENGINE_VERSION`
+  and updating the spec in the same commit.
+- Residents cannot read AI-derived case data (timeline, OCR text) until they submit their brief;
+  enforce in the API (`ensure_case_unlocked`), never only in the UI.
 
 ### 5. Provenance on every extracted fact
 - Every extracted fact (`timeline_events`, `pending_tests`) stores `source_page_id` (NOT NULL)

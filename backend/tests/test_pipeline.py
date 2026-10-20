@@ -152,7 +152,7 @@ def test_timeline_endpoint(client, db, org_a, org_b):
     run_extraction(db, org_a.org.id, doc.id, extract=fake_llm(GOOD))
     run_derive(db, org_a.org.id, case.id)
 
-    r = client.get(f"/cases/{case.id}/timeline", headers=login(client, org_a, org_a.resident))
+    r = client.get(f"/cases/{case.id}/timeline", headers=login(client, org_a, org_a.faculty))
     assert r.status_code == 200
     body = r.json()
     dates = [e["event_date"] for e in body["events"]]
@@ -163,7 +163,7 @@ def test_timeline_endpoint(client, db, org_a, org_b):
     assert [t["test_name"] for t in body["pending_tests"]] == ["echocardiogram"]
     assert [f["rule"] for f in body["flags"]] == ["lvef_drop"]
 
-    page = client.get(body["events"][0]["source"]["page_url"], headers=login(client, org_a, org_a.resident))
+    page = client.get(body["events"][0]["source"]["page_url"], headers=login(client, org_a, org_a.faculty))
     assert page.status_code == 200 and "62%" in page.json()["ocr_text"]
 
     headers_b = login(client, org_b, org_b.resident)

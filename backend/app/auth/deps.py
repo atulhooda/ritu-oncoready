@@ -47,3 +47,11 @@ def require_role(*roles: Role):
         return user
 
     return check
+
+
+def ensure_case_unlocked(db: Session, user: CurrentUser, case_id: uuid.UUID) -> None:
+    """Residents see AI-derived case data (timeline, OCR text) only after submitting their brief."""
+    from app.repositories.scoring import ReadinessBriefRepository
+
+    if user.role == Role.RESIDENT and not ReadinessBriefRepository(db, user.org_id).has_submitted(case_id, user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Submit your readiness brief to unlock this")
