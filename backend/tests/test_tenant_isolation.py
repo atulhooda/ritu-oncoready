@@ -1,9 +1,17 @@
 """Proves one org cannot read (or link to) another org's data."""
 
+from datetime import date
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.repositories.cases import CaseRepository, DocumentPageRepository, SourceDocumentRepository
+from app.repositories.timeline import (
+    DiscrepancyRepository,
+    PendingTestRepository,
+    ProvenanceError,
+    TimelineEventRepository,
+)
 from app.repositories.users import UserRepository
 from tests.conftest import PASSWORD, login
 
@@ -95,4 +103,57 @@ def test_db_rejects_cross_org_document_link(db, org_a, org_b):
             mime_type="application/pdf",
             storage_key="x",
             uploaded_by_user_id=org_b.faculty.id,
+        )
+
+
+# --- timeline, pending tests, discrepancies ---------------------------------------------
+
+
+def make_events(db, tenant, case, page):
+    events = TimelineEventRepository(db, tenant.org.id)
+    e1 = events.add(
+        case_id=case.id, event_date=date(2026, 1, 5), category="pathology",
+        source_page_id=page.id, source_text_span="Synthetic biopsy",
+    )
+    e2 = events.add(
+        case_id=case.id, event_date=date(2026, 1, 6), category="pathology",
+        source_page_id=page.id, source_text_span="dated 2026-01-05",
+    )
+    test = PendingTestRepository(db, tenant.org.id).add(
+        case_id=case.id, test_name="Synthetic marker panel", source_page_id=page.id,
+        source_text_span="Synthetic biopsy",
+    )
+    disc = DiscrepancyRepository(db, tenant.org.id).add(
+        case_id=case.id, event_a_id=e1.id, event_b_id=e2.id, field="event_date", description="Dates differ",
+    )
+    return e1, test, disc
+
+
+def test_timeline_repositories_are_scoped(db, org_a, org_b):
+    case_a, _, page_a = make_case(db, org_a)
+    event_a, test_a, disc_a = make_events(db, org_a, case_a, page_a)
+
+    assert TimelineEventRepository(db, org_b.org.id).get(event_a.id) is None
+    assert TimelineEventRepository(db, org_b.org.id).for_case(case_a.id) == []
+    assert PendingTestRepository(db, org_b.org.id).get(test_a.id) is None
+    assert DiscrepancyRepository(db, org_b.org.id).get(disc_a.id) is None
+    assert len(TimelineEventRepository(db, org_a.org.id).for_case(case_a.id)) == 2
+
+
+def test_cannot_cite_another_orgs_page(db, org_a, org_b):
+    _, _, page_a = make_case(db, org_a)
+    case_b, _, _ = make_case(db, org_b)
+    with pytest.raises(ProvenanceError):
+        TimelineEventRepository(db, org_b.org.id).add(
+            case_id=case_b.id, event_date=date(2026, 1, 5), category="lab",
+            source_page_id=page_a.id, source_text_span="Synthetic biopsy",
+        )
+
+
+def test_span_must_be_verbatim(db, org_a):
+    case_a, _, page_a = make_case(db, org_a)
+    with pytest.raises(ProvenanceError):
+        TimelineEventRepository(db, org_a.org.id).add(
+            case_id=case_a.id, event_date=date(2026, 1, 5), category="lab",
+            source_page_id=page_a.id, source_text_span="text that is not on the page",
         )
