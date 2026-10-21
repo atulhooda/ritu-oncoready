@@ -341,3 +341,24 @@ def test_browser_session_request_carries_the_calm_voice(monkeypatch):
     assert sent["body"]["language"] == "hi-IN"
     ts, sig = sent["headers"]["X-Ritu-Timestamp"], sent["headers"]["X-Ritu-Signature"]
     assert ritu.verify(ts, sig, json.dumps(sent["body"]).encode())
+
+
+def test_doctor_sees_every_conversation(client, db, org_a):
+    """A later 'nothing new' conversation must not hide what the patient said earlier."""
+    patient = person(db, org_a, Role.PATIENT, "Repeat Patient")
+    doctor = person(db, org_a, Role.DOCTOR, "Doctor Iyer")
+    h, first = finished_session(client, db, org_a, patient)
+    quiet = [{"role": "ritu", "text": "Any problems today?"}, {"role": "patient", "text": "No, nothing new today."}]
+    s2 = client.post("/me/sessions", headers=h).json()
+    client.post(f"/me/sessions/{s2['id']}/simulate", headers=h, json={"turns": quiet})
+    run_intake_extraction(db, org_a.org.id, s2["id"], extract=fake_llm([]))
+    client.post("/me/publish", headers=h)
+
+    hd = as_user(client, org_a, doctor)
+    row = client.get("/doctor/patients", headers=hd).json()[0]
+    assert row["conversations"] == 2
+    assert row["symptoms"] == ["Breathlessness on stairs", "Evening ankle swelling"]
+    detail = client.get(f"/doctor/patients/{row['case_id']}", headers=hd).json()
+    assert [str(s["session_id"]) for s in detail["sessions"]] == [s2["id"], first]  # newest first
+    assert sum(len(sec["facts"]) for sec in detail["sessions"][0]["sections"]) == 0
+    assert sum(len(sec["facts"]) for sec in detail["sessions"][1]["sections"]) == 4

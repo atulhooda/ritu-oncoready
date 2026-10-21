@@ -11,14 +11,18 @@ class IntakeSessionRepository(TenantRepository[IntakeSession]):
     def for_case(self, case_id: uuid.UUID) -> Sequence[IntakeSession]:
         return self.list(IntakeSession.case_id == case_id, limit=1000)
 
-    def latest_summarized(self, case_id: uuid.UUID) -> IntakeSession | None:
+    def summarized(self, case_id: uuid.UUID) -> Sequence[IntakeSession]:
+        """Every summarized conversation for the case, newest first."""
         stmt = (
             self.select()
             .where(IntakeSession.case_id == case_id, IntakeSession.status == "summarized")
             .order_by(IntakeSession.ended_at.desc().nulls_last(), IntakeSession.created_at.desc())
-            .limit(1)
         )
-        return self.session.scalar(stmt)
+        return self.session.scalars(stmt).all()
+
+    def latest_summarized(self, case_id: uuid.UUID) -> IntakeSession | None:
+        sessions = self.summarized(case_id)
+        return sessions[0] if sessions else None
 
 
 class SessionTurnRepository(TenantRepository[SessionTurn]):

@@ -118,11 +118,34 @@ def record_transcript(
 
 
 def build_summary(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> dict[str, Any] | None:
-    """Deterministic summary of the latest summarized session: facts grouped by section in a fixed
-    order, each with the patient's own words. No interpretation is added."""
+    """The latest summarized conversation (what the patient sees and reviews)."""
     session = IntakeSessionRepository(db, org_id).latest_summarized(case_id)
-    if session is None:
-        return None
+    return summarize_session(db, org_id, session) if session else None
+
+
+def session_history(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> list[dict[str, Any]]:
+    """Every summarized conversation, newest first. A later "nothing new" conversation must not hide
+    what the patient said earlier, so doctors get all of them."""
+    return [summarize_session(db, org_id, s) for s in IntakeSessionRepository(db, org_id).summarized(case_id)]
+
+
+def current_symptom_labels(history: list[dict[str, Any]]) -> list[str]:
+    """Current symptoms across all conversations, newest first, each label once."""
+    seen, out = set(), []
+    for summary in history:
+        for section in summary["sections"]:
+            if section["section"] != "current_symptom":
+                continue
+            for f in section["facts"]:
+                if f["label"].lower() not in seen:
+                    seen.add(f["label"].lower())
+                    out.append(f["label"])
+    return out
+
+
+def summarize_session(db: Session, org_id: uuid.UUID, session) -> dict[str, Any]:
+    """Deterministic summary of one conversation: facts grouped by section in a fixed order, each
+    with the patient's own words. No interpretation is added."""
     turns = {t.id: t for t in SessionTurnRepository(db, org_id).for_session(session.id)}
     facts = sorted(
         IntakeFactRepository(db, org_id).for_session(session.id),

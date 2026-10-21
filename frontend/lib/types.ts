@@ -160,6 +160,7 @@ export interface IntakeFact {
 export interface IntakeSummary {
   session_id: string;
   mode: "ritu" | "simulator";
+  language?: string;
   started_at: string | null;
   ended_at: string | null;
   sections: { section: string; label: string; facts: IntakeFact[] }[];
@@ -262,6 +263,7 @@ export interface DoctorPatientRow {
   cancer_type: string | null;
   published_at: string;
   symptoms: string[];
+  conversations: number;
   records: number;
   pending_tests: number;
   discrepancies: number;
@@ -274,6 +276,7 @@ export interface DoctorPatientDetail {
   published_at: string;
   details: PatientDetails;
   summary: IntakeSummary | null;
+  sessions: IntakeSummary[];
   records: RecordInfo[];
   timeline: Timeline;
 }

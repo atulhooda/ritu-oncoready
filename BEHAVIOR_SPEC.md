@@ -174,7 +174,11 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
 ### Sending to the doctor
 
 - **Sending.** "Send to doctor" sets `published_at`, and requires at least one summarized session.
-- **What the doctor sees.** Doctors in the org see sent profiles only: the latest summary, the
-  transcript, every record, and the record timeline. Records uploaded after sending are visible too.
+- **What the doctor sees.** Doctors in the org see sent profiles only: every summarized
+  conversation (newest first), each with its transcript, plus every record and the record timeline.
+  The inbox lists current symptoms from all conversations, deduplicated and newest first. A later
+  "nothing new" conversation never hides an earlier one; the patient page opens on the newest
+  conversation that has content, and notes it when the latest one reported nothing new. The patient
+  sees and reviews their latest conversation. Records uploaded after sending are visible too.
 - **Who sees what.** Patients see only their own profile. Residents and faculty never see intake
   cases, and doctors never see training cases.

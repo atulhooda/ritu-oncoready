@@ -77,6 +77,7 @@ export default function DoctorInbox() {
                         <ArrowRight size={18} className="mt-1 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-ink" />
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2 text-sm">
+                        <Badge>{r.conversations} conversation{r.conversations === 1 ? "" : "s"}</Badge>
                         <Badge>{r.records} record{r.records === 1 ? "" : "s"}</Badge>
                         {r.flags > 0 && <Badge tone="red">{r.flags} flag{r.flags === 1 ? "" : "s"}</Badge>}
                         {r.discrepancies > 0 && <Badge tone="blue">{r.discrepancies} discrepanc{r.discrepancies === 1 ? "y" : "ies"}</Badge>}

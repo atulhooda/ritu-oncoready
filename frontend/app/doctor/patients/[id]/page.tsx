@@ -10,7 +10,7 @@ import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Card, EmptyState, Label, PageHeader, Pill, Stat } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { DocumentInfo, DoctorPatientDetail, PatientDetails, SourceRef } from "@/lib/types";
+import type { DocumentInfo, DoctorPatientDetail, IntakeSummary, PatientDetails, SourceRef } from "@/lib/types";
 import { detailsLine, LANGUAGES, SEX_LABELS, TREATMENT_LABELS } from "@/lib/types";
 
 type Tab = "summary" | "records";
@@ -23,12 +23,16 @@ export default function DoctorPatientPage() {
   const [tab, setTab] = useState<Tab>("summary");
   const [turn, setTurn] = useState<number | null>(null);
   const [viewer, setViewer] = useState<Viewer | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!me) return;
     api<DoctorPatientDetail>(`/doctor/patients/${id}`)
       .then((d) => {
         setP(d);
+        // Open the newest conversation that has something in it; an empty latest one is noted separately.
+        const withFacts = d.sessions.find((s) => s.sections.some((sec) => sec.facts.length));
+        setSessionId((withFacts ?? d.sessions[0])?.session_id ?? null);
         const first = d.records.find((r) => r.page_count);
         if (first) setViewer({ docId: first.id, page: 1 });
       })
@@ -36,7 +40,12 @@ export default function DoctorPatientPage() {
   }, [me, id]);
 
   const docs: DocumentInfo[] = (p?.records ?? []).map((r) => ({ id: r.id, filename: r.filename, page_count: r.page_count, status: r.status }));
-  const symptoms = p?.summary?.sections.find((s) => s.section === "current_symptom")?.facts.length ?? 0;
+  const factCount = (s: IntakeSummary) => s.sections.reduce((n, sec) => n + sec.facts.length, 0);
+  const symptoms = new Set(
+    (p?.sessions ?? []).flatMap((s) => s.sections.find((sec) => sec.section === "current_symptom")?.facts.map((f) => f.label.toLowerCase()) ?? []),
+  ).size;
+  const selected = p?.sessions.find((s) => s.session_id === sessionId) ?? null;
+  const latest = p?.sessions[0];
   const showTurn = (n: number) => {
     setTurn(n);
     setTimeout(() => document.getElementById(`turn-${n}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
@@ -62,7 +71,7 @@ export default function DoctorPatientPage() {
             />
           </div>
           <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat label="Symptoms" value={symptoms} sub="reported now" />
+            <Stat label="Symptoms" value={symptoms} sub={`across ${p.sessions.length} conversation${p.sessions.length === 1 ? "" : "s"}`} />
             <Stat label="Records" value={p.records.length} sub={`${p.records.filter((r) => r.status === "extracted").length} read`} />
             <Stat label="Flags" tone={p.timeline.flags.length ? "red" : undefined} value={p.timeline.flags.length} sub={p.timeline.flags[0]?.message ?? "none from records"} />
             <Stat
@@ -82,16 +91,36 @@ export default function DoctorPatientPage() {
           </div>
 
           {tab === "summary" &&
-            (p.summary ? (
-              <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
-                <IntakeSummaryView summary={p.summary} audience="doctor" onTurn={showTurn} />
-                <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
-                  <DetailsCard d={p.details} />
-                  <TranscriptView summary={p.summary} highlight={turn} />
+            (selected ? (
+              <>
+                {p.sessions.length > 1 && (
+                  <div className="mb-5 flex flex-wrap gap-2">
+                    {p.sessions.map((s, i) => (
+                      <Pill key={s.session_id} active={s.session_id === sessionId} onClick={() => setSessionId(s.session_id)}>
+                        {i === 0 ? "Latest · " : ""}
+                        {s.ended_at ? new Date(s.ended_at).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—"}
+                        {s.language ? ` · ${(LANGUAGES[s.language] ?? s.language).split(" · ").pop()}` : ""}
+                        {` · ${factCount(s)} noted`}
+                      </Pill>
+                    ))}
+                  </div>
+                )}
+                {latest && latest.session_id !== sessionId && factCount(latest) === 0 && (
+                  <p className="mb-5 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink/80">
+                    Latest conversation ({latest.ended_at ? new Date(latest.ended_at).toLocaleDateString([], { day: "numeric", month: "short" }) : "—"}): the patient reported nothing new.
+                    Showing the most recent conversation with details.
+                  </p>
+                )}
+                <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
+                  <IntakeSummaryView summary={selected} audience="doctor" onTurn={showTurn} />
+                  <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
+                    <DetailsCard d={p.details} />
+                    <TranscriptView summary={selected} highlight={turn} />
+                  </div>
                 </div>
-              </div>
+              </>
             ) : (
-              <EmptyState title="No session summary." />
+              <EmptyState title="No conversation with Ritu yet." />
             ))}
 
           {tab === "records" &&
