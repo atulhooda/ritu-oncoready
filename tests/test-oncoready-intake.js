@@ -223,6 +223,43 @@ const REQUEST = {
     assert.strictEqual(delivered.length, 1);
   });
 
+  // Language follows the patient; captions reach the browser.
+  const sent = [];
+  const h3 = new CallHandler('rs_lang', 'Unknown', { readyState: 1, send: (m) => sent.push(JSON.parse(m)), close() {} }, 'oncoready_browser', false, null);
+  h3.intake = oncoready.createSession(oncoready.validateRequest({ ...REQUEST, language: 'en-IN' }).value);
+  h3.speak = async (t) => { h3.transcript.push({ role: 'ritu', text: t, time: new Date().toISOString() }); };
+  llm.completeWithFailover = async () => ({ content: 'Hello John! What problems are you having right now?', usage: null });
+  await h3.start();
+  await check('captions: every spoken line is sent to the browser', () => {
+    assert.deepStrictEqual(sent.filter((m) => m.event === 'oncoready_caption').map((m) => m.role), ['ritu']);
+    h3.transcript.push({ role: 'patient', text: 'teen hafte se khansi hai', time: null });
+    assert.strictEqual(sent[sent.length - 1].text, 'teen hafte se khansi hai');
+  });
+  await check('a one-word fragment does not switch the language; two agreeing ones do', () => {
+    h3._intakeFollowLanguage('हाँ', { languageCode: 'hi-IN' });
+    assert.strictEqual(h3._langCode(), 'en-IN');
+    h3._intakeFollowLanguage('जी', { languageCode: 'hi-IN' });
+    assert.strictEqual(h3._langCode(), 'hi-IN');
+  });
+  await check('a full sentence in another language switches voice and prompt at once', () => {
+    h3._intakeFollowLanguage('I have had a dry cough for three weeks now', { languageCode: 'en-IN' });
+    assert.strictEqual(h3._langCode(), 'en-IN');
+    h3._intakeFollowLanguage('तीन हफ्ते से सूखी खांसी हो रही है', { languageCode: 'hi-IN' });
+    assert.strictEqual(h3._langCode(), 'hi-IN');
+    assert.match(h3._intakeSystem, /Speak ONLY Hindi/);
+  });
+  await check('an explicit request switches even on a short line; unsupported tags are ignored', () => {
+    h3._intakeFollowLanguage('English mein baat karo', { languageCode: 'hi-IN' });
+    assert.strictEqual(h3._langCode(), 'en-IN');
+    h3._intakeFollowLanguage('some words in a language with no voice here', { languageCode: 'ur-IN' });
+    assert.strictEqual(h3._langCode(), 'en-IN');
+  });
+  await check('closing follows the guidance instead of a fixed line', () => {
+    const s = oncoready.createSession(oncoready.validateRequest({ ...REQUEST, script: { ...SCRIPT, closing: 'Only if they have records, ask them to upload them.' } }).value);
+    assert.match(oncoready.buildIntakePrompt(s, 'Hindi'), /following this guidance: Only if they have records/);
+  });
+  await h3.endCall();
+
   // Opening generation fails → canned opening, session continues.
   const h2 = new CallHandler('rs_fail', 'Unknown', { readyState: 1, send() {}, close() {} }, 'oncoready_browser', false, null);
   h2.intake = oncoready.createSession(oncoready.validateRequest({ ...REQUEST, language: 'en-IN' }).value);

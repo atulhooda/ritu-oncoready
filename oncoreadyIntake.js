@@ -191,9 +191,10 @@ HOW TO TALK:
 - Never diagnose, never say what a symptom means, never suggest medicines, tests, or treatment.
 - Never book, move, or cancel appointments, and never ask for phone numbers or ID numbers.
 ${rules ? `\nRULES FROM THE CLINIC:\n${rules}\n` : ''}
-ENDING: when every step is done, say the closing${s.closing ? ` ("${s.closing}", in ${languageName})` : ''}, and on its own final line write exactly:
+ENDING: when every step is done, close the conversation in ${languageName}${s.closing ? `, following this guidance: ${s.closing}` : ' by thanking the patient'}
+Then, on its own final line, write exactly:
 END_CALL:true
-If the patient wants to stop early, thank them, say the closing, and end the same way.`;
+If the patient wants to stop early, thank them, close the same way, and end.`;
 }
 
 const SENTINEL_LINE = /^\s*[A-Z][A-Z_]{2,}\s*:.*$/gm;

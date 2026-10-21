@@ -1887,14 +1887,16 @@ class CallHandler {
     // a first-utterance request doesn't dial an auto-detect socket only to
     // abandon it a millisecond later (live call 2026-07-08: orphan-socket
     // "closed before the connection was established" noise).
-    if (ENABLE_MULTILINGUAL) {
+    if (this.intake) {
+      this._intakeFollowLanguage(trimmed, meta);
+    } else if (ENABLE_MULTILINGUAL) {
       const requested = this._detectLanguageRequest(trimmed);
       if (requested && requested !== this._langCode()) {
         this._applyLanguageSwitch(requested, 'patient request');
       }
     }
 
-    if (ENABLE_MULTILINGUAL && !this._langPinned && meta && meta.languageCode) {
+    if (ENABLE_MULTILINGUAL && !this.intake && !this._langPinned && meta && meta.languageCode) {
       this._maybePinLanguage(meta.languageCode, trimmed, meta);
       // WEAK-DEFERRED EXOTIC TAG: the pin was deferred on weak evidence AND the
       // tag isn't a language this call plausibly speaks (greeting language, the
@@ -4812,13 +4814,31 @@ class CallHandler {
       }, this.intake.maxDurationS * 1000);
       if (this._intakeDeadline.unref) this._intakeDeadline.unref();
 
+      // LISTEN IN AUTO-DETECT, SPEAK THE PROFILE LANGUAGE. First live session
+      // (2026-10-22): the profile said English, the patient answered in Hindi,
+      // and an en-IN STT session wrote the Hindi down in Latin script while
+      // Ritu carried on in English for the whole call. The profile language is
+      // where Ritu STARTS; the patient decides where she goes. Auto-detect stays
+      // on for the session so a patient can move between Hindi and English.
       this.stt = createStreamingSTT(
         (text, meta) => this._onTranscript(text, meta),
         () => this._onSpeechStart(),
         () => this._onSpeechEnd(),
-        { languageCode: lang === 'mr-IN' ? 'hi-IN' : lang } // mr shares the hi-IN session, as with FORCE_LANG
+        { languageCode: 'unknown' }
       );
       prewarmPrimary();
+
+      // LIVE CAPTIONS. A browser has no phone UI to tell the patient who is
+      // talking; every line that enters the transcript is also sent to the
+      // page. One hook at the single place every speaker's line is recorded,
+      // rather than a send beside each of the seven push sites.
+      const transcript = this.transcript;
+      const pushLine = transcript.push.bind(transcript);
+      transcript.push = (...entries) => {
+        const n = pushLine(...entries);
+        for (const e of entries) this._sendCaption(e);
+        return n;
+      };
 
       this.conversationHistory.push({ role: 'user', content: oncoready.OPENING_INSTRUCTION });
       // A failed first generation must not cost the session: fall back to a
@@ -4836,6 +4856,45 @@ class CallHandler {
     } catch (error) {
       await this.handleCriticalError(error);
     }
+  }
+
+  _sendCaption(entry) {
+    if (!entry || (entry.role !== 'patient' && entry.role !== 'ritu') || !entry.text) return;
+    try {
+      if (this.ws && this.ws.readyState === 1) {
+        this.ws.send(JSON.stringify({ event: 'oncoready_caption', role: entry.role, text: String(entry.text) }));
+      }
+    } catch (_) { /* a caption must never break the session */ }
+  }
+
+  // Follow the patient's language. Same evidence rule as _maybePinLanguage —
+  // Sarvam mis-tags most sub-second fragments — so a reply language changes
+  // on ONE strong utterance (>=4 tokens) or TWO weak ones that agree. An
+  // explicit "Hindi mein baat karo" switches at once. STT stays on auto-detect.
+  _intakeFollowLanguage(text, meta) {
+    let target = this._detectLanguageRequest(text);
+    const explicit = !!target;
+    if (!target) {
+      let code = meta && meta.languageCode;
+      if (!code || code === 'unknown') return;
+      if (code === 'pa-IN') code = 'hi-IN'; // the Hindi/Punjabi confusion _maybePinLanguage documents
+      if (!config.languageNames[code]) return; // understood, but no voice for it: keep the current one
+      if (code === this._langCode()) { this._intakeLangCandidate = null; return; }
+      const tokens = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+      if (tokens < 4 && this._intakeLangCandidate !== code) {
+        this._intakeLangCandidate = code;
+        return;
+      }
+      target = code;
+    }
+    this._intakeLangCandidate = null;
+    if (!target || target === this._langCode() || !config.languageNames[target]) return;
+    this.callLanguage = target;
+    this.languageDetected = config.languageNames[target];
+    this._intakeSystem = oncoready.buildIntakePrompt(this.intake, config.languageNames[target]);
+    console.log(`[CALL ${this.callSid}] 🌐 Intake follows the patient${explicit ? ' (asked)' : ''}: ${config.languageNames[target]} (${target}) — voice=${config.speakerForLang(target)}`);
+    prewarmTTS({ speaker: this._currentSpeaker(), languageCode: target });
+    _queueLangCaches(target, this);
   }
 
   async _intakeReply() {
