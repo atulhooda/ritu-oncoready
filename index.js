@@ -18,6 +18,7 @@ const { initScheduler } = require('./scheduler');
 const { gateAtUpgrade, gateAtStart, makeRejectionLogger } = require('./mediaStreamGate');
 const logMediaStreamRejection = makeRejectionLogger();
 const { initializeHeaders } = require('./sheets');
+const oncoready = require('./oncoreadyIntake');
 
 // ─── VALIDATE CONFIG AT STARTUP ───────────────────────────────────────────────
 config.validate();
@@ -75,6 +76,9 @@ const activeCalls = new Map();
 // ─── WHATSAPP WEBHOOK (Meta Cloud API) ────────────────────────────────────────
 app.get('/whatsapp/incoming', verifyWebhook);
 app.post('/whatsapp/incoming', handleIncomingWhatsApp);
+
+// ─── ONCOREADY BROWSER SESSIONS (pre-visit intake; see oncoreadyIntake.js) ───
+app.post('/v1/browser-sessions', oncoready.createSessionHandler);
 
 // ─── EXOTEL PASSTHRU (optional — App Builder can GET this on call end) ───────
 app.get('/exotel/call-end', (req, res) => {
@@ -146,12 +150,27 @@ wss.on('connection', (ws, request) => {
 
           const start = data.start || {};
 
+          // An OncoReady browser session proves itself with a single-use token we
+          // issued (POST /v1/browser-sessions), not with an Exotel account_sid it
+          // cannot have. A token that is unknown, expired or already used is
+          // refused outright — it never falls through to the Exotel checks.
+          const startParams = start.customParameters || start.custom_parameters || {};
+          let intakeSession = null;
+          if (startParams.session_token) {
+            intakeSession = oncoready.consumeToken(startParams.session_token);
+            if (!intakeSession) {
+              console.warn('[ONCOREADY] Rejected start: session token unknown, expired or already used');
+              ws.close();
+              return;
+            }
+          }
+
           // Anti-injection: drop connections that aren't from our Exotel account.
           // (Zero-config gate; for a hard gate set MEDIA_STREAM_SECRET — handled
           // at the upgrade above.)
           // Fail CLOSED: reject if account_sid is missing OR mismatched (Exotel
           // always sends it). Otherwise an attacker just omits the field to pass.
-          if (config.exotel.sid && start.account_sid !== config.exotel.sid) {
+          if (!intakeSession && config.exotel.sid && start.account_sid !== config.exotel.sid) {
             console.warn(`[EXOTEL] Rejected start: account_sid="${start.account_sid || '(missing)'}" != configured "${config.exotel.sid}"`);
             ws.close();
             return;
@@ -162,7 +181,9 @@ wss.on('connection', (ws, request) => {
           // The shared-secret gate, decided here when the upgrade carried no
           // ?secret= (Exotel's normal case — see gateAtUpgrade). Closed before
           // any audio, STT or LLM spend.
-          const secretVerdict = gateAtStart({ required: process.env.MEDIA_STREAM_SECRET, verifiedAtUpgrade: ws._secretVerified, customParams });
+          const secretVerdict = intakeSession
+            ? { ok: true } // the session token above is a stronger credential than the shared secret
+            : gateAtStart({ required: process.env.MEDIA_STREAM_SECRET, verifiedAtUpgrade: ws._secretVerified, customParams });
           if (!secretVerdict.ok) {
             logMediaStreamRejection({
               ...secretVerdict,
@@ -216,6 +237,18 @@ wss.on('connection', (ws, request) => {
             console.warn(`[EXOTEL] Call rejected: concurrent limit reached (${activeCalls.size}/${MAX_CONCURRENT_CALLS})`);
             ws.close();
             return;
+          }
+
+          if (intakeSession) {
+            // No phone, no returning-caller lookup: this is an OncoReady patient
+            // in a browser, not a clinic caller, and nothing keyed by phone applies.
+            callHandler = new CallHandler(intakeSession.sessionId, 'Unknown', ws, 'oncoready_browser', false, null);
+            callHandler.intake = intakeSession;
+            callHandler.streamSid = streamSid;
+            activeCalls.set(callHandler.callSid, callHandler);
+            console.log(`[ONCOREADY] session ${intakeSession.sessionId} connected (${intakeSession.language})`);
+            await callHandler.start();
+            break;
           }
 
           // Fetch the saved name (if any) so Ritu can greet a repeat patient

@@ -6,6 +6,8 @@ const { getResponseStream } = require('./brain-streaming');
 const { getResponseToolCalling, streamResponseToolCalling } = require('./brain-tools');
 const { getLeanResponse, generateLeanRaw, processLeanRaw, getLeanResponseStream, cannedLine } = require('./brain-lean');
 const { prewarmPrimary } = require('./llm');
+const oncoready = require('./oncoreadyIntake');
+const { completeWithFailover: intakeComplete } = require('./llm');
 const { logCall } = require('./crm');
 const { upsertPatient, saveConfirmedMedication, getPatientMedications, pool: dbPool } = require('./db');
 const config = require('./config');
@@ -1505,6 +1507,9 @@ class CallHandler {
     // emergency exit message has been queued.
     this._emergencyTriggered = false;
     this._garbleReprompts = 0; // capped count of "line unclear, please repeat" prompts
+    // OncoReady pre-visit intake session (oncoreadyIntake.js), set by index.js
+    // before start(). null on every clinic call — then nothing below changes.
+    this.intake = null;
   }
 
   // ─── STT CALLBACKS ──────────────────────────────────────────────────────────
@@ -2067,7 +2072,7 @@ class CallHandler {
       // Guarantee the "कब से? / कोई दवाई-एलर्जी?" questions get asked after a
       // real symptom (the fast model skips them), before the model offers a
       // doctor. Canned → no LLM this turn. Skipped for booking/inquiry/rush.
-      const histQ = this._maybeHistoryQuestion(combined);
+      const histQ = this.intake ? null : this._maybeHistoryQuestion(combined);
       if (histQ) {
         console.log(`[CALL ${this.callSid}] Pre-visit history (stage ${this._historyStage}) — deterministic, LLM skipped`);
         this._processingChain = this._processingChain
@@ -2083,7 +2088,7 @@ class CallHandler {
       // separate booking paths set appointmentBooked (2616 / 2879 / 2979) —
       // hooking all three would be a seventh copy of one rule, so this reads
       // the flag they all end up setting instead.
-      const repQ = this._maybeReportAsk();
+      const repQ = this.intake ? null : this._maybeReportAsk();
       if (repQ) {
         console.log(`[CALL ${this.callSid}] 📄 Report intake ask — deterministic, LLM skipped`);
         this._processingChain = this._processingChain
@@ -2460,6 +2465,7 @@ class CallHandler {
   _maybeStartSpeculation(holdMs) {
     this._cancelSpeculation('superseded by new transcript');
     this._cancelCompletionSpec('superseded by new transcript');
+    if (this.intake) return; // a lean speculation would generate a booking reply nobody uses
     if (!ENABLE_SPECULATIVE_LLM) return;
     if (config.clinicMode !== 'lean' || !config.llm.enableLeanStreaming) return;
     if (this._emergencyTriggered || this.shouldEndCall || this._ended) return;
@@ -2708,6 +2714,7 @@ class CallHandler {
   }
 
   async start() {
+    if (this.intake) return this._startIntake();
     try {
       console.log(`[CALL ${this.callSid}] Call started from ${maskPhone(this.callerPhone)}`);
       this._loadPriorMeds();   // off the hot path — see above
@@ -2863,6 +2870,8 @@ class CallHandler {
   // ─── INTENT PROCESSING ─────────────────────────────────────────────────────
 
   async processIntent(userText, opts = {}) {
+    // OncoReady intake: its own prompt, no booking machinery, no streaming.
+    if (this.intake) return this._processIntakeTurn(userText);
     // ─── LEAN MODE (CLINIC_MODE=lean) ─────────────────────────────────
     // Small-clinic/demo path owns the turn: ONE LLM call against a preloaded
     // roster (no find_doctor, no tool round-trip → no stall/garbage/hallucination).
@@ -4707,7 +4716,9 @@ class CallHandler {
     });
 
     // 3. Fire-and-forget alert to n8n (clinic ops can route this to staff).
-    if (config.n8n.webhookUrl) {
+    //    Not for OncoReady intake: that patient is not this clinic's caller. The
+    //    spoken emergency line still plays; OncoReady gets emergency:true.
+    if (config.n8n.webhookUrl && !this.intake) {
       axios.post(config.n8n.webhookUrl, {
         type: 'emergency',
         emergencyType: detection.type,
@@ -4779,6 +4790,99 @@ class CallHandler {
   // ─── END CALL ──────────────────────────────────────────────────────────────
   // To hang up on Exotel: close the WebSocket. The App Builder flow then
   // advances to the next applet (Passthru → Hangup). No REST call needed.
+
+  // ─── ONCOREADY PRE-VISIT INTAKE (see oncoreadyIntake.js) ──────────────────
+  // Born pinned to the language OncoReady asked for, like FORCE_LANG but per
+  // session. The opening line comes from the model so it can be in any of the
+  // eleven languages without eleven hand-written templates.
+  async _startIntake() {
+    try {
+      const lang = this.intake.language;
+      console.log(`[CALL ${this.callSid}] OncoReady intake session started (${lang})`);
+      this._langPinned = true;
+      this.callLanguage = lang;
+      this.languageDetected = config.languageNames[lang] || this.languageDetected;
+      this.patientName = this.intake.patientName || null;
+      this.conversationPhase = 'intake';
+      this._intakeSystem = oncoready.buildIntakePrompt(this.intake, config.languageNames[lang] || 'English');
+      this._intakeDeadline = setTimeout(() => {
+        console.log(`[CALL ${this.callSid}] Intake session reached its ${this.intake.maxDurationS}s limit`);
+        this._endTrigger = this._endTrigger || 'max_duration';
+        this.endCall().catch(() => {});
+      }, this.intake.maxDurationS * 1000);
+      if (this._intakeDeadline.unref) this._intakeDeadline.unref();
+
+      this.stt = createStreamingSTT(
+        (text, meta) => this._onTranscript(text, meta),
+        () => this._onSpeechStart(),
+        () => this._onSpeechEnd(),
+        { languageCode: lang === 'mr-IN' ? 'hi-IN' : lang } // mr shares the hi-IN session, as with FORCE_LANG
+      );
+      prewarmPrimary();
+
+      this.conversationHistory.push({ role: 'user', content: oncoready.OPENING_INSTRUCTION });
+      // A failed first generation must not cost the session: fall back to a
+      // canned opening and let the next turn try the model again.
+      let reply = { text: '', endCall: false };
+      try { reply = await this._intakeReply(); } catch (err) {
+        console.warn(`[CALL ${this.callSid}] Intake opening generation failed (${err.message}) — canned opening`);
+      }
+      const { text, endCall } = reply;
+      const opening = text || (lang === 'hi-IN'
+        ? 'नमस्ते! डॉक्टर से मिलने से पहले मैं आपसे कुछ सवाल पूछूँगी। अभी आपको क्या तकलीफ़ हो रही है?'
+        : 'Hello! I will ask you a few questions for your doctor before the visit. What problems are you having right now?');
+      if (endCall) this.shouldEndCall = true;
+      await this._sayDeterministic(opening); // records it in history, then speaks (the chokepoint rule)
+    } catch (error) {
+      await this.handleCriticalError(error);
+    }
+  }
+
+  async _intakeReply() {
+    const t0 = Date.now();
+    const response = await intakeComplete(
+      [{ role: 'system', content: this._intakeSystem }, ...this.conversationHistory],
+      { temperature: 0.4, maxTokens: 220 }
+    );
+    this._llmMs.push(Date.now() - t0);
+    this._recordLlmUsage(response.usage);
+    return oncoready.parseReply(response.content);
+  }
+
+  async _processIntakeTurn(userText) {
+    const myGen = this._generationId;
+    const { text, endCall } = await this._intakeReply();
+    if (myGen !== this._generationId) {
+      console.log(`[CALL ${this.callSid}] Discarding stale intake reply (gen ${myGen} → ${this._generationId})`);
+      return;
+    }
+    if (this._emergencyTriggered) return; // handleEmergency owns the audio now
+    if (endCall) {
+      this._endTrigger = this._endTrigger || 'llm_end_call';
+      this.shouldEndCall = true;
+      this.conversationPhase = 'wrapup';
+    }
+    if (!text) {
+      if (endCall) this._sendMark('ritu_end_call'); // nothing left to say, still close cleanly
+      return;
+    }
+    this.conversationHistory.push({ role: 'assistant', content: text });
+    this._trimHistory();
+    await this.speak(text);
+  }
+
+  _sendIntakeResult() {
+    if (this._intakeDeadline) clearTimeout(this._intakeDeadline);
+    const result = oncoready.buildResult(this.intake, {
+      transcript: this.transcript,
+      startedAt: this.startTime,
+      endedAt: Date.now(),
+      endTrigger: this._endTrigger,
+      criticalErrors: this._criticalErrors,
+      emergency: this._emergencyTriggered || this.emergencyDetected,
+    });
+    oncoready.postResult(this.intake, result).catch(() => {}); // never throws; logged inside
+  }
 
   async endCall() {
     if ((this._rosterBrainTurns || 0) > (this._llmTurns || 0)) {
@@ -4862,7 +4966,7 @@ class CallHandler {
          this.bookingFailureReason = (lbl && lbl.en) || 'Unclassified';
       }
 
-      if (this.patientName && this.callerPhone) {
+      if (this.patientName && this.callerPhone && !this.intake) {
         upsertPatient(this.callerPhone, this.patientName).catch(e => console.error('DB Upsert Error:', e.message));
       }
 
@@ -4872,7 +4976,9 @@ class CallHandler {
       // "shadow" means observed once at call end, never on the reply path.
       const drift = this._symptomDriftAudit();
 
-      logCall({
+      if (this.intake) {
+        this._sendIntakeResult(); // OncoReady's record, not the clinic's call log / Sheet / WhatsApp
+      } else logCall({
         callSid: this.callSid,
         callerPhone: this.callerPhone,
         callSource: this.callSource,
