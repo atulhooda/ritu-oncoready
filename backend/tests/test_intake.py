@@ -251,3 +251,67 @@ def test_pipeline_rasterizes_images(tmp_path):
     path = tmp_path / "scan.jpg"
     Image.new("RGB", (300, 200), "white").save(path, "JPEG")
     assert len(rasterize(path, 72)) == 1
+
+
+# --- patient details -------------------------------------------------------------------
+
+DETAILS = {
+    "date_of_birth": "1971-09-30", "sex": "female", "phone": "+91 98200 11111", "preferred_language": "hi-IN",
+    "cancer_type": "Breast cancer", "diagnosed_on": "2025-02-01", "stage_reported": "Stage 2",
+    "treatment_status": "on_treatment", "current_treatment": "Trastuzumab every 3 weeks (on hold)",
+    "treating_hospital": "Synthetic General Hospital", "treating_doctor": "", "other_conditions": None,
+}
+
+
+def test_patient_details_roundtrip_and_validation(client, db, org_a):
+    patient = person(db, org_a, Role.PATIENT, "Detail Patient")
+    h = as_user(client, org_a, patient)
+    blank = client.get("/me/profile", headers=h).json()["details"]
+    assert blank["preferred_language"] == "en-IN" and blank["age"] is None and blank["cancer_type"] is None
+
+    saved = client.put("/me/details", headers=h, json=DETAILS).json()
+    assert saved["sex"] == "female" and saved["cancer_type"] == "Breast cancer"
+    assert saved["treating_doctor"] is None  # blank -> empty
+    assert isinstance(saved["age"], int) and saved["age"] >= 54
+    assert client.get("/me/profile", headers=h).json()["details"]["preferred_language"] == "hi-IN"
+
+    for bad in ({"sex": "robot"}, {"preferred_language": "fr-FR"}, {"date_of_birth": "2999-01-01"},
+                {"treatment_status": "cured"}, {"phone": "call me"}, {"unknown_field": "x"}):
+        assert client.put("/me/details", headers=h, json=DETAILS | bad).status_code == 422, bad
+
+
+def test_session_uses_preferred_language(client, db, org_a, monkeypatch):
+    seen = {}
+
+    def fake_create(org, sid, name, lang):
+        seen["lang"] = lang
+        return ritu.BrowserSession("rs_l", "wss://x", "t", None)
+
+    monkeypatch.setattr(ritu, "enabled", lambda: True)
+    monkeypatch.setattr(ritu, "create_browser_session", fake_create)
+    patient = person(db, org_a, Role.PATIENT, "Language Patient")
+    h = as_user(client, org_a, patient)
+    client.put("/me/details", headers=h, json=DETAILS)
+    assert client.post("/me/sessions", headers=h).json()["language"] == "hi-IN"
+    assert seen["lang"] == "hi-IN"
+
+
+def test_doctor_sees_details_only_after_send(client, db, org_a, org_b):
+    patient = person(db, org_a, Role.PATIENT, "Shared Patient")
+    other = person(db, org_a, Role.PATIENT, "Other Patient")
+    doctor, doctor_b = person(db, org_a, Role.DOCTOR, "Doctor Shah"), person(db, org_b, Role.DOCTOR, "Doctor Far")
+    h, _ = finished_session(client, db, org_a, patient)
+    client.put("/me/details", headers=h, json=DETAILS)
+    case_id = client.get("/me/profile", headers=h).json()["case_id"]
+    hd = as_user(client, org_a, doctor)
+
+    assert client.get(f"/doctor/patients/{case_id}", headers=hd).status_code == 404
+    client.post("/me/publish", headers=h)
+    row = client.get("/doctor/patients", headers=hd).json()[0]
+    assert (row["sex"], row["cancer_type"]) == ("female", "Breast cancer") and row["age"] >= 54
+    detail = client.get(f"/doctor/patients/{case_id}", headers=hd).json()
+    assert detail["details"]["treating_hospital"] == "Synthetic General Hospital"
+
+    # Another patient only ever sees their own (blank) details; another org sees nothing.
+    assert client.get("/me/profile", headers=as_user(client, org_a, other)).json()["details"]["cancer_type"] is None
+    assert client.get(f"/doctor/patients/{case_id}", headers=as_user(client, org_b, doctor_b)).status_code == 404

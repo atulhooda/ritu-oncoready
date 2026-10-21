@@ -258,3 +258,35 @@ def test_every_table_is_tenant_scoped(db):
             "WHERE table_schema = 'public' AND table_name = :t AND column_name = 'org_id'"
         ), {"t": table})
         assert nullable == "NO", f"{table} is missing a NOT NULL org_id"
+
+
+# --- patient intake --------------------------------------------------------------------
+
+
+def test_intake_repositories_are_scoped(db, org_a, org_b):
+    from app.models import Role
+    from app.repositories.intake import (
+        IntakeFactRepository,
+        IntakeSessionRepository,
+        PatientProfileRepository,
+        SessionTurnRepository,
+    )
+
+    patient = UserRepository(db, org_a.org.id).create("pt@org-a.example.com", "Pt", PASSWORD, Role.PATIENT)
+    case = CaseRepository(db, org_a.org.id).add(
+        case_code="PT-1", title="Pt", kind="intake", patient_user_id=patient.id, created_by_user_id=patient.id
+    )
+    profile = PatientProfileRepository(db, org_a.org.id).add(patient_user_id=patient.id, cancer_type="x")
+    session = IntakeSessionRepository(db, org_a.org.id).add(case_id=case.id, patient_user_id=patient.id, mode="simulator")
+    turn = SessionTurnRepository(db, org_a.org.id).add(session_id=session.id, turn_index=0, role="patient", text="cough")
+    fact = IntakeFactRepository(db, org_a.org.id).add(
+        session_id=session.id, case_id=case.id, section="current_symptom", label="Cough",
+        source_turn_id=turn.id, source_text_span="cough",
+    )
+    for repo_cls, row in ((PatientProfileRepository, profile), (IntakeSessionRepository, session),
+                          (SessionTurnRepository, turn), (IntakeFactRepository, fact)):
+        assert repo_cls(db, org_b.org.id).get(row.id) is None, repo_cls.__name__
+        assert repo_cls(db, org_a.org.id).get(row.id) is not None, repo_cls.__name__
+    assert PatientProfileRepository(db, org_b.org.id).get_for(patient.id) is None
+    assert SessionTurnRepository(db, org_b.org.id).for_session(session.id) == []
+    assert CaseRepository(db, org_b.org.id).for_patient(patient.id) is None

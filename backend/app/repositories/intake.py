@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Sequence
 
-from app.models import IntakeFact, IntakeSession, SessionTurn
+from app.models import IntakeFact, IntakeSession, PatientProfile, SessionTurn
 from app.repositories.base import TenantRepository
 
 
@@ -34,3 +34,10 @@ class IntakeFactRepository(TenantRepository[IntakeFact]):
 
     def for_session(self, session_id: uuid.UUID) -> Sequence[IntakeFact]:
         return self.list(IntakeFact.session_id == session_id, limit=1000)
+
+
+class PatientProfileRepository(TenantRepository[PatientProfile]):
+    model = PatientProfile
+
+    def get_for(self, patient_user_id: uuid.UUID) -> PatientProfile | None:
+        return self.session.scalar(self.select().where(PatientProfile.patient_user_id == patient_user_id))

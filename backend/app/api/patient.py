@@ -1,10 +1,11 @@
 """Patient profile: start a session with Ritu, upload previous records, send to the doctor."""
 
 import uuid
+from datetime import date
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app import storage
@@ -12,6 +13,7 @@ from app.auth.deps import CurrentUser, require_role
 from app.db import get_db
 from app.intake import service, tasks as intake_tasks
 from app.models import Role
+from app.models.patient import LANGUAGES, SEXES, TREATMENT_STATUSES
 from app.repositories.cases import SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.users import UserRepository
@@ -32,6 +34,37 @@ class SimulatedTranscript(BaseModel):
     turns: list[SimulatedTurn] = Field(min_length=1, max_length=200)
 
 
+class DetailsIn(BaseModel):
+    """Everything the patient can say about themselves. Blank strings are stored as empty."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    date_of_birth: date | None = None
+    sex: Literal[*SEXES] | None = None
+    phone: str | None = Field(None, max_length=32, pattern=r"^[0-9+()\- ]*$")
+    preferred_language: Literal[*LANGUAGES] = "en-IN"
+    cancer_type: str | None = Field(None, max_length=120)
+    diagnosed_on: date | None = None  # the UI sends the first day of the month
+    stage_reported: str | None = Field(None, max_length=60)
+    treatment_status: Literal[*TREATMENT_STATUSES] | None = None
+    current_treatment: str | None = Field(None, max_length=2000)
+    treating_hospital: str | None = Field(None, max_length=200)
+    treating_doctor: str | None = Field(None, max_length=200)
+    other_conditions: str | None = Field(None, max_length=2000)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def blank_is_none(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("date_of_birth", "diagnosed_on")
+    @classmethod
+    def not_in_future(cls, v: date | None) -> date | None:
+        if v is not None and (v > date.today() or v.year < 1900):
+            raise ValueError("date must be in the past")
+        return v
+
+
 def _user(db: Session, current: CurrentUser):
     return UserRepository(db, current.org_id).get(current.id)
 
@@ -49,6 +82,8 @@ def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(
     sessions = sorted(IntakeSessionRepository(db, user.org_id).for_case(case.id), key=lambda s: s.created_at)
     return {
         "name": user.full_name,
+        "email": user.email,
+        "details": service.patient_details(db, user.org_id, user.id),
         "case_id": case.id,
         "published_at": case.published_at,
         "voice_mode": "ritu" if service.ritu.enabled() else "simulator",
@@ -56,6 +91,13 @@ def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(
         "summary": service.build_summary(db, user.org_id, case.id),
         "records": service.records(db, user.org_id, case.id),
     }
+
+
+@router.put("/details")
+def update_details(body: DetailsIn, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    details = service.update_details(db, _user(db, current), body.model_dump())
+    db.commit()
+    return details
 
 
 @router.get("/intake-script")

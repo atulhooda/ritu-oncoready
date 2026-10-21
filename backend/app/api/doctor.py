@@ -26,9 +26,13 @@ def list_patients(current: CurrentUser = Depends(doctor_only), db: Session = Dep
     for case in CaseRepository(db, current.org_id).published_intake():
         summary = service.build_summary(db, current.org_id, case.id)
         symptoms = next((s["facts"] for s in summary["sections"] if s["section"] == "current_symptom"), []) if summary else []
+        details = service.patient_details(db, current.org_id, case.patient_user_id)
         out.append({
             "case_id": case.id,
             "name": case.title,
+            "age": details["age"],
+            "sex": details["sex"],
+            "cancer_type": details["cancer_type"],
             "published_at": case.published_at,
             "symptoms": [f["label"] for f in symptoms],
             "records": len(SourceDocumentRepository(db, current.org_id).for_case(case.id)),
@@ -46,6 +50,7 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only),
         "case_id": case.id,
         "name": case.title,
         "published_at": case.published_at,
+        "details": service.patient_details(db, current.org_id, case.patient_user_id),
         "summary": service.build_summary(db, current.org_id, case.id),
         "records": service.records(db, current.org_id, case.id),
         "timeline": build_timeline(db, current.org_id, case.id),

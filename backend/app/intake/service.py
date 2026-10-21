@@ -1,6 +1,6 @@
 import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from app.models import IntakeSession, PatientCase, User
 from app.models.intake import FACT_SECTIONS
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
-from app.repositories.intake import IntakeFactRepository, IntakeSessionRepository, SessionTurnRepository
+from app.repositories.intake import (
+    IntakeFactRepository,
+    IntakeSessionRepository,
+    PatientProfileRepository,
+    SessionTurnRepository,
+)
 from app.voice import client as ritu
 
 SECTION_LABELS = {
@@ -37,8 +42,41 @@ def profile_case(db: Session, user: User) -> PatientCase:
     return case
 
 
-def start_session(db: Session, user: User, language: str = "en") -> tuple[IntakeSession, ritu.BrowserSession | None]:
+DETAIL_FIELDS = (
+    "date_of_birth", "sex", "phone", "preferred_language", "cancer_type", "diagnosed_on", "stage_reported",
+    "treatment_status", "current_treatment", "treating_hospital", "treating_doctor", "other_conditions",
+)
+
+
+def age_on(dob: date | None, today: date) -> int | None:
+    if dob is None:
+        return None
+    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
+def patient_details(db: Session, org_id: uuid.UUID, patient_user_id: uuid.UUID) -> dict[str, Any]:
+    """Patient-reported details (empty fields when the patient hasn't filled them in)."""
+    p = PatientProfileRepository(db, org_id).get_for(patient_user_id)
+    out: dict[str, Any] = {f: getattr(p, f) if p else None for f in DETAIL_FIELDS}
+    out["preferred_language"] = out["preferred_language"] or "en-IN"
+    out["age"] = age_on(out["date_of_birth"], date.today())
+    out["updated_at"] = p.updated_at or p.created_at if p else None
+    return out
+
+
+def update_details(db: Session, user: User, values: dict[str, Any]) -> dict[str, Any]:
+    profiles = PatientProfileRepository(db, user.org_id)
+    p = profiles.get_for(user.id) or profiles.add(patient_user_id=user.id)
+    for k, v in values.items():
+        if k in DETAIL_FIELDS:
+            setattr(p, k, v)
+    db.flush()
+    return patient_details(db, user.org_id, user.id)
+
+
+def start_session(db: Session, user: User, language: str | None = None) -> tuple[IntakeSession, ritu.BrowserSession | None]:
     case = profile_case(db, user)
+    language = language or patient_details(db, user.org_id, user.id)["preferred_language"]
     mode = "ritu" if ritu.enabled() else "simulator"
     session = IntakeSessionRepository(db, user.org_id).add(
         case_id=case.id, patient_user_id=user.id, mode=mode, language=language, status="created"
