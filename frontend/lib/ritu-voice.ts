@@ -104,7 +104,20 @@ export class RituVoice {
     this.ctx = new AudioContext();
     this.outAnalyser = this.ctx.createAnalyser();
     this.outAnalyser.fftSize = 512;
-    this.outAnalyser.connect(this.ctx.destination);
+    // Gentler playback. Phone-band (8 kHz) speech concentrates its energy in the 2-4 kHz
+    // "presence" band, which is what reads as shrill on laptop speakers. Soften it, add a
+    // little low-end warmth, and sit slightly below full scale.
+    const warmth = this.ctx.createBiquadFilter();
+    warmth.type = "lowshelf";
+    warmth.frequency.value = 300;
+    warmth.gain.value = 3;
+    const soften = this.ctx.createBiquadFilter();
+    soften.type = "highshelf";
+    soften.frequency.value = 2200;
+    soften.gain.value = -6;
+    const level = this.ctx.createGain();
+    level.gain.value = 0.85;
+    this.outAnalyser.connect(warmth).connect(soften).connect(level).connect(this.ctx.destination);
     this.micAnalyser = this.ctx.createAnalyser();
     this.micAnalyser.fftSize = 512;
 

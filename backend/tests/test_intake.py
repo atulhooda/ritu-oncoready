@@ -315,3 +315,29 @@ def test_doctor_sees_details_only_after_send(client, db, org_a, org_b):
     # Another patient only ever sees their own (blank) details; another org sees nothing.
     assert client.get("/me/profile", headers=as_user(client, org_a, other)).json()["details"]["cancer_type"] is None
     assert client.get(f"/doctor/patients/{case_id}", headers=as_user(client, org_b, doctor_b)).status_code == 404
+
+
+def test_browser_session_request_carries_the_calm_voice(monkeypatch):
+    sent = {}
+
+    class Resp:
+        status_code = 201
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"session_id": "rs_1", "ws_url": "wss://x", "token": "t", "expires_at": None}
+
+    def fake_post(url, content, headers, timeout):
+        sent["body"] = json.loads(content)
+        sent["headers"] = headers
+        return Resp()
+
+    monkeypatch.setattr(get_settings(), "ritu_base_url", "http://ritu.test")
+    monkeypatch.setattr(ritu.httpx, "post", fake_post)
+    ritu.create_browser_session("org", "sess", "Maria", "hi-IN")
+    assert sent["body"]["voice"] == {"speaker": "roopa", "pace": 1.0, "temperature": 0.45}
+    assert sent["body"]["language"] == "hi-IN"
+    ts, sig = sent["headers"]["X-Ritu-Timestamp"], sent["headers"]["X-Ritu-Signature"]
+    assert ritu.verify(ts, sig, json.dumps(sent["body"]).encode())

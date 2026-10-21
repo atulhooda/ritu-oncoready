@@ -61,6 +61,7 @@ def create_browser_session(org_id, session_id, patient_name: str, language: str)
         "context": {"patient_display_name": patient_name, "clinic_display_name": s.clinic_display_name},
         "script": INTAKE_SCRIPT,
         "callback_url": f"{s.public_api_url.rstrip('/')}/integrations/ritu/sessions",
+        "voice": {"speaker": s.ritu_voice_speaker, "pace": s.ritu_voice_pace, "temperature": s.ritu_voice_temperature},
         "max_duration_s": 600,
     }).encode()
     ts = str(int(time.time()))

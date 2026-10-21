@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     ritu_shared_secret: str = ""  # HMAC for requests to Ritu and for Ritu's callbacks
     public_api_url: str = "http://localhost:8000"  # where Ritu sends the session callback
     clinic_display_name: str = "OncoReady demo clinic"
+    # Ritu's voice for browser sessions. Calmer than the phone deploy's default (suhani at 1.2x):
+    # roopa measured lower and softer in an audition of Sarvam's bulbul:v3 voices (2026-10-22).
+    ritu_voice_speaker: str = "roopa"
+    ritu_voice_pace: float = 1.0
+    ritu_voice_temperature: float = 0.45
 
     # LLM (extraction only, see app/llm/client.py)
     gemini_api_key: str | None = None
