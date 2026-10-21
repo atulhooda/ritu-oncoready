@@ -1,12 +1,15 @@
-import { Badge } from "@/components/Shell";
+import { Badge } from "@/components/ui";
 import type { BriefSummary } from "@/lib/types";
 
-export function ScoreCell({ b }: { b: BriefSummary }) {
+export function ScoreCell({ b, showPercent = true }: { b: BriefSummary; showPercent?: boolean }) {
   if (b.status === "scoring_failed") return <Badge tone="red">scoring failed</Badge>;
-  if (!b.score) return <Badge tone="slate">scoring…</Badge>;
+  if (!b.score) return <Badge>scoring…</Badge>;
   return (
-    <span className="whitespace-nowrap">
-      {b.score.percent}% <span className="text-slate-500">({b.score.points_earned}/{b.score.points_possible})</span>{" "}
+    <span className="inline-flex flex-wrap items-center gap-2 whitespace-nowrap">
+      {showPercent && <span className="font-semibold">{Number(b.score.percent).toFixed(0)}%</span>}
+      <span className="text-muted">
+        {b.score.points_earned}/{b.score.points_possible} pts
+      </span>
       {b.score.critical_missed > 0 && <Badge tone="red">{b.score.critical_missed} critical missed</Badge>}
     </span>
   );

@@ -13,6 +13,9 @@ docker compose exec backend python /seed/seed.py --demo-briefs  # demo resident 
 # sign in at the frontend: org "demo", resident@ / faculty@demo.example.com, password synthetic-demo-pass
 ```
 
+After changing frontend dependencies, renew the container's `node_modules` volume:
+`docker compose up -d --build -V frontend`.
+
 Backend tests need a Postgres database:
 
 ```bash

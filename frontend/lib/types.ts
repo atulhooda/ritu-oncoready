@@ -6,6 +6,7 @@ export interface Me {
   email: string;
   full_name: string;
   role: Role;
+  org_name: string | null;
 }
 
 export interface CaseSummary {
@@ -134,4 +135,10 @@ export interface Trend {
   resident: { id: string; name: string };
   cases: BriefSummary[];
   categories: CategoryTrend[];
+}
+
+/** "Synthetic case: new left breast mass" -> "New left breast mass" */
+export function caseTitle(title: string | null | undefined): string {
+  const t = (title ?? "").replace(/^Synthetic case:\s*/, "");
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }

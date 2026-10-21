@@ -32,6 +32,7 @@ class UserOut(BaseModel):
     email: str
     full_name: str
     role: str
+    org_name: str | None = None
 
 
 @router.post("/login", response_model=TokenOut)
@@ -48,4 +49,6 @@ def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
 
 @router.get("/me", response_model=UserOut)
 def me(current: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    return UserRepository(db, current.org_id).get(current.id)
+    user = UserRepository(db, current.org_id).get(current.id)
+    org = OrgRepository(db).get(current.org_id)
+    return UserOut.model_validate(user).model_copy(update={"org_name": org.name if org else None})

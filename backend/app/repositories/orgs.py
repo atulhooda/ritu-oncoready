@@ -11,6 +11,9 @@ class OrgRepository:
     def __init__(self, session: Session):
         self.session = session
 
+    def get(self, org_id) -> Org | None:
+        return self.session.get(Org, org_id)
+
     def get_by_slug(self, slug: str) -> Org | None:
         return self.session.scalar(select(Org).where(Org.slug == slug))
 

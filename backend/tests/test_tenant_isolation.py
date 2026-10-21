@@ -51,6 +51,7 @@ def test_me_returns_own_org(client, org_a, org_b):
     r = client.get("/auth/me", headers=login(client, org_a, org_a.resident))
     assert r.status_code == 200
     assert r.json()["org_id"] == str(org_a.org.id)
+    assert r.json()["org_name"] == org_a.org.name
 
 
 # --- cases, documents, pages ------------------------------------------------------------
