@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import { IntakeSummaryView } from "@/components/IntakeSummaryView";
+import { NextStepCard } from "@/components/NextStepCard";
 import { PatientAside } from "@/components/PatientAside";
 import { SessionPanel } from "@/components/SessionPanel";
 import { Shell } from "@/components/Shell";
@@ -56,7 +57,7 @@ export default function TalkToRituPage() {
                       </p>
                       <p className="mt-1 text-muted">
                         {profile.voice_mode === "ritu" ? (
-                          <>Ritu will speak <b>{language}</b>. You can change this in <Link href="/patient" className="text-brand hover:underline">My profile</Link>. Allow microphone access when your browser asks.</>
+                          <>Ritu starts in <b>{language}</b> (set in <Link href="/patient" className="text-brand hover:underline">My profile</Link>) and switches if you answer in another language. Allow microphone access when your browser asks.</>
                         ) : (
                           <>Ritu&apos;s voice is not connected yet, so you will type your answers to the same questions.</>
                         )}
@@ -69,12 +70,8 @@ export default function TalkToRituPage() {
                   </div>
                 </Card>
               )}
+              {profile.summary && !live && !writing && <NextStepCard profile={profile} />}
               {profile.summary && !live && <IntakeSummaryView summary={profile.summary} audience="patient" />}
-              {profile.summary && !live && (
-                <p className="text-sm text-muted">
-                  Next: <Link href="/patient/records" className="font-medium text-brand hover:underline">add your earlier records →</Link>
-                </p>
-              )}
             </div>
             <PatientAside profile={profile} />
           </div>

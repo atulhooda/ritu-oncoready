@@ -22,13 +22,18 @@ INTAKE_SCRIPT = {
         {
             "id": "previous_records",
             "goal": "Find out which earlier records they have (reports, scans, prescriptions, discharge "
-            "summaries): what, when, and from where. Ask them to upload these in their OncoReady profile "
-            "after the conversation.",
+            "summaries): what, when, and from where. If they have none, that is fine: say so kindly and "
+            "move on.",
             "prompts": [
                 "Do you have any earlier medical records, like test reports, scans, prescriptions or discharge summaries?",
                 "Which ones, and roughly when and where were they done?",
             ],
         },
     ],
-    "closing": "Thank you. Please upload those records in your profile, and I will share this with your doctor.",
+    # Guidance for Ritu (she phrases it in the patient's language).
+    "closing": "Thank the patient and say their doctor will see what they shared. Only if they said they "
+    "have earlier records, ask them to upload photos or PDFs of those records on the 'My records' page "
+    "of their OncoReady profile. If they have no records, do not ask for any.",
+    # What the typed simulator shows as Ritu's last line.
+    "closing_example": "Thank you. Your doctor will see what you shared today.",
 }

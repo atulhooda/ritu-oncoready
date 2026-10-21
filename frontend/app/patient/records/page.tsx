@@ -4,6 +4,7 @@ import { FileText, FileUp } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
+import { mentionedRecords } from "@/components/NextStepCard";
 import { PatientAside } from "@/components/PatientAside";
 import { Shell } from "@/components/Shell";
 import { usePatient } from "@/components/usePatient";
@@ -52,6 +53,16 @@ export default function RecordsPage() {
           {error && <p className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
           <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
             <div className="space-y-6">
+              {mentionedRecords(profile).length > 0 && (
+                <Card className="p-6">
+                  <Label>You told Ritu you have</Label>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {mentionedRecords(profile).map((m) => (
+                      <Badge key={m} tone="blue">{m}</Badge>
+                    ))}
+                  </div>
+                </Card>
+              )}
               <div
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -104,11 +115,17 @@ export default function RecordsPage() {
                   </ul>
                 </Card>
               )}
-              {profile.records.length > 0 && (
-                <p className="text-sm text-muted">
-                  Next: <Link href="/patient/send" className="font-medium text-brand hover:underline">review and send to your doctor →</Link>
+              <Card className="flex flex-wrap items-center justify-between gap-4 p-6">
+                <p className="text-muted">
+                  {profile.records.length ? "Done adding records?" : "Don't have any records? You can still send what you told Ritu."}
                 </p>
-              )}
+                <Link
+                  href="/patient/send"
+                  className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-[15px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(58,79,224,0.7)] hover:bg-brand-hover"
+                >
+                  {profile.records.length ? "Review and send to doctor" : "I don't have records, continue"}
+                </Link>
+              </Card>
             </div>
             <PatientAside profile={profile} />
           </div>

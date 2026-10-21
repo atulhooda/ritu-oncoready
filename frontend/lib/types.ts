@@ -251,6 +251,7 @@ export interface PatientProfile {
 export interface IntakeScript {
   steps: { id: string; goal: string; prompts: string[] }[];
   closing: string;
+  closing_example: string;
 }
 
 export interface DoctorPatientRow {

@@ -3,12 +3,19 @@
  * (recognition, conversation, synthesis); this only moves audio. Protocol: Ritu's /media-stream
  * (see ritu voice/public/test-harness.html and docs/VOICE_INTEGRATION.md):
  *   up:   connected, start{customParameters.session_token}, media{payload: base64 PCM16 8 kHz}, mark, stop
- *   down: media (same encoding), mark (echo when played), clear (flush playback)
+ *   down: media (same encoding), mark (echo when played), clear (flush playback),
+ *         oncoready_caption {role, text} (live captions, intake sessions only)
  */
 
 const RATE = 8000;
 
-export type VoiceState = "connecting" | "live" | "ended" | "error";
+/** connecting → ritu (speaking) → listening → thinking (heard you, preparing a reply) → ritu … → ended */
+export type VoicePhase = "connecting" | "ritu" | "listening" | "thinking" | "ended" | "error";
+
+export interface VoiceEvents {
+  onPhase: (phase: VoicePhase, detail?: string) => void;
+  onCaption?: (role: "ritu" | "patient", text: string) => void;
+}
 
 function downsample(input: Float32Array, from: number, to: number): Float32Array {
   if (from === to) return input;
@@ -42,37 +49,73 @@ function fromBase64Pcm16(payload: string): Float32Array<ArrayBuffer> {
   return out;
 }
 
+function rms(analyser: AnalyserNode | null, buf: Float32Array<ArrayBuffer>): number {
+  if (!analyser) return 0;
+  analyser.getFloatTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  return Math.min(1, Math.sqrt(sum / buf.length) * 4); // speech RMS ~0.05-0.25 → 0.2-1
+}
+
 export class RituVoice {
   private ws: WebSocket | null = null;
   private ctx: AudioContext | null = null;
   private mic: MediaStream | null = null;
   private processor: ScriptProcessorNode | null = null;
+  private outAnalyser: AnalyserNode | null = null;
+  private micAnalyser: AnalyserNode | null = null;
+  private levelBuf = new Float32Array(512);
   private playing: AudioBufferSourceNode[] = [];
   private playEnd = 0;
+  private phase: VoicePhase = "connecting";
+  private stopped = false;
 
   constructor(
     private wsUrl: string,
     private token: string,
-    private onState: (state: VoiceState, detail?: string) => void,
-    private onSpeaking: (who: "ritu" | "patient" | null) => void = () => {},
+    private events: VoiceEvents,
   ) {}
 
+  private setPhase(p: VoicePhase, detail?: string) {
+    if (this.phase === p && !detail) return;
+    if (this.phase === "ended" && p !== "error") return;
+    this.phase = p;
+    this.events.onPhase(p, detail);
+  }
+
+  /** Live loudness 0..1 of Ritu's playback and of the microphone (for the animation). */
+  levels(): { ritu: number; mic: number } {
+    return { ritu: rms(this.outAnalyser, this.levelBuf), mic: rms(this.micAnalyser, this.levelBuf) };
+  }
+
   async start(): Promise<void> {
-    this.onState("connecting");
-    this.mic = await navigator.mediaDevices.getUserMedia({
+    this.setPhase("connecting");
+    const mic = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
+    // stop() can land while the permission prompt is open (React dev mode mounts, unmounts and
+    // remounts every effect). A stopped instance must not go on to open the socket: it would spend
+    // the single-use token and play Ritu's audio from a component no longer on screen.
+    if (this.stopped) {
+      mic.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    this.mic = mic;
     this.ctx = new AudioContext();
+    this.outAnalyser = this.ctx.createAnalyser();
+    this.outAnalyser.fftSize = 512;
+    this.outAnalyser.connect(this.ctx.destination);
+    this.micAnalyser = this.ctx.createAnalyser();
+    this.micAnalyser.fftSize = 512;
+
     const source = this.ctx.createMediaStreamSource(this.mic);
+    source.connect(this.micAnalyser);
     this.processor = this.ctx.createScriptProcessor(4096, 1, 1);
     source.connect(this.processor);
-    this.processor.connect(this.ctx.destination);
+    this.processor.connect(this.ctx.destination); // required for onaudioprocess to fire; outputs silence
     this.processor.onaudioprocess = (e) => {
       if (this.ws?.readyState !== WebSocket.OPEN) return;
-      const input = e.inputBuffer.getChannelData(0);
-      const level = input.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
-      if (level > 0.08 && this.playEnd <= (this.ctx?.currentTime ?? 0)) this.onSpeaking("patient");
-      const payload = toBase64Pcm16(downsample(input, this.ctx!.sampleRate, RATE));
+      const payload = toBase64Pcm16(downsample(e.inputBuffer.getChannelData(0), this.ctx!.sampleRate, RATE));
       this.ws.send(JSON.stringify({ event: "media", media: { payload } }));
     };
 
@@ -90,51 +133,59 @@ export class RituVoice {
           },
         }),
       );
-      this.onState("live");
     };
     this.ws.onmessage = (ev) => this.handle(ev.data);
-    this.ws.onerror = () => this.onState("error", "Connection to Ritu failed");
+    this.ws.onerror = () => this.setPhase("error", "Connection to Ritu failed");
     this.ws.onclose = () => {
       this.cleanup();
-      this.onState("ended");
+      this.setPhase("ended");
     };
   }
 
   private handle(raw: string) {
-    let msg: { event?: string; media?: { payload?: string }; mark?: { name?: string } };
+    let msg: { event?: string; media?: { payload?: string }; mark?: { name?: string }; role?: string; text?: string };
     try {
       msg = JSON.parse(raw);
     } catch {
       return;
     }
-    if (msg.event === "media" && msg.media?.payload && this.ctx) {
+    if (msg.event === "media" && msg.media?.payload && this.ctx && this.outAnalyser) {
       const samples = fromBase64Pcm16(msg.media.payload);
       const buffer = this.ctx.createBuffer(1, samples.length, RATE);
       buffer.copyToChannel(samples, 0);
       const node = this.ctx.createBufferSource();
       node.buffer = buffer;
-      node.connect(this.ctx.destination);
+      node.connect(this.outAnalyser);
       const at = Math.max(this.ctx.currentTime, this.playEnd);
       node.start(at);
       this.playEnd = at + buffer.duration;
       this.playing.push(node);
       node.onended = () => {
         this.playing = this.playing.filter((n) => n !== node);
-        if (!this.playing.length) this.onSpeaking(null);
+        if (!this.playing.length && this.phase === "ritu") this.setPhase("listening");
       };
-      this.onSpeaking("ritu");
+      this.setPhase("ritu");
     } else if (msg.event === "mark" && msg.mark?.name) {
+      // Echo once our playback reaches this point, as the phone network would.
       const wait = this.ctx ? Math.max(0, (this.playEnd - this.ctx.currentTime) * 1000) : 0;
       const name = msg.mark.name;
-      setTimeout(() => this.ws?.readyState === WebSocket.OPEN && this.ws.send(JSON.stringify({ event: "mark", mark: { name } })), wait);
+      setTimeout(() => {
+        if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ event: "mark", mark: { name } }));
+        if (name === "ritu_done" && !this.playing.length) this.setPhase("listening");
+      }, wait);
     } else if (msg.event === "clear") {
       this.playing.forEach((n) => n.stop());
       this.playing = [];
       this.playEnd = this.ctx?.currentTime ?? 0;
+      this.setPhase("listening");
+    } else if (msg.event === "oncoready_caption" && (msg.role === "ritu" || msg.role === "patient") && msg.text) {
+      this.events.onCaption?.(msg.role, msg.text);
+      if (msg.role === "patient" && this.phase !== "ritu") this.setPhase("thinking");
     }
   }
 
   stop() {
+    this.stopped = true;
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ event: "stop" }));
     this.ws?.close();
     this.cleanup();
@@ -148,5 +199,7 @@ export class RituVoice {
     if (this.ctx && this.ctx.state !== "closed") this.ctx.close();
     this.processor = null;
     this.mic = null;
+    this.outAnalyser = null;
+    this.micAnalyser = null;
   }
 }
