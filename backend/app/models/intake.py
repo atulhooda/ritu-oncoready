@@ -12,7 +12,10 @@ from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
 SESSION_STATUSES = ("created", "in_progress", "completed", "summarized", "failed", "expired")
 SESSION_MODES = ("ritu", "simulator")  # simulator: typed stand-in until Ritu browser sessions exist
 TURN_ROLES = ("patient", "ritu", "system")
-FACT_SECTIONS = ("current_symptom", "medication", "allergy", "past_history", "previous_record")
+# Display order. treatment / recent_care / concern added with the oncology question set (0012).
+FACT_SECTIONS = (
+    "current_symptom", "treatment", "medication", "allergy", "recent_care", "past_history", "previous_record", "concern",
+)
 
 
 class IntakeSession(TenantMixin, Base):
