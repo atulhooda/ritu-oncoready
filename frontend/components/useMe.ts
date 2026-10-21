@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { api, ApiError, setToken } from "@/lib/api";
 import type { Me, Role } from "@/lib/types";
+import { homeFor } from "@/lib/types";
 
 /** Loads the current user; redirects to /login when signed out or to home on a wrong role. */
 export function useMe(allowed?: Role[]): Me | null {
@@ -16,7 +17,7 @@ export function useMe(allowed?: Role[]): Me | null {
     api<Me>("/auth/me")
       .then((user) => {
         if (allowedKey && !allowedKey.split(",").includes(user.role)) {
-          router.replace(user.role === "resident" ? "/cases" : "/faculty");
+          router.replace(homeFor(user.role));
           return;
         }
         setMe(user);

@@ -21,6 +21,7 @@ backend/.venv/bin/python seed/render.py         # re-render seed PDFs + REVIEW_F
 docker compose exec backend python /seed/seed.py [--reprocess]   # load cases, enqueue pipeline
 docker compose exec backend python /seed/recall.py               # extraction recall vs answer keys
 docker compose exec backend python /seed/seed.py --demo-briefs   # submit + score demo resident briefs
+docker compose exec backend python /seed/seed.py --intake        # doctor + patient personas
 ```
 
 ## Document pipeline (`app/pipeline/`, Celery)

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button, Eyebrow, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
 import type { Me } from "@/lib/types";
+import { homeFor } from "@/lib/types";
 
 const FIELDS = [
   { key: "org", label: "Organization", type: "text" },
@@ -30,7 +31,7 @@ export default function LoginPage() {
       });
       setToken(access_token);
       const me = await api<Me>("/auth/me");
-      router.replace(me.role === "resident" ? "/cases" : "/faculty");
+      router.replace(homeFor(me.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

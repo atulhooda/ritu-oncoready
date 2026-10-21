@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, FolderOpen, LogOut, Menu, Users, X } from "lucide-react";
+import { ClipboardCheck, FolderOpen, LogOut, Menu, Stethoscope, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,6 +16,8 @@ const NAV = {
     { href: "/faculty", label: "Assessments", icon: ClipboardCheck },
     { href: "/faculty/residents", label: "Residents", icon: Users },
   ],
+  patient: [{ href: "/patient", label: "My profile", icon: UserRound }],
+  doctor: [{ href: "/doctor", label: "Patients", icon: Stethoscope }],
 };
 
 function isActive(pathname: string, href: string) {
@@ -54,7 +56,7 @@ function Brand() {
 function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const items = me.role === "resident" ? NAV.resident : NAV.faculty;
+  const items = NAV[me.role === "admin" ? "faculty" : me.role];
   return (
     <div className="flex h-full flex-col bg-ink text-white/80">
       <div className="border-b border-white/10 px-6 py-5">
@@ -85,7 +87,9 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
       <div className="space-y-5 border-t border-white/10 px-6 py-6">
         <div>
           <div className="font-semibold text-white">{me.org_name ?? "OncoReady"}</div>
-          <div className="text-sm text-white/55">Synthetic teaching cases</div>
+          <div className="text-sm text-white/55">
+            {me.role === "patient" || me.role === "doctor" ? "Demo patients · synthetic data" : "Synthetic teaching cases"}
+          </div>
         </div>
         <div className="flex items-center justify-between gap-3 text-sm">
           <div className="min-w-0 rounded-lg border border-white/15 px-3 py-2">

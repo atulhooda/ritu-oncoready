@@ -51,6 +51,7 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - /app/.next  # container-owned build cache; host `next build` can't clobber it
     ports: ["${FRONTEND_HOST_PORT:-3000}:3000"]
     depends_on: [backend]
 

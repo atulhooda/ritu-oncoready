@@ -60,6 +60,67 @@ def load_case(db, org, faculty_id, case_dir: Path) -> list[tuple]:
     return todo
 
 
+def load_intake_personas(sync: bool) -> None:
+    """Doctor user + demo patients. Personas with a transcript get a finished session (stored
+    through the same path as a Ritu callback), their records, and are sent to the doctor."""
+    import uuid as uuid_mod
+
+    from app.intake import service
+    from app.intake.extraction import run_intake_extraction
+    from app.repositories.intake import IntakeSessionRepository
+
+    to_process = []
+    with SessionLocal() as db:
+        org = OrgRepository(db).get_by_slug("demo")
+        users = UserRepository(db, org.id)
+        if users.get_by_email("doctor@demo.example.com") is None:
+            users.create("doctor@demo.example.com", "Dr. Demo Oncologist", DEMO_PASSWORD, Role.DOCTOR)
+        for path in sorted((HERE / "personas").glob("*.json")):
+            p = json.loads(path.read_text())
+            user = users.get_by_email(p["email"]) or users.create(p["email"], p["name"], DEMO_PASSWORD, Role.PATIENT)
+            case = service.profile_case(db, user)
+            if IntakeSessionRepository(db, org.id).for_case(case.id):
+                print(f"  {p['name']}: already has a session")
+                continue
+            for rel in p["records"]:
+                src = HERE / "cases" / rel
+                doc_id = uuid_mod.uuid4()
+                key = f"{org.id}/{case.id}/{doc_id}.pdf"
+                storage.write_bytes(key, src.read_bytes())
+                SourceDocumentRepository(db, org.id).add(
+                    id=doc_id, case_id=case.id, filename=src.name, mime_type="application/pdf",
+                    storage_key=key, uploaded_by_user_id=user.id,
+                )
+                to_process.append((doc_id, case.id))
+            if p["transcript"]:
+                session, _ = service.start_session(db, user)
+                service.record_transcript(db, org.id, session, p["transcript"])
+                print(f"  {p['name']}: summary {run_intake_extraction(db, org.id, session.id)}")
+                if p["publish"]:
+                    service.publish(db, user)
+            print(f"  {p['name']}: {p['email']} / {DEMO_PASSWORD}, {len(p['records'])} record(s)")
+        db.commit()
+        org_id = org.id
+    print(f"doctor: doctor@demo.example.com / {DEMO_PASSWORD}")
+    for doc_id, case_id in to_process:
+        if sync:
+            from app.pipeline.derive import run_derive
+            from app.pipeline.extraction import run_extraction
+            from app.pipeline.ocr import run_ocr
+
+            with SessionLocal() as db:
+                run_ocr(db, org_id, doc_id)
+                run_extraction(db, org_id, doc_id)
+                run_derive(db, org_id, case_id)
+                db.commit()
+        else:
+            from app.pipeline.tasks import enqueue_document
+
+            enqueue_document(org_id, doc_id, case_id)
+    if to_process and not sync:
+        print(f"enqueued {len(to_process)} record(s) for OCR + extraction")
+
+
 def submit_demo_briefs(sync: bool) -> None:
     from datetime import UTC, datetime
 
@@ -108,9 +169,14 @@ def main() -> None:
     ap.add_argument("--reprocess", action="store_true", help="re-run the pipeline for documents already loaded")
     ap.add_argument("--demo-briefs", action="store_true",
                     help="submit seed/briefs/*.json as the demo resident and score them (needs an LLM key)")
+    ap.add_argument("--intake", action="store_true",
+                    help="create the doctor + patient personas in seed/personas (needs an LLM key for summaries)")
     args = ap.parse_args()
     if args.demo_briefs:
         submit_demo_briefs(sync=args.sync)
+        return
+    if args.intake:
+        load_intake_personas(sync=args.sync)
         return
 
     with SessionLocal() as db:

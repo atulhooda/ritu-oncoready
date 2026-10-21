@@ -10,7 +10,10 @@ docker compose up --build
 docker compose exec backend python /seed/seed.py   # synthetic demo org + cases, runs pipeline
 docker compose exec backend python /seed/recall.py # extraction recall vs answer keys
 docker compose exec backend python /seed/seed.py --demo-briefs  # demo resident briefs, scored
-# sign in at the frontend: org "demo", resident@ / faculty@demo.example.com, password synthetic-demo-pass
+docker compose exec backend python /seed/seed.py --intake       # doctor + patient personas (Maria sent, John fresh)
+# sign in at the frontend: org "demo", password synthetic-demo-pass
+#   training: resident@ / faculty@demo.example.com
+#   intake:   maria@ / john@ (patients), doctor@demo.example.com
 ```
 
 After changing frontend dependencies, renew the container's `node_modules` volume:

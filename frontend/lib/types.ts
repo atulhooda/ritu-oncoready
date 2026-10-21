@@ -1,4 +1,8 @@
-export type Role = "resident" | "faculty" | "admin";
+export type Role = "resident" | "faculty" | "admin" | "patient" | "doctor";
+
+export function homeFor(role: Role): string {
+  return { resident: "/cases", faculty: "/faculty", admin: "/faculty", patient: "/patient", doctor: "/doctor" }[role];
+}
 
 export interface Me {
   id: string;
@@ -141,4 +145,75 @@ export interface Trend {
 export function caseTitle(title: string | null | undefined): string {
   const t = (title ?? "").replace(/^Synthetic case:\s*/, "");
   return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+// --- patient intake ---------------------------------------------------------------------
+
+export interface IntakeFact {
+  id: string;
+  label: string;
+  details: Record<string, string>;
+  quote: string;
+  turn_index: number;
+}
+
+export interface IntakeSummary {
+  session_id: string;
+  mode: "ritu" | "simulator";
+  started_at: string | null;
+  ended_at: string | null;
+  sections: { section: string; label: string; facts: IntakeFact[] }[];
+  transcript: { turn_index: number; role: "patient" | "ritu" | "system"; text: string }[];
+}
+
+export interface IntakeSession {
+  id: string;
+  status: "created" | "in_progress" | "completed" | "summarized" | "failed" | "expired";
+  mode: "ritu" | "simulator";
+  error: string | null;
+  ritu?: { ws_url: string; token: string; expires_at: string | null };
+}
+
+export interface RecordInfo {
+  id: string;
+  filename: string;
+  status: string;
+  page_count: number | null;
+  uploaded_at: string;
+  error: string | null;
+}
+
+export interface PatientProfile {
+  name: string;
+  case_id: string;
+  published_at: string | null;
+  voice_mode: "ritu" | "simulator";
+  sessions: IntakeSession[];
+  summary: IntakeSummary | null;
+  records: RecordInfo[];
+}
+
+export interface IntakeScript {
+  steps: { id: string; goal: string; prompts: string[] }[];
+  closing: string;
+}
+
+export interface DoctorPatientRow {
+  case_id: string;
+  name: string;
+  published_at: string;
+  symptoms: string[];
+  records: number;
+  pending_tests: number;
+  discrepancies: number;
+  flags: number;
+}
+
+export interface DoctorPatientDetail {
+  case_id: string;
+  name: string;
+  published_at: string;
+  summary: IntakeSummary | null;
+  records: RecordInfo[];
+  timeline: Timeline;
 }
