@@ -16,6 +16,9 @@ docker compose exec backend python /seed/seed.py --intake       # doctor + patie
 #   intake:   maria@ / john@ (patients), doctor@demo.example.com
 ```
 
+Real Ritu voice (optional): see `docs/VOICE_INTEGRATION.md` → "Turning on real voice". Without it,
+"Talk to Ritu" runs a typed simulator of the same questions.
+
 After changing frontend dependencies, renew the container's `node_modules` volume:
 `docker compose up -d --build -V frontend`.
 

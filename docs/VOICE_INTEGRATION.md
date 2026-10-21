@@ -1,17 +1,57 @@
-# Ritu voice ↔ OncoReady: minimal integration API
+# Ritu voice ↔ OncoReady integration
 
-Status: **proposal, nothing built.** OncoReady does not implement voice (CLAUDE.md rule 7);
-it calls Ritu over HTTP and receives results back.
+**Status: built on both sides and wired end to end. Real voice needs two API keys.**
 
-Goal: a patient presses **Start session** in their OncoReady profile and talks to Ritu **in the
-browser**. Ritu asks about current symptoms, then previous records. When the session ends,
-Ritu sends the **transcript** to OncoReady, which builds the summary for the doctor.
+- **OncoReady:** `backend/app/voice/client.py`, `backend/app/api/integrations.py`,
+  `frontend/lib/ritu-voice.ts`
+- **Ritu** (`../ritu voice`, commit `5edb8b2`): `oncoreadyIntake.js`, plus hooks in `index.js` and
+  `callHandler.js`, with tests in `tests/test-oncoready-intake.js`.
 
-OncoReady's side is built (`backend/app/voice/client.py`, `backend/app/api/integrations.py`,
-`frontend/lib/ritu-voice.ts`). Until Ritu ships the changes below, OncoReady runs a clearly
-labeled typed **simulator** of the same questions, which goes through the same storage, extraction and doctor flow.
+The live wiring was tested, without speech, inside Docker:
+- OncoReady creates the session on Ritu.
+- The browser token is accepted once, and a replay is refused.
+- Ritu runs the intake session.
+- The signed result comes back, and OncoReady records it.
 
-## Where Ritu is today
+Speech (Sarvam) and the LLM are the only untested parts, because they need real keys.
+
+## Turning on real voice (3 steps)
+
+1. In `../ritu voice/.env`, fill in `SARVAM_API_KEY` and `GEMINI_API_KEY`.
+   For Groq instead, set `GROQ_API_KEY` and `LLM_PRIMARY_PROVIDER=groq`.
+   The OncoReady secret and the other settings are already there.
+2. In `ritu-oncoready/.env`, uncomment the three `RITU_*` / `PUBLIC_API_URL` lines.
+3. Run:
+   ```
+   docker compose --profile voice up -d --build
+   docker compose up -d --force-recreate backend worker
+   ```
+
+Then open a patient's **Talk to Ritu** page. The "simulator" label disappears, and "Start session"
+asks for the microphone. Ritu speaks the language set in the patient's profile.
+
+Browsers only allow the microphone on `localhost` or HTTPS. For a demo on another machine, serve
+OncoReady over `https://`, serve Ritu over `wss://`, and set `ONCOREADY_PUBLIC_WS_BASE` to that
+`wss://` address.
+
+## How Ritu handles an intake session (what changed in Ritu)
+
+- **`POST /v1/browser-sessions`:** checks the HMAC signature and issues a token. The token works
+  once and expires after 2 minutes.
+- **`/media-stream`:** accepts that token in place of the Exotel `account_sid` (phone calls still
+  need the `account_sid`).
+- **Intake mode in `CallHandler`:**
+  - **Prompt:** OncoReady's script, not the booking receptionist.
+  - **Language:** pinned to the requested one, with a greeting the model writes in that language.
+  - **Off:** booking actions, speculative generation, and the booking-only questions.
+  - **Ending:** `END_CALL` ends the session.
+  - **Still on, every turn:** the emergency detector, medical-advice deflection and
+    sensitive-data refusal.
+- **`endCall`:** sends the signed transcript to OncoReady, retrying on failure. It does not write
+  the clinic's call log, patient row, Sheet or WhatsApp, and does not send the emergency staff
+  alert. OncoReady receives `emergency: true` instead.
+
+## Where Ritu was before this work
 
 Based on a read-only review of `../ritu voice` (`engageo-server-v2`). Paths are relative to that repo.
 
@@ -83,7 +123,7 @@ Same shape as the phone webhook below. OncoReady reads `session_id`, `external_r
 `transcript[{role, text, time}]`. It verifies the HMAC signature (5-minute window) and ignores
 duplicate deliveries.
 
-### What Ritu must change for browser sessions
+### What Ritu had to change for browser sessions (done)
 
 1. **Session token gate.** Today a `start` without the clinic's Exotel `account_sid` is refused
    (`index.js:154`, fail-closed). That's correct for phone calls, but a browser can't send one.
