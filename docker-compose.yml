@@ -68,6 +68,8 @@ services:
       PORT: "8090"
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ritu
       ONCOREADY_PUBLIC_WS_BASE: ws://localhost:${RITU_HOST_PORT:-8090}
+      # Ritu's LLM reuses OncoReady's Gemini key (one copy of the secret, in ritu-oncoready/.env)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports: ["${RITU_HOST_PORT:-8090}:8090"]
     depends_on:
       postgres: { condition: service_healthy }

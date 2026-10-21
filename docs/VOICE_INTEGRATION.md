@@ -17,9 +17,9 @@ Speech (Sarvam) and the LLM are the only untested parts, because they need real 
 
 ## Turning on real voice (3 steps)
 
-1. In `../ritu voice/.env`, fill in `SARVAM_API_KEY` and `GEMINI_API_KEY`.
-   For Groq instead, set `GROQ_API_KEY` and `LLM_PRIMARY_PROVIDER=groq`.
-   The OncoReady secret and the other settings are already there.
+1. In `../ritu voice/.env`, fill in `SARVAM_API_KEY`. Ritu's LLM uses OncoReady's own
+   `GEMINI_API_KEY`, which docker compose passes through, so the key exists in one place.
+   For Groq instead, set `GROQ_API_KEY` and `LLM_PRIMARY_PROVIDER=groq` in Ritu's `.env`.
 2. In `ritu-oncoready/.env`, uncomment the three `RITU_*` / `PUBLIC_API_URL` lines.
 3. Run:
    ```
