@@ -2396,6 +2396,8 @@ class CallHandler {
   }
 
   _currentSpeaker() {
+    // An OncoReady session may choose its own (calmer) voice; Sarvam's v3 voices speak every language.
+    if (this.intake && this.intake.voice && this.intake.voice.speaker) return this.intake.voice.speaker;
     return config.speakerForLang(this._replyVoiceLang || this._langCode());
   }
 
@@ -3490,7 +3492,7 @@ class CallHandler {
       this._speechReplies += 1;
       const ttsHandle = streamTTS(text, (audioChunk) => {
         this._sendStreamingAudio(audioChunk);
-      }, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined });
+      }, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined, ...this._ttsStyle() });
       this._noteSpokenSentence(text, ttsHandle);
       this._activeTTS = ttsHandle;
       try {
@@ -3516,7 +3518,7 @@ class CallHandler {
       this._ttsTail = Buffer.alloc(0);
 
       try {
-        const audioBuffer = await textToSpeech(text, 0, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined });
+        const audioBuffer = await textToSpeech(text, 0, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined, ...this._ttsStyle() });
         this._sendAudioBuffer(audioBuffer);
 
         this._sendSilence(200);
@@ -3668,7 +3670,7 @@ class CallHandler {
     try {
       const ttsHandle = streamTTS(text, (audioChunk) => {
         this._sendStreamingAudio(audioChunk);
-      }, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined });
+      }, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined, ...this._ttsStyle() });
       this._noteSpokenSentence(text, ttsHandle);
       this._activeTTS = ttsHandle;
       try {
@@ -3685,7 +3687,7 @@ class CallHandler {
       }
       console.error(`[CALL ${this.callSid}] Sentence streaming TTS failed, HTTP fallback: ${err.message}`);
       this._flushStreamingTail();
-      const audioBuffer = await textToSpeech(text, 0, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined });
+      const audioBuffer = await textToSpeech(text, 0, { speaker: this._currentSpeaker(), languageCode: this.callLanguage || undefined, ...this._ttsStyle() });
       this._sendAudioBuffer(audioBuffer);
     }
     return text;
@@ -4856,6 +4858,16 @@ class CallHandler {
     } catch (error) {
       await this.handleCriticalError(error);
     }
+  }
+
+  // Pace / temperature for this session's speech. {} on clinic calls (deploy defaults apply).
+  _ttsStyle() {
+    const v = this.intake && this.intake.voice;
+    if (!v) return {};
+    const out = {};
+    if (v.pace !== undefined) out.pace = v.pace;
+    if (v.temperature !== undefined) out.temperature = v.temperature;
+    return out;
   }
 
   _sendCaption(entry) {

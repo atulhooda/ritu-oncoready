@@ -281,14 +281,22 @@ function _ttsTemperature(languageCode) {
   return t === undefined ? {} : { temperature: t };
 }
 
-function _ttsConfigMessage(languageCode, speaker) {
+// Per-session style (pace / temperature) overrides the deploy's defaults. Only
+// OncoReady browser sessions pass one today; every phone call passes nothing.
+function _ttsStyleFields(languageCode, style = {}) {
+  return {
+    pace: style.pace !== undefined ? style.pace : config.paceForLang(languageCode),
+    ...(style.temperature !== undefined ? { temperature: style.temperature } : _ttsTemperature(languageCode)),
+  };
+}
+
+function _ttsConfigMessage(languageCode, speaker, style) {
   return JSON.stringify({
     type: 'config',
     data: {
       target_language_code: languageCode,
       speaker,
-      pace: config.paceForLang(languageCode),
-      ..._ttsTemperature(languageCode),
+      ..._ttsStyleFields(languageCode, style),
       speech_sample_rate: 8000,
       enable_preprocessing: true,
       output_audio_codec: 'linear16'
@@ -363,10 +371,13 @@ function streamTTS(text, onAudioChunk, opts = {}) {
   // and passed in. target_language_code still follows each sentence for correct
   // pronunciation; only the speaker identity is held steady.
   const speaker = opts.speaker || config.sarvam.speaker;
+  const style = { pace: opts.pace, temperature: opts.temperature };
+  const styled = style.pace !== undefined || style.temperature !== undefined;
 
   // Prewarmed socket for this exact (speaker, lang)? Its handshake+config are
-  // already done (or in flight) — only text+flush+synthesis remain.
-  const warm = claimTTSPrewarm(speaker, languageCode);
+  // already done (or in flight) — only text+flush+synthesis remain. A styled
+  // request never claims one: the prewarm was configured with the defaults.
+  const warm = styled ? null : claimTTSPrewarm(speaker, languageCode);
   if (warm) {
     ws = warm.ws;
   } else {
@@ -429,7 +440,7 @@ function streamTTS(text, onAudioChunk, opts = {}) {
     } else {
       ws.on('open', () => {
         console.log(`[SARVAM] TTS STREAM connected, sending config (codec=linear16 8kHz, lang=${languageCode}, speaker=${speaker})...`);
-        ws.send(_ttsConfigMessage(languageCode, speaker));
+        ws.send(_ttsConfigMessage(languageCode, speaker, style));
         sendTextAndFlush();
       });
     }
@@ -553,8 +564,7 @@ async function textToSpeech(text, retryCount = 0, opts = {}) {
         text,
         target_language_code: languageCode,
         speaker,
-        pace: config.paceForLang(languageCode),
-        ..._ttsTemperature(languageCode),
+        ..._ttsStyleFields(languageCode, { pace: opts.pace, temperature: opts.temperature }),
         speech_sample_rate: 8000,
         enable_preprocessing: false,
         model: 'bulbul:v3'

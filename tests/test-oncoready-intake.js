@@ -260,6 +260,19 @@ const REQUEST = {
   });
   await h3.endCall();
 
+  await check('voice style: validated, and a session uses its own speaker, pace and temperature', () => {
+    assert.match(oncoready.validateRequest({ ...REQUEST, voice: { speaker: 'Roopa!' } }).error, /speaker/);
+    assert.match(oncoready.validateRequest({ ...REQUEST, voice: { pace: 5 } }).error, /pace/);
+    assert.match(oncoready.validateRequest({ ...REQUEST, voice: { temperature: 0 } }).error, /temperature/);
+    const styled = new CallHandler('rs_voice', 'Unknown', { readyState: 1, send() {}, close() {} }, 'oncoready_browser', false, null);
+    styled.intake = oncoready.createSession(oncoready.validateRequest({ ...REQUEST, voice: { speaker: 'roopa', pace: 1, temperature: 0.45 } }).value);
+    assert.strictEqual(styled._currentSpeaker(), 'roopa');
+    assert.deepStrictEqual(styled._ttsStyle(), { pace: 1, temperature: 0.45 });
+    const plain = new CallHandler('CA-plain', '+919876543210', { readyState: 1, send() {}, close() {} }, 'exotel', false, null);
+    assert.deepStrictEqual(plain._ttsStyle(), {}, 'clinic calls keep the deploy defaults');
+    assert.notStrictEqual(plain._currentSpeaker(), 'roopa');
+  });
+
   // Opening generation fails → canned opening, session continues.
   const h2 = new CallHandler('rs_fail', 'Unknown', { readyState: 1, send() {}, close() {} }, 'oncoready_browser', false, null);
   h2.intake = oncoready.createSession(oncoready.validateRequest({ ...REQUEST, language: 'en-IN' }).value);

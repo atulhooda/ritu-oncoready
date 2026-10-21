@@ -86,6 +86,22 @@ function validateRequest(body) {
   })).filter((st) => st.id && st.goal);
   if (!cleanSteps.length) return { error: 'script.steps must contain at least one step with id and goal' };
 
+  // Optional voice style. Bounded to what Sarvam bulbul:v3 accepts.
+  const v = body.voice || {};
+  const voice = {};
+  if (v.speaker !== undefined) {
+    if (typeof v.speaker !== 'string' || !/^[a-z]{2,20}$/.test(v.speaker)) return { error: 'voice.speaker must be a Sarvam speaker id' };
+    voice.speaker = v.speaker;
+  }
+  if (v.pace !== undefined) {
+    if (typeof v.pace !== 'number' || v.pace < 0.5 || v.pace > 2) return { error: 'voice.pace must be 0.5-2.0' };
+    voice.pace = v.pace;
+  }
+  if (v.temperature !== undefined) {
+    if (typeof v.temperature !== 'number' || v.temperature < 0.01 || v.temperature > 2) return { error: 'voice.temperature must be 0.01-2.0' };
+    voice.temperature = v.temperature;
+  }
+
   const ctx = body.context || {};
   return {
     value: {
@@ -101,6 +117,7 @@ function validateRequest(body) {
         closing: str(s.closing, 400),
       },
       maxDurationS: Math.min(Math.max(parseInt(body.max_duration_s, 10) || 600, 60), 1200),
+      voice: Object.keys(voice).length ? voice : null,
     },
   };
 }
