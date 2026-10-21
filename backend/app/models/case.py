@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Float, Integer, String, Text, UniqueConstraint, true
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, Integer, String, Text, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
@@ -11,7 +12,9 @@ DOCUMENT_STATUSES = ("uploaded", "ocr_done", "extracted", "failed")
 
 
 class PatientCase(TenantMixin, Base):
-    """A synthetic teaching case. Real patient data is not allowed (CHECK is_synthetic)."""
+    """A case: either a synthetic teaching case (kind 'training') or a demo patient's own intake
+    profile (kind 'intake', owned by `patient_user_id`). Real patient data is not allowed
+    (CHECK is_synthetic)."""
 
     __tablename__ = "patient_cases"
     __table_args__ = tenant_args(
@@ -19,6 +22,11 @@ class PatientCase(TenantMixin, Base):
         CheckConstraint("is_synthetic", name="synthetic_only"),
         CheckConstraint("status IN ('draft', 'published', 'archived')", name="status"),
         tenant_fk("created_by_user_id", "users", ondelete=None),
+        tenant_fk("patient_user_id", "users", ondelete=None),
+        UniqueConstraint("patient_user_id"),  # one intake profile per patient
+        CheckConstraint("kind IN ('training', 'intake')", name="kind"),
+        CheckConstraint("(kind = 'intake') = (patient_user_id IS NOT NULL)", name="intake_has_patient"),
+        CheckConstraint("published_at IS NULL OR kind = 'intake'", name="only_intake_published"),
     )
 
     case_code: Mapped[str] = mapped_column(String(32))
@@ -27,6 +35,10 @@ class PatientCase(TenantMixin, Base):
     is_synthetic: Mapped[bool] = mapped_column(Boolean, server_default=true())
     status: Mapped[str] = mapped_column(String(16), server_default="draft")
     created_by_user_id: Mapped[uuid.UUID]
+    kind: Mapped[str] = mapped_column(String(16), server_default="training")
+    patient_user_id: Mapped[uuid.UUID | None]
+    # Intake only: when the patient sent their summary + records to the doctors.
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SourceDocument(TenantMixin, Base):

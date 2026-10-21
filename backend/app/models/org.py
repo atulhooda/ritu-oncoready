@@ -25,13 +25,15 @@ class Role(enum.StrEnum):
     RESIDENT = "resident"
     FACULTY = "faculty"
     ADMIN = "admin"
+    PATIENT = "patient"  # demo persona who talks to Ritu and uploads their records
+    DOCTOR = "doctor"  # receives published intake summaries and records
 
 
 class User(TenantMixin, Base):
     __tablename__ = "users"
     __table_args__ = tenant_args(
         UniqueConstraint("org_id", "email"),
-        CheckConstraint("role IN ('resident', 'faculty', 'admin')", name="role"),
+        CheckConstraint("role IN ('resident', 'faculty', 'admin', 'patient', 'doctor')", name="role"),
     )
 
     email: Mapped[str] = mapped_column(String(320))
