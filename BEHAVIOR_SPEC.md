@@ -103,3 +103,54 @@ Any change to these rules requires a new `ENGINE_VERSION`. Scores from older ver
 - **Brief editing:** a resident has one brief per case. It can be edited while it is a draft and
   becomes read-only once submitted.
 - **Who sees drafts:** faculty never see drafts.
+
+## Patient intake (patient → Ritu → doctor)
+
+Implemented in `backend/app/intake/`, `backend/app/api/patient.py`, `backend/app/api/doctor.py`
+and `backend/app/api/integrations.py`. Patients are **demo personas**; real patient data is still
+not allowed.
+
+### Profile
+
+- Each patient has exactly one intake case, created on first use. Their sessions, records and
+  summary all hang off it.
+
+### Session
+
+- **Start.** "Start session" creates an `intake_session`. In `ritu` mode, OncoReady asks Ritu for a
+  browser session and gives the browser a short-lived `ws_url` and `token`. In `simulator` mode
+  (no Ritu configured), the browser shows the same script and the patient types their answers.
+- **Script.** Two steps, in order: current symptoms, then previous records
+  (`backend/app/voice/script.py`). Ritu must not diagnose or advise.
+- **Statuses.** A session goes `created → in_progress → completed` (transcript stored) `→ summarized`
+  (facts extracted). It can also end as `failed` or `expired`; these carry `error`.
+- **Recording the transcript.** It is stored once. Repeat deliveries are ignored, and it must
+  contain at least one patient turn.
+- **Ritu callbacks.** They need a valid HMAC signature less than 5 minutes old, and the
+  `session_id` must match the one Ritu returned when the session started.
+
+### Summary
+
+- **Extraction.** The LLM proposes facts in five sections: current symptoms, current medicines,
+  allergies, past history, previous records mentioned. Each fact has a patient turn index and a
+  quote.
+- **Validation.** A fact is kept only if that turn is a patient turn and the quote matches it
+  (rapidfuzz ≥ 0.85). The stored quote is the patient's own text. Rejected candidates are kept on
+  the session as `rejected_facts`.
+- **Rendering.** The summary is built in code, with no LLM. It always lists the five sections in the
+  same order, with facts ordered by turn. Each fact has a short label, optional details, and the
+  patient's quote with its turn number. It includes the full transcript. It never contains a
+  diagnosis, a cause, or advice.
+
+### Records
+
+- The patient uploads PDF, PNG or JPEG files (20 MB max). They go through the document pipeline
+  (OCR, extraction with page citations, pending tests, discrepancies, flags).
+
+### Sending to the doctor
+
+- **Sending.** "Send to doctor" sets `published_at`, and requires at least one summarized session.
+- **What the doctor sees.** Doctors in the org see sent profiles only: the latest summary, the
+  transcript, every record, and the record timeline. Records uploaded after sending are visible too.
+- **Who sees what.** Patients see only their own profile. Residents and faculty never see intake
+  cases, and doctors never see training cases.

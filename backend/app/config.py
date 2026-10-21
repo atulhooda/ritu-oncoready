@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     ocr_dpi: int = 200
     span_match_threshold: float = 0.85  # rapidfuzz partial ratio, 0..1
 
+    # Ritu voice server (docs/VOICE_INTEGRATION.md). Empty base URL -> typed simulator mode.
+    ritu_base_url: str = ""
+    ritu_shared_secret: str = ""  # HMAC for requests to Ritu and for Ritu's callbacks
+    public_api_url: str = "http://localhost:8000"  # where Ritu sends the session callback
+    clinic_display_name: str = "OncoReady demo clinic"
+
     # LLM (extraction only, see app/llm/client.py)
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"

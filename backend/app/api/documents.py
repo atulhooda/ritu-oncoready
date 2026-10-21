@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import storage
+from app.auth.access import visible_case_or_404
 from app.auth.deps import CurrentUser, ensure_case_unlocked, get_current_user
 from app.db import get_db
 from app.repositories.cases import DocumentPageRepository, SourceDocumentRepository
@@ -23,9 +24,11 @@ class PageOut(BaseModel):
     image_url: str
 
 
-def _page_or_404(db: Session, org_id: uuid.UUID, document_id: uuid.UUID, page_number: int):
-    doc = SourceDocumentRepository(db, org_id).get(document_id)
-    page = DocumentPageRepository(db, org_id).get_by_number(document_id, page_number) if doc else None
+def _page_or_404(db: Session, user: CurrentUser, document_id: uuid.UUID, page_number: int):
+    doc = SourceDocumentRepository(db, user.org_id).get(document_id)
+    if doc is not None:
+        visible_case_or_404(db, user, doc.case_id)
+    page = DocumentPageRepository(db, user.org_id).get_by_number(document_id, page_number) if doc else None
     if page is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Page not found")
     return doc, page
@@ -36,7 +39,7 @@ def get_page(
     document_id: uuid.UUID, page_number: int,
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db),
 ):
-    doc, page = _page_or_404(db, user.org_id, document_id, page_number)
+    doc, page = _page_or_404(db, user, document_id, page_number)
     ensure_case_unlocked(db, user, doc.case_id)  # OCR text is machine output; the image is always viewable
     return PageOut(
         document_id=doc.id, filename=doc.filename, page_number=page.page_number, ocr_text=page.ocr_text,
@@ -50,7 +53,7 @@ def get_page_image(
     document_id: uuid.UUID, page_number: int,
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db),
 ):
-    doc, page = _page_or_404(db, user.org_id, document_id, page_number)
+    doc, page = _page_or_404(db, user, document_id, page_number)
     path = storage.path(storage.page_image_key(doc.storage_key, page.page_number))
     if not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Page image not rendered")

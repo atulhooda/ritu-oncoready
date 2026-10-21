@@ -7,7 +7,7 @@ celery_app = Celery(
     "oncoready",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.pipeline.tasks", "app.scoring.tasks"],
+    include=["app.pipeline.tasks", "app.scoring.tasks", "app.intake.tasks"],
 )
 celery_app.conf.update(task_acks_late=True, worker_prefetch_multiplier=1)
 

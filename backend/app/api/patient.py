@@ -1,0 +1,141 @@
+"""Patient profile: start a session with Ritu, upload previous records, send to the doctor."""
+
+import uuid
+from typing import Any, Literal
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app import storage
+from app.auth.deps import CurrentUser, require_role
+from app.db import get_db
+from app.intake import service, tasks as intake_tasks
+from app.models import Role
+from app.repositories.cases import SourceDocumentRepository
+from app.repositories.intake import IntakeSessionRepository
+from app.repositories.users import UserRepository
+from app.voice.script import INTAKE_SCRIPT
+
+router = APIRouter(prefix="/me", tags=["patient"])
+patient_only = require_role(Role.PATIENT)
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+UPLOAD_TYPES = {b"%PDF": ("pdf", "application/pdf"), b"\x89PNG": ("png", "image/png"), b"\xff\xd8\xff": ("jpg", "image/jpeg")}
+
+
+class SimulatedTurn(BaseModel):
+    role: Literal["patient", "ritu"]
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class SimulatedTranscript(BaseModel):
+    turns: list[SimulatedTurn] = Field(min_length=1, max_length=200)
+
+
+def _user(db: Session, current: CurrentUser):
+    return UserRepository(db, current.org_id).get(current.id)
+
+
+def _session_out(s) -> dict[str, Any]:
+    return {"id": s.id, "status": s.status, "mode": s.mode, "language": s.language,
+            "started_at": s.started_at, "ended_at": s.ended_at, "error": s.error}
+
+
+@router.get("/profile")
+def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> dict[str, Any]:
+    user = _user(db, current)
+    case = service.profile_case(db, user)
+    db.commit()
+    sessions = sorted(IntakeSessionRepository(db, user.org_id).for_case(case.id), key=lambda s: s.created_at)
+    return {
+        "name": user.full_name,
+        "case_id": case.id,
+        "published_at": case.published_at,
+        "voice_mode": "ritu" if service.ritu.enabled() else "simulator",
+        "sessions": [_session_out(s) for s in sessions],
+        "summary": service.build_summary(db, user.org_id, case.id),
+        "records": service.records(db, user.org_id, case.id),
+    }
+
+
+@router.get("/intake-script")
+def intake_script(current: CurrentUser = Depends(patient_only)) -> dict[str, Any]:
+    return INTAKE_SCRIPT
+
+
+@router.post("/sessions", status_code=status.HTTP_201_CREATED)
+def start_session(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        session, connection = service.start_session(db, _user(db, current))
+    except service.IntakeError as e:
+        db.commit()  # keep the failed session for the record
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+    db.commit()
+    out = _session_out(session)
+    if connection is not None:  # the browser streams audio straight to Ritu with this short-lived token
+        out["ritu"] = {"ws_url": connection.ws_url, "token": connection.token, "expires_at": connection.expires_at}
+    return out
+
+
+@router.get("/sessions/{session_id}")
+def get_session(session_id: uuid.UUID, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    session = IntakeSessionRepository(db, current.org_id).get(session_id)
+    if session is None or session.patient_user_id != current.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
+    return _session_out(session)
+
+
+@router.post("/sessions/{session_id}/simulate")
+def simulate(
+    session_id: uuid.UUID, body: SimulatedTranscript,
+    current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Typed stand-in for a Ritu voice session (only while Ritu browser sessions are not configured)."""
+    session = IntakeSessionRepository(db, current.org_id).get(session_id)
+    if session is None or session.patient_user_id != current.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
+    if session.mode != "simulator":
+        raise HTTPException(status.HTTP_409_CONFLICT, "This session runs through Ritu voice")
+    try:
+        recorded = service.record_transcript(db, current.org_id, session, [t.model_dump() for t in body.turns])
+    except service.IntakeError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    db.commit()
+    if recorded:
+        intake_tasks.enqueue_summary(current.org_id, session.id)
+    return _session_out(session)
+
+
+@router.post("/records", status_code=status.HTTP_202_ACCEPTED)
+def upload_record(
+    file: UploadFile = File(...), current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    from app.pipeline.tasks import enqueue_document
+
+    data = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (20 MB max)")
+    kind = next((v for sig, v in UPLOAD_TYPES.items() if data.startswith(sig)), None)
+    if kind is None:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Upload a PDF, PNG or JPEG")
+    case = service.profile_case(db, _user(db, current))
+    doc_id = uuid.uuid4()
+    key = f"{current.org_id}/{case.id}/{doc_id}.{kind[0]}"
+    storage.write_bytes(key, data)
+    doc = SourceDocumentRepository(db, current.org_id).add(
+        id=doc_id, case_id=case.id, filename=(file.filename or f"record.{kind[0]}")[:300], mime_type=kind[1],
+        storage_key=key, uploaded_by_user_id=current.id,
+    )
+    db.commit()
+    enqueue_document(current.org_id, doc.id, case.id)
+    return {"id": doc.id, "filename": doc.filename, "status": doc.status}
+
+
+@router.post("/publish")
+def publish(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        case = service.publish(db, _user(db, current))
+    except service.IntakeError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    db.commit()
+    return {"published_at": case.published_at}

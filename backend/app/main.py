@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, briefs, cases, documents, faculty
+from app.api import auth, briefs, cases, doctor, documents, faculty, integrations, patient
 from app.config import get_settings
 
 app = FastAPI(title="Ritu OncoReady")
@@ -17,6 +17,9 @@ app.include_router(cases.router)
 app.include_router(documents.router)
 app.include_router(briefs.router)
 app.include_router(faculty.router)
+app.include_router(patient.router)
+app.include_router(doctor.router)
+app.include_router(integrations.router)
 
 
 @app.get("/health")

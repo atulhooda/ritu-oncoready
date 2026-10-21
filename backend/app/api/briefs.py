@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import CurrentUser, require_role
 from app.db import get_db
 from app.models import Role
-from app.repositories.cases import CaseRepository
+from app.auth.access import visible_case_or_404
 from app.repositories.scoring import ReadinessBriefRepository
 from app.scoring import tasks
 from app.scoring.matching import SECTIONS
@@ -37,8 +37,7 @@ class BriefOut(BaseModel):
 
 
 def _case_or_404(db: Session, user: CurrentUser, case_id: uuid.UUID) -> None:
-    if CaseRepository(db, user.org_id).get(case_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+    visible_case_or_404(db, user, case_id)  # residents only ever see training cases
 
 
 def _out(brief) -> BriefOut:

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app import storage
+from app.auth.access import visible_case_or_404, visible_cases
 from app.auth.deps import CurrentUser, ensure_case_unlocked, get_current_user, require_role
 from app.db import get_db
 from app.models import Role
@@ -46,16 +47,9 @@ class DocumentOut(BaseModel):
     error: str | None
 
 
-def _get_case_or_404(repo: CaseRepository, case_id: uuid.UUID):
-    case = repo.get(case_id)
-    if case is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
-    return case
-
-
 @router.get("", response_model=list[CaseOut])
 def list_cases(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    return CaseRepository(db, user.org_id).list()
+    return visible_cases(db, user)
 
 
 @router.post("", response_model=CaseOut, status_code=status.HTTP_201_CREATED)
@@ -71,14 +65,14 @@ def create_case(
 
 @router.get("/{case_id}", response_model=CaseOut)
 def get_case(case_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    return _get_case_or_404(CaseRepository(db, user.org_id), case_id)
+    return visible_case_or_404(db, user, case_id)
 
 
 @router.get("/{case_id}/documents", response_model=list[DocumentOut])
 def list_case_documents(
     case_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    _get_case_or_404(CaseRepository(db, user.org_id), case_id)
+    visible_case_or_404(db, user, case_id)
     return SourceDocumentRepository(db, user.org_id).for_case(case_id)
 
 
@@ -95,7 +89,7 @@ def upload_document(
     """Upload a synthetic case PDF; OCR -> extraction -> derivation runs in the worker."""
     from app.pipeline.tasks import enqueue_document  # keeps celery import out of app startup
 
-    _get_case_or_404(CaseRepository(db, user.org_id), case_id)
+    visible_case_or_404(db, user, case_id)
     data = file.file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "PDF too large")
@@ -119,6 +113,6 @@ def get_timeline(
 ) -> dict[str, Any]:
     """Events in date order (undated under "Date unclear"), with source page links,
     pending tests, discrepancies, and lab change flags. Locked for residents until they submit."""
-    _get_case_or_404(CaseRepository(db, user.org_id), case_id)
+    visible_case_or_404(db, user, case_id)
     ensure_case_unlocked(db, user, case_id)
     return build_timeline(db, user.org_id, case_id)

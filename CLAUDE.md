@@ -62,7 +62,8 @@ docker compose exec backend python /seed/seed.py --demo-briefs   # submit + scor
 - One module: `app/llm/client.py`. Gemini primary, Groq fallback. Nothing else imports a provider.
 - Every call passes a Pydantic schema; output is validated before it is used. Invalid output
   -> try fallback -> raise. Never store unvalidated LLM output.
-- Allowed uses: extracting facts from documents, and **proposing** brief-to-rubric matches. A
+- Allowed uses: extracting facts from documents and from intake transcripts (quotes verified
+  against the patient's turn), and **proposing** brief-to-rubric matches. A
   match is accepted only with a quote verified verbatim in the brief (`app/scoring/matching.py`).
 - LLMs are **not** used for scoring, grading, or generating clinical content.
 
@@ -86,5 +87,16 @@ docker compose exec backend python /seed/seed.py --demo-briefs   # submit + scor
 - Enums are stored as `VARCHAR` + `CHECK` (non-native) so up/down migrations stay clean.
 
 ### 7. Voice
-- Voice is handled by the existing **Ritu voice server**. Integrate later via its API only.
-  Do not build STT/TTS/telephony/voice pipelines in this repo.
+- Voice is handled by the existing **Ritu voice server** (contract: `docs/VOICE_INTEGRATION.md`).
+  Do not build STT/TTS/telephony/voice logic in this repo. `frontend/lib/ritu-voice.ts` is only an
+  audio *transport* (mic -> Ritu's `/media-stream`, playback of Ritu's audio).
+- All Ritu calls go through `backend/app/voice/client.py`; Ritu's callbacks are HMAC-verified in
+  `backend/app/api/integrations.py`.
+- Until Ritu ships browser sessions, intake runs in **simulator** mode (typed answers to the same
+  script). Keep both paths feeding `intake.service.record_transcript`.
+
+### 8. Roles and who sees what (`app/auth/access.py`)
+- `resident`, `faculty`, `admin`: training cases only. `patient`: their own intake case only.
+  `doctor`: intake cases the patient has sent (`published_at` set). Everything else is 404.
+- Patients are demo personas (rule 2 still applies). Intake facts quote the patient's own
+  words from a transcript turn (`intake_facts.source_turn_id` + `source_text_span`).

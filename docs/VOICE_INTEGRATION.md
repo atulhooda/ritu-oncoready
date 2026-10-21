@@ -3,8 +3,13 @@
 Status: **proposal, nothing built.** OncoReady does not implement voice (CLAUDE.md rule 7);
 it calls Ritu over HTTP and receives results back.
 
-Goal: OncoReady triggers an outbound **pre-visit call** to a patient, and receives the
-**transcript** when the call ends.
+Goal: a patient presses **Start session** in their OncoReady profile and talks to Ritu **in the
+browser**. Ritu asks about current symptoms, then previous records. When the session ends,
+Ritu sends the **transcript** to OncoReady, which builds the summary for the doctor.
+
+OncoReady's side is built (`backend/app/voice/client.py`, `backend/app/api/integrations.py`,
+`frontend/lib/ritu-voice.ts`). Until Ritu ships the changes below, OncoReady runs a clearly
+labeled typed **simulator** of the same questions, which goes through the same storage, extraction and doctor flow.
 
 ## Where Ritu is today
 
@@ -24,7 +29,75 @@ Based on a read-only review of `../ritu voice` (`engageo-server-v2`). Paths are 
 
 So everything below is new on the Ritu side.
 
-## Proposed API (Ritu exposes, OncoReady calls)
+## Chosen design: browser sessions
+
+Audio goes **browser ↔ Ritu directly**; OncoReady never relays audio. OncoReady only creates
+the session (server-to-server) and receives the transcript.
+
+```
+Patient browser ──(1) POST /me/sessions──────────────► OncoReady
+                                                        │ (2) POST /v1/browser-sessions (HMAC)
+                                                        ▼
+                                                      Ritu ── returns {session_id, ws_url, token}
+Patient browser ◄─(3) {ws_url, token}────────────────── OncoReady
+Patient browser ══(4) WSS audio (existing /media-stream protocol)══► Ritu
+                                                      Ritu ──(5) POST callback (HMAC) ──► OncoReady
+```
+
+### Ritu endpoint: `POST /v1/browser-sessions`
+
+Signed with the same HMAC headers as below. Body:
+
+```json
+{
+  "external_ref": "oncoready:<org_id>:<session_id>",
+  "language": "en",
+  "context": {"patient_display_name": "Maria Placeholder", "clinic_display_name": "OncoReady demo clinic"},
+  "script": { "purpose": "pre_visit_intake", "rules": ["..."], "steps": [
+      {"id": "current_symptoms", "goal": "...", "prompts": ["..."]},
+      {"id": "previous_records", "goal": "...", "prompts": ["..."]}
+  ], "closing": "..." },
+  "callback_url": "https://<oncoready>/integrations/ritu/sessions",
+  "max_duration_s": 600
+}
+```
+
+The script comes from `backend/app/voice/script.py`. OncoReady owns *what* is asked, and Ritu
+owns *how* it is said.
+
+Response: `201 {"session_id": "rs_…", "ws_url": "wss://<ritu>/media-stream?sample-rate=8000",
+"token": "<single-use>", "expires_at": "<ISO, ~2 min>"}`.
+
+### Audio protocol: the existing `/media-stream` protocol (as in `public/test-harness.html`)
+
+- The browser sends `{"event":"connected"}`, then a `start` message:
+  `{"event":"start","start":{"streamSid","callSid","customParameters":{"session_token":"<token>","callSource":"oncoready_browser"}}}`
+- Microphone audio goes up as `{"event":"media","media":{"payload":"<base64 PCM16 mono 8 kHz>"}}`.
+- Ritu's audio comes back as `media` with the same encoding. Ritu also sends `mark` (the browser echoes it once playback reaches that point) and `clear` (flush playback).
+- `{"event":"stop"}` ends the session from the browser. Ritu ends it after the closing line.
+
+### Callback to OncoReady: `POST {callback_url}`
+
+Same shape as the phone webhook below. OncoReady reads `session_id`, `external_ref`, `status`
+(`completed | failed | no_input | expired | canceled`), `started_at`, `ended_at`, and
+`transcript[{role, text, time}]`. It verifies the HMAC signature (5-minute window) and ignores
+duplicate deliveries.
+
+### What Ritu must change for browser sessions
+
+1. **Session token gate.** Today a `start` without the clinic's Exotel `account_sid` is refused
+   (`index.js:154`, fail-closed). That's correct for phone calls, but a browser can't send one.
+   Ritu should accept a `start` that carries a valid, unexpired, single-use `session_token` that
+   it issued itself, and keep the `account_sid` rule for Exotel.
+2. **Pre-visit intake mode.** When a session has an intake script, Ritu should use it instead of
+   `buildSystemPrompt` (the booking receptionist). That means: an outbound-style greeting, the two
+   steps in order, no booking markers, and the patient's language.
+3. **Completion callback.** In `endCall()`, POST the signed result to `callback_url` and retry on
+   failure.
+4. **Exclusions.** Leave these sessions out of the missed-call WhatsApp recovery and out of the
+   returning-caller lookup by phone.
+
+## Phone-call API (alternative, kept for later)
 
 Three pieces: start a call, get a call, and a completion webhook. All JSON over HTTPS.
 
