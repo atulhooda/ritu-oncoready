@@ -115,6 +115,22 @@ not allowed.
 - Each patient has exactly one intake case, created on first use. Their sessions, records and
   summary all hang off it.
 
+### Patient pages
+
+The patient side has four pages:
+
+1. **My profile** (`/patient`): patient-reported details.
+   - About you: date of birth (age is worked out from it), sex, phone, and the language for Ritu.
+   - Your cancer: cancer type, when it was found (month), stage as told to them, treatment status,
+     current treatment, treating hospital and doctor, other conditions.
+   - Blank fields are stored as empty. Dates must be in the past. The language must be one of
+     Ritu's 11 codes, and Ritu speaks it in the session.
+2. **Talk to Ritu** (`/patient/session`): the session.
+3. **My records** (`/patient/records`): uploads.
+4. **Send to doctor** (`/patient/send`): review all three, then send.
+
+Doctors see the details, labeled self-reported, only once the patient has sent their profile.
+
 ### Session
 
 - **Start.** "Start session" creates an `intake_session`. In `ritu` mode, OncoReady asks Ritu for a

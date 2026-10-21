@@ -79,6 +79,13 @@ def load_intake_personas(sync: bool) -> None:
             p = json.loads(path.read_text())
             user = users.get_by_email(p["email"]) or users.create(p["email"], p["name"], DEMO_PASSWORD, Role.PATIENT)
             case = service.profile_case(db, user)
+            if p.get("details"):  # always refreshed, so existing personas pick up new fields
+                from datetime import date
+
+                service.update_details(db, user, {
+                    k: date.fromisoformat(v) if k in ("date_of_birth", "diagnosed_on") and v else v
+                    for k, v in p["details"].items()
+                })
             if IntakeSessionRepository(db, org.id).for_case(case.id):
                 print(f"  {p['name']}: already has a session")
                 continue

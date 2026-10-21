@@ -183,8 +183,63 @@ export interface RecordInfo {
   error: string | null;
 }
 
+export interface PatientDetails {
+  date_of_birth: string | null;
+  sex: "female" | "male" | "intersex" | "other" | "prefer_not_to_say" | null;
+  phone: string | null;
+  preferred_language: string;
+  cancer_type: string | null;
+  diagnosed_on: string | null;
+  stage_reported: string | null;
+  treatment_status: "not_started" | "on_treatment" | "completed" | "follow_up" | "not_sure" | null;
+  current_treatment: string | null;
+  treating_hospital: string | null;
+  treating_doctor: string | null;
+  other_conditions: string | null;
+  age: number | null;
+  updated_at: string | null;
+}
+
+export const LANGUAGES: Record<string, string> = {
+  "en-IN": "English",
+  "hi-IN": "हिन्दी · Hindi",
+  "mr-IN": "मराठी · Marathi",
+  "gu-IN": "ગુજરાતી · Gujarati",
+  "kn-IN": "ಕನ್ನಡ · Kannada",
+  "ta-IN": "தமிழ் · Tamil",
+  "te-IN": "తెలుగు · Telugu",
+  "bn-IN": "বাংলা · Bengali",
+  "pa-IN": "ਪੰਜਾਬੀ · Punjabi",
+  "ml-IN": "മലയാളം · Malayalam",
+  "od-IN": "ଓଡ଼ିଆ · Odia",
+};
+
+export const SEX_LABELS: Record<string, string> = {
+  female: "Female",
+  male: "Male",
+  intersex: "Intersex",
+  other: "Other",
+  prefer_not_to_say: "Prefer not to say",
+};
+
+export const TREATMENT_LABELS: Record<string, string> = {
+  not_started: "Not started yet",
+  on_treatment: "On treatment now",
+  completed: "Finished treatment",
+  follow_up: "In follow-up",
+  not_sure: "Not sure",
+};
+
+/** "54 · Female · Breast cancer" from whatever the patient filled in. */
+export function detailsLine(d: Pick<PatientDetails, "age" | "sex" | "cancer_type"> | null | undefined): string {
+  if (!d) return "";
+  return [d.age !== null ? `${d.age} y` : null, d.sex ? SEX_LABELS[d.sex] : null, d.cancer_type].filter(Boolean).join(" · ");
+}
+
 export interface PatientProfile {
   name: string;
+  email: string;
+  details: PatientDetails;
   case_id: string;
   published_at: string | null;
   voice_mode: "ritu" | "simulator";
@@ -201,6 +256,9 @@ export interface IntakeScript {
 export interface DoctorPatientRow {
   case_id: string;
   name: string;
+  age: number | null;
+  sex: PatientDetails["sex"];
+  cancer_type: string | null;
   published_at: string;
   symptoms: string[];
   records: number;
@@ -213,6 +271,7 @@ export interface DoctorPatientDetail {
   case_id: string;
   name: string;
   published_at: string;
+  details: PatientDetails;
   summary: IntakeSummary | null;
   records: RecordInfo[];
   timeline: Timeline;

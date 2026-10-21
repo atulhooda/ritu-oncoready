@@ -9,6 +9,7 @@ import { useMe } from "@/components/useMe";
 import { Badge, Card, EmptyState, Label, PageHeader, Pill } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { DoctorPatientRow } from "@/lib/types";
+import { detailsLine } from "@/lib/types";
 
 type Filter = "all" | "flags" | "pending" | "today";
 
@@ -68,6 +69,7 @@ export default function DoctorInbox() {
                             sent {new Date(r.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
                           </div>
                           <div className="mt-1 text-xl font-semibold">{r.name}</div>
+                          {detailsLine(r) && <div className="text-muted">{detailsLine(r)}</div>}
                           <div className="mt-2 flex flex-wrap gap-2">
                             {r.symptoms.length ? r.symptoms.map((s) => <Badge key={s}>{s}</Badge>) : <span className="text-muted">No symptoms noted</span>}
                           </div>

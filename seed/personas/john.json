@@ -4,5 +4,19 @@
   "email": "john@demo.example.com",
   "records": [],
   "publish": false,
-  "transcript": null
+  "transcript": null,
+  "details": {
+    "date_of_birth": "1959-07-22",
+    "sex": "male",
+    "phone": "+91 98200 22222",
+    "preferred_language": "en-IN",
+    "cancer_type": "Lung cancer",
+    "diagnosed_on": "2026-02-01",
+    "stage_reported": null,
+    "treatment_status": "not_started",
+    "current_treatment": null,
+    "treating_hospital": "Synthetic General Hospital",
+    "treating_doctor": null,
+    "other_conditions": "High blood pressure"
+  }
 }

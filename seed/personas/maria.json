@@ -2,19 +2,70 @@
   "_notice": "SYNTHETIC demo persona. Not a real patient. Records are the SYN-003 synthetic documents.",
   "name": "Maria Placeholder",
   "email": "maria@demo.example.com",
-  "records": ["SYN-003/docs/syn-003_pathology.pdf", "SYN-003/docs/syn-003_outside_echo.pdf", "SYN-003/docs/syn-003_oncology_notes.pdf"],
+  "records": [
+    "SYN-003/docs/syn-003_pathology.pdf",
+    "SYN-003/docs/syn-003_outside_echo.pdf",
+    "SYN-003/docs/syn-003_oncology_notes.pdf"
+  ],
   "publish": true,
   "transcript": [
-    {"role": "ritu", "text": "What problems or symptoms are you having right now?"},
-    {"role": "patient", "text": "For the last two weeks I get breathless when I climb the stairs, and I have to stop halfway."},
-    {"role": "ritu", "text": "Since when has this been happening, and how bad is it?"},
-    {"role": "patient", "text": "It started about two weeks ago. Now even walking to the market makes me tired. My ankles also swell by the evening."},
-    {"role": "ritu", "text": "Is there anything else you are feeling that you want the doctor to know?"},
-    {"role": "patient", "text": "I feel tired most days. I am allergic to penicillin, it gives me a rash. I was getting trastuzumab every three weeks, but they stopped it in September."},
-    {"role": "ritu", "text": "Do you have any earlier medical records, like test reports, scans, prescriptions or discharge summaries?"},
-    {"role": "patient", "text": "Yes, I have my biopsy report from February and three heart scan reports, the echo tests, from Heart Associates."},
-    {"role": "ritu", "text": "Which ones, and roughly when and where were they done?"},
-    {"role": "patient", "text": "The echoes were in March, June and September this year. A repeat echo was ordered for October but I have not done it yet."},
-    {"role": "ritu", "text": "Thank you. Please upload those records in your profile, and I will share this with your doctor."}
-  ]
+    {
+      "role": "ritu",
+      "text": "What problems or symptoms are you having right now?"
+    },
+    {
+      "role": "patient",
+      "text": "For the last two weeks I get breathless when I climb the stairs, and I have to stop halfway."
+    },
+    {
+      "role": "ritu",
+      "text": "Since when has this been happening, and how bad is it?"
+    },
+    {
+      "role": "patient",
+      "text": "It started about two weeks ago. Now even walking to the market makes me tired. My ankles also swell by the evening."
+    },
+    {
+      "role": "ritu",
+      "text": "Is there anything else you are feeling that you want the doctor to know?"
+    },
+    {
+      "role": "patient",
+      "text": "I feel tired most days. I am allergic to penicillin, it gives me a rash. I was getting trastuzumab every three weeks, but they stopped it in September."
+    },
+    {
+      "role": "ritu",
+      "text": "Do you have any earlier medical records, like test reports, scans, prescriptions or discharge summaries?"
+    },
+    {
+      "role": "patient",
+      "text": "Yes, I have my biopsy report from February and three heart scan reports, the echo tests, from Heart Associates."
+    },
+    {
+      "role": "ritu",
+      "text": "Which ones, and roughly when and where were they done?"
+    },
+    {
+      "role": "patient",
+      "text": "The echoes were in March, June and September this year. A repeat echo was ordered for October but I have not done it yet."
+    },
+    {
+      "role": "ritu",
+      "text": "Thank you. Please upload those records in your profile, and I will share this with your doctor."
+    }
+  ],
+  "details": {
+    "date_of_birth": "1971-09-30",
+    "sex": "female",
+    "phone": "+91 98200 11111",
+    "preferred_language": "hi-IN",
+    "cancer_type": "Breast cancer (HER2 positive)",
+    "diagnosed_on": "2025-02-01",
+    "stage_reported": "Stage 2",
+    "treatment_status": "on_treatment",
+    "current_treatment": "Weekly paclitaxel with trastuzumab from March 2025; trastuzumab on hold since September",
+    "treating_hospital": "Synthetic General Hospital",
+    "treating_doctor": "Dr. Demo Oncologist",
+    "other_conditions": "None"
+  }
 }

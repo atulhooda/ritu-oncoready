@@ -10,7 +10,8 @@ import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Card, EmptyState, Label, PageHeader, Pill, Stat } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { DocumentInfo, DoctorPatientDetail, SourceRef } from "@/lib/types";
+import type { DocumentInfo, DoctorPatientDetail, PatientDetails, SourceRef } from "@/lib/types";
+import { detailsLine, LANGUAGES, SEX_LABELS, TREATMENT_LABELS } from "@/lib/types";
 
 type Tab = "summary" | "records";
 
@@ -57,7 +58,7 @@ export default function DoctorPatientPage() {
             <PageHeader
               eyebrow={`Pre-visit · sent ${new Date(p.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`}
               title={p.name}
-              subtitle="Demo persona · synthetic data"
+              subtitle={[detailsLine(p.details), "Demo persona · synthetic data"].filter(Boolean).join("  ·  ")}
             />
           </div>
           <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -84,7 +85,8 @@ export default function DoctorPatientPage() {
             (p.summary ? (
               <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
                 <IntakeSummaryView summary={p.summary} audience="doctor" onTurn={showTurn} />
-                <div className="xl:sticky xl:top-24 xl:h-fit">
+                <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
+                  <DetailsCard d={p.details} />
                   <TranscriptView summary={p.summary} highlight={turn} />
                 </div>
               </div>
@@ -106,5 +108,37 @@ export default function DoctorPatientPage() {
         </>
       )}
     </Shell>
+  );
+}
+
+function DetailsCard({ d }: { d: PatientDetails }) {
+  const rows: [string, string | null][] = [
+    ["Age", d.age !== null ? `${d.age} (born ${d.date_of_birth})` : null],
+    ["Sex", d.sex ? SEX_LABELS[d.sex] : null],
+    ["Cancer type", d.cancer_type],
+    ["Found", d.diagnosed_on ? new Date(d.diagnosed_on).toLocaleDateString([], { month: "long", year: "numeric" }) : null],
+    ["Stage (as told to patient)", d.stage_reported],
+    ["Treatment status", d.treatment_status ? TREATMENT_LABELS[d.treatment_status] : null],
+    ["Current treatment", d.current_treatment],
+    ["Treating hospital", d.treating_hospital],
+    ["Treating doctor", d.treating_doctor],
+    ["Other conditions", d.other_conditions],
+    ["Language", LANGUAGES[d.preferred_language] ?? d.preferred_language],
+    ["Phone", d.phone],
+  ];
+  return (
+    <Card>
+      <div className="border-b border-line/70 px-7 py-5">
+        <Label>Patient details · self-reported</Label>
+      </div>
+      <dl className="divide-y divide-line/60 px-7 py-2 text-[15px]">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-6 py-2.5">
+            <dt className="text-muted">{k}</dt>
+            <dd className="text-right font-medium">{v || <span className="font-normal text-muted">—</span>}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
   );
 }

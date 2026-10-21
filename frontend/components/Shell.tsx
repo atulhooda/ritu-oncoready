@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, FolderOpen, LogOut, Menu, Stethoscope, UserRound, Users, X } from "lucide-react";
+import { ClipboardCheck, FileUp, FolderOpen, LogOut, Menu, Mic, Send, Stethoscope, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,12 +16,18 @@ const NAV = {
     { href: "/faculty", label: "Assessments", icon: ClipboardCheck },
     { href: "/faculty/residents", label: "Residents", icon: Users },
   ],
-  patient: [{ href: "/patient", label: "My profile", icon: UserRound }],
+  patient: [
+    { href: "/patient", label: "My profile", icon: UserRound },
+    { href: "/patient/session", label: "Talk to Ritu", icon: Mic },
+    { href: "/patient/records", label: "My records", icon: FileUp },
+    { href: "/patient/send", label: "Send to doctor", icon: Send },
+  ],
   doctor: [{ href: "/doctor", label: "Patients", icon: Stethoscope }],
 };
 
 function isActive(pathname: string, href: string) {
   if (href === "/faculty") return pathname === "/faculty" || pathname.startsWith("/faculty/briefs");
+  if (href === "/patient") return pathname === "/patient";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
