@@ -117,19 +117,27 @@ not allowed.
 
 ### Patient pages
 
-The patient side has four pages:
+Patients see three destinations: **Check-in** (`/patient`), **My records** (`/patient/records`) and
+**Profile** (`/patient/profile`). On phones these are a bottom tab bar.
 
-1. **My profile** (`/patient`): patient-reported details.
-   - About you: date of birth (age is worked out from it), sex, phone, and the language for Ritu.
-   - Your cancer: cancer type, when it was found (month), stage as told to them, treatment status,
-     current treatment, treating hospital and doctor, other conditions.
-   - Blank fields are stored as empty. Dates must be in the past. The language must be one of
-     Ritu's 11 codes, and Ritu speaks it in the session.
-2. **Talk to Ritu** (`/patient/session`): the session.
-3. **My records** (`/patient/records`): uploads.
-4. **Send to doctor** (`/patient/send`): review all three, then send.
+Check-in is one guided flow of four steps, shown as a stepper. Every step can be opened directly,
+and each finished step shows a check.
 
-Doctors see the details, labeled self-reported, only once the patient has sent their profile.
+1. **About you:** patient-reported details. Date of birth, sex and cancer type are needed to finish
+   this step. Age is worked out from the date of birth. Dates must be in the past. The language must
+   be one of Ritu's 11 codes; Ritu starts in it and follows the patient's language.
+2. **Talk to Ritu:** what Ritu does, that answers go only to the care team, and that Ritu gives no
+   medical advice, all shown before the session starts. The step is done once a summarized session
+   exists.
+3. **Earlier records:** uploads. The step is done when there is at least one record, or the patient
+   chose "I don't have any records", or the check-in has been sent.
+4. **Review & send:** everything on one page, with Edit links, then "Send to my care team". This
+   needs a summarized session.
+
+After sending, Check-in shows "You're ready for your visit" and what happens next. The old
+`/patient/session` and `/patient/send` addresses redirect into steps 2 and 4.
+
+Doctors see the details, labeled self-reported, only once the patient has sent their check-in.
 
 ### Session
 

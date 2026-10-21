@@ -68,7 +68,7 @@ function SimulatedSession({ session, onFinished }: { session: IntakeSession; onF
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-7 py-5">
         <Label>Session with Ritu</Label>
-        <Badge tone="amber">simulator: Ritu voice not connected yet</Badge>
+        <Badge>typing mode</Badge>
       </div>
       <div className="flex gap-2 px-7 pt-5">
         {script?.steps.map((s, i) => (

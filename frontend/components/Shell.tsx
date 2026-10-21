@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, FileUp, FolderOpen, LogOut, Menu, Mic, Send, Stethoscope, UserRound, Users, X } from "lucide-react";
+import { ClipboardCheck, ClipboardList, FileUp, FolderOpen, LogOut, Menu, Stethoscope, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -17,10 +17,9 @@ const NAV = {
     { href: "/faculty/residents", label: "Residents", icon: Users },
   ],
   patient: [
-    { href: "/patient", label: "My profile", icon: UserRound },
-    { href: "/patient/session", label: "Talk to Ritu", icon: Mic },
+    { href: "/patient", label: "Check-in", icon: ClipboardList },
     { href: "/patient/records", label: "My records", icon: FileUp },
-    { href: "/patient/send", label: "Send to doctor", icon: Send },
+    { href: "/patient/profile", label: "Profile", icon: UserRound },
   ],
   doctor: [{ href: "/doctor", label: "Patients", icon: Stethoscope }],
 };
@@ -94,7 +93,7 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
         <div>
           <div className="font-semibold text-white">{me.org_name ?? "OncoReady"}</div>
           <div className="text-sm text-white/55">
-            {me.role === "patient" || me.role === "doctor" ? "Demo patients · synthetic data" : "Synthetic teaching cases"}
+            {me.role === "patient" ? "Pre-visit check-in" : me.role === "doctor" ? "Pre-visit summaries" : "Synthetic teaching cases"}
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 text-sm">
@@ -112,16 +111,41 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
             <LogOut size={16} strokeWidth={1.75} /> Log out
           </button>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.25em] text-white/45">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Not for clinical use
-        </div>
+        {me.role !== "patient" && (
+          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.25em] text-white/45">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Not for clinical use
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+/** Phone navigation for patients: a bottom tab bar instead of the staff sidebar. */
+function PatientTabs() {
+  const pathname = usePathname();
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+      <ul className="mx-auto flex max-w-md">
+        {NAV.patient.map(({ href, label, icon: Icon }) => {
+          const active = isActive(pathname, href);
+          return (
+            <li key={href} className="flex-1">
+              <Link href={href} className={`flex flex-col items-center gap-1 py-2.5 text-xs font-medium ${active ? "text-brand" : "text-muted"}`}>
+                <Icon size={22} strokeWidth={active ? 2 : 1.75} />
+                {label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
 export function Shell({ me, actions, children }: { me: Me | null; actions?: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const patient = me?.role === "patient";
   return (
     <div className="min-h-screen bg-paper text-ink">
       {me && (
@@ -141,18 +165,31 @@ export function Shell({ me, actions, children }: { me: Me | null; actions?: Reac
         <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-8">
             <div className="flex items-center gap-3">
-              {me && (
+              {me && !patient && (
                 <button className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu">
                   {open ? <X size={20} /> : <Menu size={20} />}
                 </button>
               )}
-              <Clock />
+              {patient ? (
+                <span className="font-semibold lg:hidden">{me?.org_name ?? "OncoReady"}</span>
+              ) : null}
+              <span className={patient ? "hidden lg:block" : ""}>
+                <Clock />
+              </span>
             </div>
             <div className="flex items-center gap-3">{actions}</div>
           </div>
         </header>
-        <main className="px-4 py-8 sm:px-8 sm:py-10">{me ? children : <p className="text-muted">Loading…</p>}</main>
+        <main className={`px-4 py-8 sm:px-8 sm:py-10 ${patient ? "pb-28 lg:pb-10" : ""}`}>
+          {me ? children : <p className="text-muted">Loading…</p>}
+          {patient && (
+            <p className="mx-auto mt-12 max-w-4xl text-center text-xs text-muted">
+              Demo patient · synthetic data · not for clinical use
+            </p>
+          )}
+        </main>
       </div>
+      {patient && <PatientTabs />}
     </div>
   );
 }

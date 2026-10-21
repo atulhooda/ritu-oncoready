@@ -39,6 +39,7 @@ export function PageHeader({
   subtitle,
   actions,
   live,
+  size = "lg",
 }: {
   eyebrow: string;
   title: string;
@@ -46,7 +47,21 @@ export function PageHeader({
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
   live?: boolean;
+  /** "sm": the calmer header used on patient pages. */
+  size?: "lg" | "sm";
 }) {
+  if (size === "sm") {
+    return (
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <Eyebrow dot={live ? "green" : "brand"}>{eyebrow}</Eyebrow>
+          <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight sm:text-4xl">{title}</h1>
+          {subtitle && <p className="mt-2 text-[16px] text-muted sm:text-[17px]">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex items-center gap-3">{actions}</div>}
+      </div>
+    );
+  }
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
