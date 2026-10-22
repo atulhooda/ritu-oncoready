@@ -163,8 +163,12 @@ def summarize_session(db: Session, org_id: uuid.UUID, session) -> dict[str, Any]
             "section": key,
             "label": SECTION_LABELS[key],
             "facts": [
-                {"id": f.id, "label": f.label, "details": f.details, "quote": f.source_text_span,
-                 "turn_index": turns[f.source_turn_id].turn_index}
+                {"id": f.id, "label": f.label,
+                 "details": {k: v for k, v in f.details.items() if k != "evidence"},
+                 "quote": f.source_text_span, "turn_index": turns[f.source_turn_id].turn_index,
+                 # every verified quote about this problem, primary first
+                 "evidence": [{"turn_index": turns[f.source_turn_id].turn_index, "quote": f.source_text_span}]
+                 + list(f.details.get("evidence", []))}
                 for f in facts if f.section == key
             ],
         }

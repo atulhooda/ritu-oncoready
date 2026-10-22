@@ -425,3 +425,30 @@ def test_new_summary_sections_are_stored(db, org_a):
     assert by["treatment"]["facts"][0]["details"]["missed_doses"] == "one tablet"
     assert by["concern"]["label"] == "What they want to ask the doctor"
     assert [s["section"] for s in summary["sections"]][:2] == ["current_symptom", "treatment"]
+
+
+def test_one_problem_merges_its_quotes(db, org_a):
+    """'Pain in lungs' + 'how bad: 10' + 'getting worse' said in three turns become one problem."""
+    from app.intake import service
+
+    patient = person(db, org_a, Role.PATIENT, "Merge Patient")
+    session, _ = service.start_session(db, UserRepository(db, org_a.org.id).get(patient.id))
+    service.record_transcript(db, org_a.org.id, session, [
+        {"role": "ritu", "text": "What is bothering you?"},
+        {"role": "patient", "text": "मेरे फेफड़ों में दर्द हो रहा है।"},
+        {"role": "ritu", "text": "How bad, 0 to 10?"},
+        {"role": "patient", "text": "10।"},
+        {"role": "ritu", "text": "Getting better or worse?"},
+        {"role": "patient", "text": "धीरे धीरे बढ़ रहा है।"},
+    ])
+    run_intake_extraction(db, org_a.org.id, session.id, extract=fake_llm([{
+        "section": "current_symptom", "label": "Chest (lung) pain", "turn_index": 1, "quote": "मेरे फेफड़ों में दर्द",
+        "details": {"score": "10/10", "trend": "worsening", "location": "lungs"},
+        "evidence": [{"turn_index": 3, "quote": "10"}, {"turn_index": 5, "quote": "धीरे धीरे बढ़ रहा है"},
+                     {"turn_index": 5, "quote": "words never said"}],
+    }]))
+    summary = service.build_summary(db, org_a.org.id, session.case_id)
+    [pain] = next(s for s in summary["sections"] if s["section"] == "current_symptom")["facts"]
+    assert pain["details"] == {"score": "10/10", "trend": "worsening", "location": "lungs"}
+    assert [e["turn_index"] for e in pain["evidence"]] == [1, 3, 5]
+    assert IntakeSessionRepository(db, org_a.org.id).get(session.id).rejected_facts[0]["reason"] == "evidence_quote_not_in_turn"

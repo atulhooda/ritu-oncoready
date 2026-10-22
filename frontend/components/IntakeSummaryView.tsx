@@ -68,13 +68,9 @@ export function IntakeSummaryView({
   );
 }
 
-export function TranscriptView({ summary, highlight }: { summary: IntakeSummary; highlight?: number | null }) {
-  return (
-    <Card>
-      <div className="border-b border-line/70 px-7 py-5">
-        <Label>Transcript</Label>
-      </div>
-      <ol className="space-y-3 px-7 py-5">
+export function TranscriptView({ summary, highlight, bare }: { summary: IntakeSummary; highlight?: number | null; bare?: boolean }) {
+  const list = (
+      <ol className={`space-y-3 px-7 ${bare ? "max-h-[520px] overflow-y-auto border-t border-line/70 pb-5 pt-4" : "py-5"}`}>
         {summary.transcript.map((t) => (
           <li
             key={t.turn_index}
@@ -88,6 +84,14 @@ export function TranscriptView({ summary, highlight }: { summary: IntakeSummary;
           </li>
         ))}
       </ol>
+  );
+  if (bare) return list;
+  return (
+    <Card>
+      <div className="border-b border-line/70 px-7 py-5">
+        <Label>Transcript</Label>
+      </div>
+      {list}
     </Card>
   );
 }

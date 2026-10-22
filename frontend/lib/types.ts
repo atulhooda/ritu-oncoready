@@ -155,6 +155,8 @@ export interface IntakeFact {
   details: Record<string, string>;
   quote: string;
   turn_index: number;
+  /** Every verified quote about this problem, primary first. */
+  evidence?: { turn_index: number; quote: string }[];
 }
 
 export interface IntakeSummary {

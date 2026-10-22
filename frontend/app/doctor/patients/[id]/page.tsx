@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { DocViewer, TimelineView, type Viewer } from "@/components/CaseViews";
-import { IntakeSummaryView, TranscriptView } from "@/components/IntakeSummaryView";
+import { DoctorSummary } from "@/components/DoctorSummary";
+import { TranscriptView } from "@/components/IntakeSummaryView";
 import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Card, EmptyState, Label, PageHeader, Pill, Stat } from "@/components/ui";
@@ -24,6 +25,7 @@ export default function DoctorPatientPage() {
   const [turn, setTurn] = useState<number | null>(null);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   useEffect(() => {
     if (!me) return;
@@ -48,6 +50,7 @@ export default function DoctorPatientPage() {
   const latest = p?.sessions[0];
   const showTurn = (n: number) => {
     setTurn(n);
+    setTranscriptOpen(true);
     setTimeout(() => document.getElementById(`turn-${n}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
   const openSource = (s: SourceRef) => {
@@ -112,10 +115,20 @@ export default function DoctorPatientPage() {
                   </p>
                 )}
                 <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
-                  <IntakeSummaryView summary={selected} audience="doctor" onTurn={showTurn} />
+                  <DoctorSummary summary={selected} onTurn={showTurn} />
                   <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
                     <DetailsCard d={p.details} />
-                    <TranscriptView summary={selected} highlight={turn} />
+                    <Card>
+                      <button
+                        onClick={() => setTranscriptOpen((o) => !o)}
+                        className="flex w-full items-center justify-between px-7 py-5 text-left"
+                        aria-expanded={transcriptOpen}
+                      >
+                        <Label>Full conversation</Label>
+                        <span className="text-sm font-medium text-brand">{transcriptOpen ? "Hide" : `Show · ${selected.transcript.length} turns`}</span>
+                      </button>
+                      {transcriptOpen && <TranscriptView summary={selected} highlight={turn} bare />}
+                    </Card>
                   </div>
                 </div>
               </>
