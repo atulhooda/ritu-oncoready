@@ -62,3 +62,11 @@ body {
   .voice-orb, .voice-halo, .voice-bars span { transition: none; }
   .voice-dots span, .voice-stage[data-phase="connecting"] .voice-orb { animation: none; }
 }
+
+/* ── Print the pre-visit report alone ── */
+@media print {
+  body * { visibility: hidden; }
+  .print-report, .print-report * { visibility: visible; }
+  .print-report { position: absolute; inset: 0 auto auto 0; width: 100%; border: none !important; box-shadow: none !important; }
+  .print-hide { display: none !important; }
+}
