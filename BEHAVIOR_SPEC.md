@@ -168,8 +168,21 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
 
 ### Records
 
-- The patient uploads PDF, PNG or JPEG files (20 MB max). They go through the document pipeline
-  (OCR, extraction with page citations, pending tests, discrepancies, flags).
+- **Uploading.** One record per upload: a PDF, a photo, or up to 20 photos saved as one document
+  (photograph a report page by page). Each file is 20 MB max. Photos are turned upright using the
+  phone's rotation flag, then converted into a PDF before the pipeline (OCR, extraction with page
+  citations, pending tests, discrepancies, flags).
+- **Removing.** A patient can remove their own records, with a confirm step. This deletes the file,
+  its page images and everything read from it, and recomputes pending tests and discrepancies.
+
+### Recording
+
+- **Consent.** Before a voice session the patient chooses whether to record the audio for their care
+  team (on by default, can be unticked). Typed sessions never record. The server refuses an upload
+  for a session without consent, and the database enforces it too.
+- **What is recorded.** The browser records both voices (the patient's microphone and Ritu as heard)
+  and uploads them when the session ends.
+- **Who can listen.** Doctors can play it, for sent check-ins only.
 
 ### Sending to the doctor
 

@@ -13,6 +13,8 @@ from app.llm.client import Extraction
 from app.models import Role
 from app.repositories.intake import IntakeFactRepository, IntakeSessionRepository
 from app.repositories.users import UserRepository
+from app import storage
+from app.repositories.cases import SourceDocumentRepository
 from app.voice import client as ritu
 from tests.conftest import PASSWORD, login
 from tests.test_tenant_isolation import make_case
@@ -233,16 +235,63 @@ def test_patient_cannot_touch_another_patients_session(client, db, org_a):
     assert client.post(f"/me/sessions/{s['id']}/simulate", headers=h2, json={"turns": TURNS}).status_code == 404
 
 
-def test_record_upload_types(client, db, org_a, no_background):
+def _jpeg(w=60, h=40, orientation=None):
+    buf = io.BytesIO()
+    img = Image.new("RGB", (w, h), "white")
+    if orientation:
+        exif = img.getexif()
+        exif[0x0112] = orientation  # EXIF Orientation
+        img.save(buf, "JPEG", exif=exif)
+    else:
+        img.save(buf, "JPEG")
+    return buf.getvalue()
+
+
+def test_record_upload_types(client, db, org_a, no_background, monkeypatch, tmp_path):
+    import pymupdf
+
+    monkeypatch.setattr(get_settings(), "storage_dir", str(tmp_path))
     patient = person(db, org_a, Role.PATIENT, "Upload Patient")
     h = as_user(client, org_a, patient)
-    buf = io.BytesIO()
-    Image.new("RGB", (40, 40), "white").save(buf, "PNG")
-    r = client.post("/me/records", headers=h, files={"file": ("echo.png", buf.getvalue(), "image/png")})
-    assert r.status_code == 202
+    # A single photo is stored as a one-page PDF named after the file.
+    r = client.post("/me/records", headers=h, files={"file": ("echo.jpg", _jpeg(), "image/jpeg")})
+    assert r.status_code == 202 and r.json()["filename"] == "echo.pdf"
     assert [str(d) for d in no_background["documents"]] == [r.json()["id"]]  # OCR pipeline enqueued
+    # Several camera photos become ONE document, pages in order, upright.
+    pages = [("pages", (f"p{i}.jpg", _jpeg(60, 40, orientation=6 if i == 0 else None), "image/jpeg")) for i in range(3)]
+    r = client.post("/me/records", headers=h, files=pages, data={"name": "Blood report"})
+    assert r.status_code == 202 and r.json()["filename"] == "Blood report.pdf"
+    doc = SourceDocumentRepository(db, org_a.org.id).get(r.json()["id"])
+    pdf = pymupdf.open(storage.path(doc.storage_key))
+    assert pdf.page_count == 3
+    first = pdf[0].rect
+    assert first.height > first.width, "EXIF orientation 6 (rotated 90°) must come out portrait"
+    # Rejected uploads.
     assert client.post("/me/records", headers=h, files={"file": ("x.txt", b"hello", "text/plain")}).status_code == 415
-    assert [rec["filename"] for rec in client.get("/me/profile", headers=h).json()["records"]] == ["echo.png"]
+    assert client.post("/me/records", headers=h).status_code == 422
+    mixed = [("pages", ("a.jpg", _jpeg(), "image/jpeg")), ("pages", ("b.pdf", b"%PDF-1.4 x", "application/pdf"))]
+    assert client.post("/me/records", headers=h, files=mixed).status_code == 415
+    names = [rec["filename"] for rec in client.get("/me/profile", headers=h).json()["records"]]
+    assert names == ["echo.pdf", "Blood report.pdf"]
+
+
+def test_patient_can_remove_own_record_only(client, db, org_a, no_background, monkeypatch, tmp_path):
+    monkeypatch.setattr(get_settings(), "storage_dir", str(tmp_path))
+    patient, other = person(db, org_a, Role.PATIENT, "Owner P"), person(db, org_a, Role.PATIENT, "Other P")
+    doctor = person(db, org_a, Role.DOCTOR, "Doctor Del")
+    h = as_user(client, org_a, patient)
+    rec = client.post("/me/records", headers=h, files={"file": ("scan.jpg", _jpeg(), "image/jpeg")}).json()
+    doc = SourceDocumentRepository(db, org_a.org.id).get(rec["id"])
+    path = storage.path(doc.storage_key)
+    assert path.exists()
+
+    assert client.delete(f"/me/records/{rec['id']}", headers=as_user(client, org_a, other)).status_code == 404
+    assert client.delete(f"/me/records/{rec['id']}", headers=as_user(client, org_a, doctor)).status_code == 403
+    assert client.delete(f"/me/records/{rec['id']}", headers=h).status_code == 204
+    assert not path.exists()
+    assert SourceDocumentRepository(db, org_a.org.id).get(rec["id"]) is None
+    assert client.get("/me/profile", headers=h).json()["records"] == []
+    assert client.delete(f"/me/records/{rec['id']}", headers=h).status_code == 404
 
 
 def test_pipeline_rasterizes_images(tmp_path):

@@ -4,14 +4,14 @@ import uuid
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app import storage
 from app.auth.deps import CurrentUser, require_role
 from app.db import get_db
-from app.intake import service, tasks as intake_tasks
+from app.intake import service, tasks as intake_tasks, uploads
 from app.models import Role
 from app.models.patient import LANGUAGES, SEXES, TREATMENT_STATUSES
 from app.repositories.cases import SourceDocumentRepository
@@ -22,7 +22,7 @@ from app.voice.script import build_intake_script
 router = APIRouter(prefix="/me", tags=["patient"])
 patient_only = require_role(Role.PATIENT)
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-UPLOAD_TYPES = {b"%PDF": ("pdf", "application/pdf"), b"\x89PNG": ("png", "image/png"), b"\xff\xd8\xff": ("jpg", "image/jpeg")}
+MAX_PAGES = 20
 
 
 class StartSessionIn(BaseModel):
@@ -203,27 +203,70 @@ def upload_recording(
 
 @router.post("/records", status_code=status.HTTP_202_ACCEPTED)
 def upload_record(
-    file: UploadFile = File(...), current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)
+    file: UploadFile | None = File(None),
+    pages: list[UploadFile] | None = File(None),
+    name: str | None = Form(None),
+    current: CurrentUser = Depends(patient_only),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    """One record per request: a PDF, a photo, or several photos (`pages`) saved as one document."""
     from app.pipeline.tasks import enqueue_document
 
-    data = file.file.read(MAX_UPLOAD_BYTES + 1)
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (20 MB max)")
-    kind = next((v for sig, v in UPLOAD_TYPES.items() if data.startswith(sig)), None)
-    if kind is None:
-        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Upload a PDF, PNG or JPEG")
+    parts = ([file] if file else []) + list(pages or [])
+    if not parts:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Nothing uploaded")
+    if len(parts) > MAX_PAGES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"At most {MAX_PAGES} pages per document")
+    blobs = []
+    for part in parts:
+        data = part.file.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (20 MB max)")
+        blobs.append(data)
+    if len(blobs) == 1 and uploads.is_pdf(blobs[0]):
+        pdf = blobs[0]
+    elif all(uploads.is_image(b) for b in blobs):
+        try:
+            pdf = uploads.images_to_pdf(blobs)
+        except Exception:
+            raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Could not read that image")
+    else:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Upload a PDF, or photos (PNG or JPEG)")
+
+    original = (parts[0].filename or "").rsplit(".", 1)[0]
+    label = (name or "").strip() or (original if len(parts) == 1 and original else None)
+    filename = f"{label or 'Photo ' + date.today().isoformat()}.pdf"[:300]
     case = service.profile_case(db, _user(db, current))
     doc_id = uuid.uuid4()
-    key = f"{current.org_id}/{case.id}/{doc_id}.{kind[0]}"
-    storage.write_bytes(key, data)
+    key = f"{current.org_id}/{case.id}/{doc_id}.pdf"
+    storage.write_bytes(key, pdf)
     doc = SourceDocumentRepository(db, current.org_id).add(
-        id=doc_id, case_id=case.id, filename=(file.filename or f"record.{kind[0]}")[:300], mime_type=kind[1],
+        id=doc_id, case_id=case.id, filename=filename, mime_type="application/pdf",
         storage_key=key, uploaded_by_user_id=current.id,
     )
     db.commit()
     enqueue_document(current.org_id, doc.id, case.id)
     return {"id": doc.id, "filename": doc.filename, "status": doc.status}
+
+
+@router.delete("/records/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_record(document_id: uuid.UUID, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    """Remove one of your own records: its file, page images, and everything read from it."""
+    import shutil
+
+    from app.pipeline.derive import run_derive
+
+    case = service.profile_case(db, _user(db, current))
+    docs = SourceDocumentRepository(db, current.org_id)
+    doc = docs.get(document_id)
+    if doc is None or doc.case_id != case.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Record not found")
+    key = doc.storage_key
+    docs.delete_where(docs.model.id == doc.id)  # pages, extracted facts and rejections cascade
+    run_derive(db, current.org_id, case.id)  # pending tests / discrepancies no longer cite it
+    db.commit()
+    storage.path(key).unlink(missing_ok=True)
+    shutil.rmtree(storage.path(storage.page_image_key(key, 1)).parent, ignore_errors=True)
 
 
 @router.post("/publish")
