@@ -10,8 +10,21 @@ import { api } from "@/lib/api";
 import type { IntakeSession, PatientProfile } from "@/lib/types";
 import { LANGUAGES } from "@/lib/types";
 
-export function RituStep({ profile, clinic, reload }: { profile: PatientProfile; clinic: string; reload: () => Promise<void> }) {
+export function RituStep({
+  profile,
+  clinic,
+  reload,
+  fresh = false,
+}: {
+  profile: PatientProfile;
+  clinic: string;
+  reload: () => Promise<void>;
+  /** Starting a new session: show the introduction, not the last conversation's summary. */
+  fresh?: boolean;
+}) {
   const [live, setLive] = useState<IntakeSession | null>(null);
+  const [startingOver, setStartingOver] = useState(fresh);
+  const summary = startingOver ? null : profile.summary;
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState(true);
   const latest = profile.sessions.filter((s) => (s.kind ?? "pre_visit") === "pre_visit").at(-1);
@@ -29,6 +42,7 @@ export function RituStep({ profile, clinic, reload }: { profile: PatientProfile;
   }
   const finished = useCallback(() => {
     setLive(null);
+    setStartingOver(false);
     reload();
   }, [reload]);
 
@@ -44,8 +58,13 @@ export function RituStep({ profile, clinic, reload }: { profile: PatientProfile;
             <p className="text-sm text-muted">This takes a few seconds.</p>
           </div>
         </div>
-      ) : profile.summary ? null : (
+      ) : summary ? null : (
         <div className="space-y-5">
+          {profile.published_at && startingOver && (
+            <p className="rounded-xl bg-brand-soft/60 px-4 py-3 text-[15px]">
+              A new session for your next visit. What you tell Ritu is shared with your care team automatically; your earlier sessions stay with them too.
+            </p>
+          )}
           <p className="text-[17px] leading-relaxed text-ink/85">
             Ritu is the pre-visit assistant for {clinic}. She will ask how you are feeling right now, then about any earlier reports you have.
             {voice ? ` She starts in ${language} and follows you if you answer in another language.` : ""}
@@ -75,11 +94,11 @@ export function RituStep({ profile, clinic, reload }: { profile: PatientProfile;
           )}
         </div>
       )}
-      {latest?.status === "failed" && !profile.summary && <p className="text-sm text-red-700">The last conversation did not finish. Please try again.</p>}
+      {latest?.status === "failed" && !summary && !startingOver && <p className="text-sm text-red-700">The last conversation did not finish. Please try again.</p>}
       {error && <p className="text-sm text-red-700">{error}</p>}
-      {profile.summary && !writing && <IntakeSummaryView summary={profile.summary} audience="patient" />}
+      {summary && !writing && <IntakeSummaryView summary={summary} audience="patient" />}
       <div>
-        {profile.summary ? (
+        {summary ? (
           <Button variant="secondary" onClick={start} disabled={writing}>
             <Mic size={17} /> Talk to Ritu again
           </Button>

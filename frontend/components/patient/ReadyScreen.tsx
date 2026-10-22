@@ -1,10 +1,20 @@
-import { CheckCircle2, FileUp, HeartPulse, PencilLine } from "lucide-react";
+import { CheckCircle2, FileUp, HeartPulse, Mic, PencilLine } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui";
 import type { PatientProfile } from "@/lib/types";
 
-export function ReadyScreen({ profile, clinic, onReview }: { profile: PatientProfile; clinic: string; onReview: () => void }) {
+export function ReadyScreen({
+  profile,
+  clinic,
+  onReview,
+  onNewSession,
+}: {
+  profile: PatientProfile;
+  clinic: string;
+  onReview: () => void;
+  onNewSession: () => void;
+}) {
   const n = profile.records.length;
   return (
     <Card className="p-8 sm:p-10">
@@ -26,6 +36,9 @@ export function ReadyScreen({ profile, clinic, onReview }: { profile: PatientPro
         <Link href="/patient/diary" className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-[15px] font-semibold text-white hover:bg-brand/90">
           <HeartPulse size={17} /> Check in with Ritu
         </Link>
+        <button onClick={onNewSession} className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-5 py-3 text-[15px] font-semibold hover:border-ink/30">
+          <Mic size={17} /> Start a new session
+        </button>
         <Link href="/patient/records" className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-5 py-3 text-[15px] font-semibold hover:border-ink/30">
           <FileUp size={17} /> Add records
         </Link>

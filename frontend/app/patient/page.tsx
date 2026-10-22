@@ -31,6 +31,7 @@ export default function CheckInPage() {
   const { me, profile, reload } = usePatient();
   const [step, setStep] = useState<StepId | null>(null);
   const [showReady, setShowReady] = useState(false);
+  const [fresh, setFresh] = useState(false); // "Start a new session": open Ritu's step without the last summary
 
   useEffect(() => {
     if (!profile || step) return;
@@ -43,6 +44,7 @@ export default function CheckInPage() {
 
   const go = (s: StepId) => {
     setShowReady(false);
+    setFresh(false);
     setStep(s);
     window.history.replaceState(null, "", `/patient?step=${s}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -83,7 +85,15 @@ export default function CheckInPage() {
             subtitle={showReady ? undefined : `${STEPS.length} short steps · about ${total} minutes. You can stop and come back any time.`}
           />
           {showReady ? (
-            <ReadyScreen profile={profile} clinic={clinic} onReview={() => go("review")} />
+            <ReadyScreen
+              profile={profile}
+              clinic={clinic}
+              onReview={() => go("review")}
+              onNewSession={() => {
+                go("ritu");
+                setFresh(true);
+              }}
+            />
           ) : (
             step && (
               <>
@@ -104,7 +114,7 @@ export default function CheckInPage() {
                         }}
                       />
                     )}
-                    {step === "ritu" && <RituStep profile={profile} clinic={clinic} reload={reload} />}
+                    {step === "ritu" && <RituStep key={fresh ? "new" : "last"} profile={profile} clinic={clinic} reload={reload} fresh={fresh} />}
                     {step === "records" && <RecordsUploader profile={profile} onChange={reload} />}
                     {step === "review" && <ReviewStep profile={profile} clinic={clinic} reload={reload} goTo={go} />}
                   </div>

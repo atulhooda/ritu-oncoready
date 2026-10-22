@@ -134,7 +134,7 @@ and each finished step shows a check.
 4. **Review & send:** everything on one page, with Edit links, then "Send to my care team". This
    needs a summarized session.
 
-After sending, Check-in shows "You're ready for your visit" and what happens next. The old
+After sending, Check-in shows "You're ready for your visit", what happens next, and "Start a new session": the Talk to Ritu step without the last summary, for a fresh pre-visit conversation (shared automatically, earlier ones kept). The old
 `/patient/session` and `/patient/send` addresses redirect into steps 2 and 4.
 
 Doctors see the details, labeled self-reported, only once the patient has sent their check-in.
