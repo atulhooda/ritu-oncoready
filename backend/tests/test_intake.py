@@ -452,3 +452,57 @@ def test_one_problem_merges_its_quotes(db, org_a):
     assert pain["details"] == {"score": "10/10", "trend": "worsening", "location": "lungs"}
     assert [e["turn_index"] for e in pain["evidence"]] == [1, 3, 5]
     assert IntakeSessionRepository(db, org_a.org.id).get(session.id).rejected_facts[0]["reason"] == "evidence_quote_not_in_turn"
+
+
+# --- audio recording ----------------------------------------------------------------------
+
+
+def voice_session(client, db, tenant, patient, monkeypatch, record):
+    monkeypatch.setattr(ritu, "enabled", lambda: True)
+    monkeypatch.setattr(ritu, "create_browser_session", lambda *a: ritu.BrowserSession("rs_rec", "wss://x", "t", None))
+    h = as_user(client, tenant, patient)
+    return h, client.post("/me/sessions", headers=h, json={"record_audio": record}).json()
+
+
+def upload_audio(client, h, sid, mime="audio/webm", data=b"\x1aE\xdf\xa3fake-webm"):
+    return client.post(f"/me/sessions/{sid}/recording", headers=h, files={"file": ("session.webm", data, mime)})
+
+
+def test_recording_needs_consent_and_reaches_only_the_doctor(client, db, org_a, org_b, monkeypatch, tmp_path):
+    monkeypatch.setattr(get_settings(), "storage_dir", str(tmp_path))
+    patient, other = person(db, org_a, Role.PATIENT, "Rec Patient"), person(db, org_a, Role.PATIENT, "Rec Other")
+    doctor, doctor_b = person(db, org_a, Role.DOCTOR, "Doctor Rec"), person(db, org_b, Role.DOCTOR, "Doctor Far Rec")
+
+    h, no = voice_session(client, db, org_a, patient, monkeypatch, record=False)
+    assert no["recording_consent"] is False
+    assert upload_audio(client, h, no["id"]).status_code == 409
+
+    h, yes = voice_session(client, db, org_a, patient, monkeypatch, record=True)
+    assert upload_audio(client, h, yes["id"], mime="video/mp4").status_code == 415
+    assert upload_audio(client, as_user(client, org_a, other), yes["id"]).status_code == 404
+    r = upload_audio(client, h, yes["id"])
+    assert r.status_code == 201 and r.json()["has_recording"] is True
+
+    # Make it a summarized, sent session so the doctor can open it.
+    session = IntakeSessionRepository(db, org_a.org.id).get(yes["id"])
+    from app.intake import service
+    service.record_transcript(db, org_a.org.id, session, TURNS)
+    run_intake_extraction(db, org_a.org.id, session.id, extract=fake_llm(FACTS[:1]))
+    case_id = str(session.case_id)
+    url = f"/doctor/patients/{case_id}/sessions/{yes['id']}/recording"
+    hd = as_user(client, org_a, doctor)
+    assert client.get(url, headers=hd).status_code == 404  # not sent yet
+    client.post("/me/publish", headers=h)
+    got = client.get(url, headers=hd)
+    assert got.status_code == 200 and got.content.startswith(b"\x1aE") and got.headers["content-type"].startswith("audio/webm")
+    detail = client.get(f"/doctor/patients/{case_id}", headers=hd).json()
+    assert next(s for s in detail["sessions"] if str(s["session_id"]) == yes["id"])["has_recording"] is True
+    assert client.get(url, headers=as_user(client, org_b, doctor_b)).status_code == 404
+    assert client.get(url, headers=h).status_code == 403  # patients use /me, not the doctor API
+
+
+def test_simulator_sessions_never_record(client, db, org_a):
+    patient = person(db, org_a, Role.PATIENT, "Typed Patient")
+    h = as_user(client, org_a, patient)
+    s = client.post("/me/sessions", headers=h, json={"record_audio": True}).json()
+    assert s["mode"] == "simulator" and s["recording_consent"] is False

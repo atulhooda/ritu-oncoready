@@ -3,16 +3,19 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.auth.access import visible_case_or_404
 from app.auth.deps import CurrentUser, require_role
+from app import storage
 from app.db import get_db
 from app.intake import service
 from app.models import Role
 from app.pipeline.derive import facts_for_case, lab_flags
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
+from app.repositories.intake import IntakeSessionRepository
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository
 from app.services.timeline import build_timeline
 
@@ -56,3 +59,18 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only),
         "records": service.records(db, current.org_id, case.id),
         "timeline": build_timeline(db, current.org_id, case.id),
     }
+
+
+@router.get("/patients/{case_id}/sessions/{session_id}/recording", response_class=FileResponse)
+def session_recording(
+    case_id: uuid.UUID, session_id: uuid.UUID,
+    current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db),
+):
+    case = visible_case_or_404(db, current, case_id)  # sent intake cases only
+    session = IntakeSessionRepository(db, current.org_id).get(session_id)
+    if session is None or session.case_id != case.id or not session.recording_key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Recording not found")
+    path = storage.path(session.recording_key)
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Recording not found")
+    return FileResponse(path, media_type=session.recording_mime or "application/octet-stream")

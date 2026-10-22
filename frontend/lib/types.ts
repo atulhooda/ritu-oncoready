@@ -163,6 +163,7 @@ export interface IntakeSummary {
   session_id: string;
   mode: "ritu" | "simulator";
   language?: string;
+  has_recording?: boolean;
   started_at: string | null;
   ended_at: string | null;
   sections: { section: string; label: string; facts: IntakeFact[] }[];
@@ -171,6 +172,8 @@ export interface IntakeSummary {
 
 export interface IntakeSession {
   id: string;
+  recording_consent?: boolean;
+  has_recording?: boolean;
   status: "created" | "in_progress" | "completed" | "summarized" | "failed" | "expired";
   mode: "ritu" | "simulator";
   error: string | null;

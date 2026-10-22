@@ -25,6 +25,14 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 UPLOAD_TYPES = {b"%PDF": ("pdf", "application/pdf"), b"\x89PNG": ("png", "image/png"), b"\xff\xd8\xff": ("jpg", "image/jpeg")}
 
 
+class StartSessionIn(BaseModel):
+    record_audio: bool = False  # the patient ticked "record the audio for my care team"
+
+
+AUDIO_TYPES = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav"}
+MAX_RECORDING_BYTES = 40 * 1024 * 1024
+
+
 class SimulatedTurn(BaseModel):
     role: Literal["patient", "ritu"]
     text: str = Field(min_length=1, max_length=4000)
@@ -71,7 +79,8 @@ def _user(db: Session, current: CurrentUser):
 
 def _session_out(s) -> dict[str, Any]:
     return {"id": s.id, "status": s.status, "mode": s.mode, "language": s.language,
-            "started_at": s.started_at, "ended_at": s.ended_at, "error": s.error}
+            "started_at": s.started_at, "ended_at": s.ended_at, "error": s.error,
+            "recording_consent": s.recording_consent, "has_recording": bool(s.recording_key)}
 
 
 @router.get("/profile")
@@ -106,9 +115,11 @@ def intake_script(current: CurrentUser = Depends(patient_only), db: Session = De
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
-def start_session(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> dict[str, Any]:
+def start_session(
+    body: StartSessionIn | None = None, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)
+) -> dict[str, Any]:
     try:
-        session, connection = service.start_session(db, _user(db, current))
+        session, connection = service.start_session(db, _user(db, current), record_audio=bool(body and body.record_audio))
     except service.IntakeError as e:
         db.commit()  # keep the failed session for the record
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
@@ -145,6 +156,48 @@ def simulate(
     db.commit()
     if recorded:
         intake_tasks.enqueue_summary(current.org_id, session.id)
+    return _session_out(session)
+
+
+def _remux(path) -> None:
+    """Browser recordings carry no duration header, so players cannot show length or seek. A stream
+    copy through ffmpeg writes one. Best-effort: on any failure the original file stays."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        return
+    tmp = path.with_suffix(".remux" + path.suffix)
+    try:
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(path), "-c", "copy", str(tmp)],
+                       check=True, timeout=60, capture_output=True)
+        tmp.replace(path)
+    except (subprocess.SubprocessError, OSError):
+        tmp.unlink(missing_ok=True)
+
+
+@router.post("/sessions/{session_id}/recording", status_code=status.HTTP_201_CREATED)
+def upload_recording(
+    session_id: uuid.UUID, file: UploadFile = File(...),
+    current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Audio the browser recorded during a voice session. Only with the consent given at the start."""
+    session = IntakeSessionRepository(db, current.org_id).get(session_id)
+    if session is None or session.patient_user_id != current.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
+    if not session.recording_consent:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Recording was not agreed for this session")
+    mime = (file.content_type or "").split(";")[0].strip().lower()
+    if mime not in AUDIO_TYPES:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Unsupported audio type")
+    data = file.file.read(MAX_RECORDING_BYTES + 1)
+    if not data or len(data) > MAX_RECORDING_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Recording missing or too large")
+    key = f"{current.org_id}/{session.case_id}/sessions/{session.id}.{AUDIO_TYPES[mime]}"
+    path = storage.write_bytes(key, data)
+    _remux(path)
+    session.recording_key, session.recording_mime = key, mime
+    db.commit()
     return _session_out(session)
 
 

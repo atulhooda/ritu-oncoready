@@ -78,13 +78,16 @@ def update_details(db: Session, user: User, values: dict[str, Any]) -> dict[str,
     return patient_details(db, user.org_id, user.id)
 
 
-def start_session(db: Session, user: User, language: str | None = None) -> tuple[IntakeSession, ritu.BrowserSession | None]:
+def start_session(
+    db: Session, user: User, language: str | None = None, record_audio: bool = False
+) -> tuple[IntakeSession, ritu.BrowserSession | None]:
     case = profile_case(db, user)
     details = patient_details(db, user.org_id, user.id)
     language = language or details["preferred_language"]
     mode = "ritu" if ritu.enabled() else "simulator"
     session = IntakeSessionRepository(db, user.org_id).add(
-        case_id=case.id, patient_user_id=user.id, mode=mode, language=language, status="created"
+        case_id=case.id, patient_user_id=user.id, mode=mode, language=language, status="created",
+        recording_consent=record_audio and mode == "ritu",  # only voice sessions have audio
     )
     connection = None
     if mode == "ritu":
@@ -176,6 +179,7 @@ def summarize_session(db: Session, org_id: uuid.UUID, session) -> dict[str, Any]
     ]
     return {
         "session_id": session.id, "mode": session.mode, "language": session.language,
+        "has_recording": bool(session.recording_key),
         "started_at": session.started_at, "ended_at": session.ended_at, "extracted_by": session.extracted_by,
         "sections": sections,
         "transcript": [{"turn_index": t.turn_index, "role": t.role, "text": t.text}

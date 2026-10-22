@@ -4,6 +4,7 @@ import { Mic, PhoneOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Badge, Button, Card, Label } from "@/components/ui";
+import { API_URL, getToken } from "@/lib/api";
 import { RituVoice, type VoicePhase } from "@/lib/ritu-voice";
 import type { IntakeSession } from "@/lib/types";
 
@@ -35,7 +36,16 @@ export function VoiceSession({ session, onFinished }: { session: IntakeSession; 
         if (p === "ended") onFinished();
       },
       onCaption: (role, text) => setCaptions((c) => [...c, { role, text }]),
-    });
+      onRecording: (audio) => {
+        const body = new FormData();
+        body.append("file", new File([audio], "session-audio", { type: audio.type.split(";")[0] }));
+        fetch(`${API_URL}/me/sessions/${session.id}/recording`, {
+          method: "POST",
+          body,
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }).catch(() => {}); // a lost recording must never break the session
+      },
+    }, !!session.recording_consent);
     voice.current = v;
     v.start().catch((e) => {
       setPhase("error");
@@ -58,7 +68,7 @@ export function VoiceSession({ session, onFinished }: { session: IntakeSession; 
       cancelAnimationFrame(raf);
       v.stop();
     };
-  }, [session.ritu, onFinished]);
+  }, [session.ritu, session.id, session.recording_consent, onFinished]);
 
   useEffect(() => {
     captionEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); // returns a Promise in newer Chrome
@@ -69,9 +79,12 @@ export function VoiceSession({ session, onFinished }: { session: IntakeSession; 
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-7 py-5">
         <Label>Talking to Ritu</Label>
-        <Badge tone={phase === "error" ? "red" : phase === "ended" ? "slate" : "green"}>
-          {phase === "error" ? "not connected" : phase === "ended" ? "ended" : "● live"}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {session.recording_consent && phase !== "ended" && phase !== "error" && <Badge tone="red">● recording</Badge>}
+          <Badge tone={phase === "error" ? "red" : phase === "ended" ? "slate" : "green"}>
+            {phase === "error" ? "not connected" : phase === "ended" ? "ended" : "● live"}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-0 lg:grid-cols-[1fr_1fr]">

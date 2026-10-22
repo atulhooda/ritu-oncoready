@@ -15,6 +15,13 @@ export type VoicePhase = "connecting" | "ritu" | "listening" | "thinking" | "end
 export interface VoiceEvents {
   onPhase: (phase: VoicePhase, detail?: string) => void;
   onCaption?: (role: "ritu" | "patient", text: string) => void;
+  /** Called once after the session with both voices mixed, when recording was requested. */
+  onRecording?: (audio: Blob) => void;
+}
+
+function recorderMime(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  return ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((m) => MediaRecorder.isTypeSupported(m));
 }
 
 function downsample(input: Float32Array, from: number, to: number): Float32Array {
@@ -69,11 +76,14 @@ export class RituVoice {
   private playEnd = 0;
   private phase: VoicePhase = "connecting";
   private stopped = false;
+  private recorder: MediaRecorder | null = null;
+  private recorded: Blob[] = [];
 
   constructor(
     private wsUrl: string,
     private token: string,
     private events: VoiceEvents,
+    private record = false,
   ) {}
 
   private setPhase(p: VoicePhase, detail?: string) {
@@ -118,11 +128,24 @@ export class RituVoice {
     const level = this.ctx.createGain();
     level.gain.value = 0.85;
     this.outAnalyser.connect(warmth).connect(soften).connect(level).connect(this.ctx.destination);
+    const mixed = this.record && recorderMime() ? this.ctx.createMediaStreamDestination() : null;
+    if (mixed) level.connect(mixed); // Ritu's voice, as the patient heard it
     this.micAnalyser = this.ctx.createAnalyser();
     this.micAnalyser.fftSize = 512;
 
     const source = this.ctx.createMediaStreamSource(this.mic);
     source.connect(this.micAnalyser);
+    if (mixed) {
+      source.connect(mixed); // the patient's voice (echo-cancelled, so Ritu is not recorded twice)
+      const mimeType = recorderMime();
+      this.recorder = new MediaRecorder(mixed.stream, mimeType ? { mimeType } : undefined);
+      this.recorder.ondataavailable = (e) => e.data.size && this.recorded.push(e.data);
+      this.recorder.onstop = () => {
+        if (this.recorded.length) this.events.onRecording?.(new Blob(this.recorded, { type: this.recorder?.mimeType || mimeType }));
+        this.recorded = [];
+      };
+      this.recorder.start(1000);
+    }
     this.processor = this.ctx.createScriptProcessor(4096, 1, 1);
     source.connect(this.processor);
     this.processor.connect(this.ctx.destination); // required for onaudioprocess to fire; outputs silence
@@ -205,11 +228,14 @@ export class RituVoice {
   }
 
   private cleanup() {
+    if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop(); // fires onstop → onRecording
     this.processor?.disconnect();
     this.mic?.getTracks().forEach((t) => t.stop());
     this.playing.forEach((n) => n.stop());
     this.playing = [];
-    if (this.ctx && this.ctx.state !== "closed") this.ctx.close();
+    const ctx = this.ctx;
+    this.ctx = null; // cleanup can run twice (stop + socket close); close the context once
+    if (ctx) setTimeout(() => ctx.state !== "closed" && ctx.close(), 500); // after the recorder's last chunk
     this.processor = null;
     this.mic = null;
     this.outAnalyser = null;

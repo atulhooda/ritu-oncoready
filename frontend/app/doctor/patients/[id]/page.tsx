@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { DocViewer, TimelineView, type Viewer } from "@/components/CaseViews";
 import { DoctorSummary } from "@/components/DoctorSummary";
+import { SessionRecording } from "@/components/SessionRecording";
 import { TranscriptView } from "@/components/IntakeSummaryView";
 import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
@@ -117,6 +118,7 @@ export default function DoctorPatientPage() {
                 <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
                   <DoctorSummary summary={selected} onTurn={showTurn} />
                   <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
+                    {selected.has_recording && <SessionRecording caseId={p.case_id} sessionId={selected.session_id} />}
                     <DetailsCard d={p.details} />
                     <Card>
                       <button

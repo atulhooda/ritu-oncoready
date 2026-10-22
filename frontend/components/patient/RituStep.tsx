@@ -13,6 +13,7 @@ import { LANGUAGES } from "@/lib/types";
 export function RituStep({ profile, clinic, reload }: { profile: PatientProfile; clinic: string; reload: () => Promise<void> }) {
   const [live, setLive] = useState<IntakeSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [record, setRecord] = useState(true);
   const latest = profile.sessions[profile.sessions.length - 1];
   const writing = latest?.status === "completed";
   const voice = profile.voice_mode === "ritu";
@@ -21,7 +22,7 @@ export function RituStep({ profile, clinic, reload }: { profile: PatientProfile;
   async function start() {
     setError(null);
     try {
-      setLive(await api<IntakeSession>("/me/sessions", { method: "POST" }));
+      setLive(await api<IntakeSession>("/me/sessions", { method: "POST", body: JSON.stringify({ record_audio: voice && record }) }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start");
     }
@@ -63,6 +64,15 @@ export function RituStep({ profile, clinic, reload }: { profile: PatientProfile;
               {voice ? "Speak normally and pause when you are done. Allow the microphone when your browser asks." : "You will type your answers."}
             </li>
           </ul>
+          {voice && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-[#fcfbf9] px-4 py-3 text-[15px]">
+              <input type="checkbox" checked={record} onChange={(e) => setRecord(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--color-brand)]" />
+              <span>
+                <span className="font-medium">Record the audio of this conversation for my care team.</span>
+                <span className="block text-sm text-muted">Only your care team can listen to it. You can untick this and still talk to Ritu.</span>
+              </span>
+            </label>
+          )}
         </div>
       )}
       {latest?.status === "failed" && !profile.summary && <p className="text-sm text-red-700">The last conversation did not finish. Please try again.</p>}
