@@ -321,3 +321,20 @@ export interface SymptomCourse {
     cells: ({ fact_id: string; score: number | null; trend: string | null; severity: string | null; urgent: boolean } | null)[];
   }[];
 }
+
+/** A doctor's professional details. Self-declared: not yet verified with HPR. */
+export interface Practitioner {
+  name: string;
+  email: string;
+  hpr_id: string | null;
+  registration_number: string | null;
+  medical_council: string | null;
+  qualification: string | null;
+  verified: boolean;
+}
+
+/** 71123456789012 -> 71-1234-5678-9012 */
+export function formatId14(digits: string): string {
+  const d = digits.replace(/\D/g, "").slice(0, 14);
+  return [d.slice(0, 2), d.slice(2, 6), d.slice(6, 10), d.slice(10, 14)].filter(Boolean).join("-");
+}

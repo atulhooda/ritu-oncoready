@@ -1,10 +1,12 @@
-"""Doctor profile: patients who sent their Ritu session summary and records."""
+"""Doctor profile: their professional details, and patients who sent their Ritu session summary and records."""
 
+import re
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth.access import visible_case_or_404
@@ -17,10 +19,63 @@ from app.pipeline.derive import facts_for_case, lab_flags
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository
+from app.repositories.users import PractitionerProfileRepository, UserRepository
 from app.services.timeline import build_timeline
 
 router = APIRouter(prefix="/doctor", tags=["doctor"])
 doctor_only = require_role(Role.DOCTOR)
+
+
+class PractitionerIn(BaseModel):
+    """Self-declared professional details. Blank strings are stored as empty."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    hpr_id: str | None = Field(None, max_length=20)
+    registration_number: str | None = Field(None, max_length=40, pattern=r"^[A-Za-z0-9/\- ]*$")
+    medical_council: str | None = Field(None, max_length=120)
+    qualification: str | None = Field(None, max_length=200)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def blank_is_none(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("hpr_id")
+    @classmethod
+    def hpr_14_digits(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        digits = re.sub(r"[\s-]", "", v)
+        if not re.fullmatch(r"\d{14}", digits):
+            raise ValueError("An HPR ID has 14 digits")
+        return digits
+
+
+PRACTITIONER_FIELDS = ("hpr_id", "registration_number", "medical_council", "qualification")
+
+
+def _practitioner_out(db: Session, current: CurrentUser) -> dict[str, Any]:
+    user = UserRepository(db, current.org_id).get(current.id)
+    p = PractitionerProfileRepository(db, current.org_id).get_for(current.id)
+    out: dict[str, Any] = {"name": user.full_name, "email": user.email, "verified": False}  # self-declared
+    out.update({f: getattr(p, f) if p else None for f in PRACTITIONER_FIELDS})
+    return out
+
+
+@router.get("/me")
+def get_me(current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _practitioner_out(db, current)
+
+
+@router.put("/me")
+def update_me(body: PractitionerIn, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
+    repo = PractitionerProfileRepository(db, current.org_id)
+    p = repo.get_for(current.id) or repo.add(user_id=current.id)
+    for k, v in body.model_dump().items():
+        setattr(p, k, v)
+    db.commit()
+    return _practitioner_out(db, current)
 
 
 @router.get("/patients")

@@ -129,6 +129,14 @@ not allowed.
 - **Who sees it.** The patient (Profile), and the doctor (report particulars, inbox badge:
   "ABHA verified" for the sandbox, "ABHA (demo)" for demo links). Unlinking clears it.
 
+### Doctor's professional details
+
+- On **My profile** (`/doctor/profile`) a doctor adds their HPR ID (14 digits, ABDM Healthcare
+  Professionals Registry), council registration number, medical council and qualifications.
+- They are **self-declared**: not checked against HPR or a council register yet, and every report
+  says "self-declared". Each report shows them under "Prepared for".
+- The inbox asks the doctor to add them until an HPR ID or registration number is saved.
+
 ### Patient pages
 
 Patients see four destinations: **Check-in** (`/patient`), **Diary** (`/patient/diary`, check-ins

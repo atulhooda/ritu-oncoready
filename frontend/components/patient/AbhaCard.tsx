@@ -7,12 +7,8 @@ import { Field, TextInput } from "@/components/Field";
 import { Button, Card, Label } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { AbhaLink, PatientProfile } from "@/lib/types";
+import { formatId14 } from "@/lib/types";
 
-/** 91-1234-5678-9012 as the patient types. */
-function formatAbha(raw: string): string {
-  const d = raw.replace(/\D/g, "").slice(0, 14);
-  return [d.slice(0, 2), d.slice(2, 6), d.slice(6, 10), d.slice(10, 14)].filter(Boolean).join("-");
-}
 
 export function AbhaStatus({ abha }: { abha: AbhaLink }) {
   return abha.verified_via === "abdm_sandbox" ? (
@@ -131,7 +127,7 @@ export function AbhaCard({ profile, onChange }: { profile: PatientProfile; onCha
       ) : (
         <form onSubmit={sendOtp} className="mt-5 space-y-4">
           <Field label="ABHA number" hint="14 digits, on your ABHA card or in the ABHA app.">
-            <TextInput inputMode="numeric" placeholder="91-1234-5678-9012" value={number} onChange={(e) => setNumber(formatAbha(e.target.value))} />
+            <TextInput inputMode="numeric" placeholder="91-1234-5678-9012" value={number} onChange={(e) => setNumber(formatId14(e.target.value))} />
           </Field>
           <Button type="submit" disabled={busy || number.replace(/\D/g, "").length !== 14}>
             Send OTP

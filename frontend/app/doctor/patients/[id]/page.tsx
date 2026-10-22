@@ -13,7 +13,7 @@ import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Card, EmptyState, Label, PageHeader, Pill } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { DocumentInfo, DoctorPatientDetail, IntakeSummary, SourceRef } from "@/lib/types";
+import type { DocumentInfo, DoctorPatientDetail, IntakeSummary, Practitioner, SourceRef } from "@/lib/types";
 import { detailsLine, LANGUAGES } from "@/lib/types";
 
 type Tab = "summary" | "check_ins" | "records";
@@ -32,10 +32,12 @@ export default function DoctorPatientPage() {
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [checkInId, setCheckInId] = useState<string | null>(null);
+  const [doctor, setDoctor] = useState<Practitioner | null>(null);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   useEffect(() => {
     if (!me) return;
+    api<Practitioner>("/doctor/me").then(setDoctor).catch(() => {});
     api<DoctorPatientDetail>(`/doctor/patients/${id}`)
       .then((d) => {
         setP(d);
@@ -70,7 +72,7 @@ export default function DoctorPatientPage() {
   };
   const conversation = (s: IntakeSummary) => (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <HospitalReport summary={s} details={p!.details} patientName={p!.name} clinic={me?.org_name ?? "Clinic"} onTurn={showTurn} />
+      <HospitalReport summary={s} details={p!.details} patientName={p!.name} clinic={me?.org_name ?? "Clinic"} doctor={doctor} onTurn={showTurn} />
       <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
         {s.has_recording && <SessionRecording key={s.session_id} caseId={p!.case_id} sessionId={s.session_id} />}
         <Card>

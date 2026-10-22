@@ -290,3 +290,14 @@ def test_intake_repositories_are_scoped(db, org_a, org_b):
     assert PatientProfileRepository(db, org_b.org.id).get_for(patient.id) is None
     assert SessionTurnRepository(db, org_b.org.id).for_session(session.id) == []
     assert CaseRepository(db, org_b.org.id).for_patient(patient.id) is None
+
+
+def test_practitioner_profiles_are_scoped(db, org_a, org_b):
+    from app.models import Role
+    from app.repositories.users import PractitionerProfileRepository
+
+    doctor = UserRepository(db, org_a.org.id).create("dr@org-a.example.com", "Dr", PASSWORD, Role.DOCTOR)
+    row = PractitionerProfileRepository(db, org_a.org.id).add(user_id=doctor.id, hpr_id="71123456789012")
+    assert PractitionerProfileRepository(db, org_b.org.id).get(row.id) is None
+    assert PractitionerProfileRepository(db, org_b.org.id).get_for(doctor.id) is None
+    assert PractitionerProfileRepository(db, org_a.org.id).get_for(doctor.id).id == row.id

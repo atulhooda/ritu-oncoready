@@ -22,12 +22,16 @@ const NAV = {
     { href: "/patient/records", label: "My records", icon: FileUp },
     { href: "/patient/profile", label: "Profile", icon: UserRound },
   ],
-  doctor: [{ href: "/doctor", label: "Patients", icon: Stethoscope }],
+  doctor: [
+    { href: "/doctor", label: "Patients", icon: Stethoscope },
+    { href: "/doctor/profile", label: "My profile", icon: UserRound },
+  ],
 };
 
 function isActive(pathname: string, href: string) {
   if (href === "/faculty") return pathname === "/faculty" || pathname.startsWith("/faculty/briefs");
   if (href === "/patient") return pathname === "/patient";
+  if (href === "/doctor") return pathname === "/doctor" || pathname.startsWith("/doctor/patients");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

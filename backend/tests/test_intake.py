@@ -724,3 +724,19 @@ def test_abdm_sandbox_flow_checks_the_returned_abha(monkeypatch):
     assert calls[-1][1]["authData"]["otp"]["otpValue"] != "654321"
     with pytest.raises(abdm.AbdmError, match="different ABHA"):
         abdm.verify_otp("txn-1", "654321", "91-0000-0000-0000")
+
+
+def test_doctor_professional_details(client, db, org_a):
+    doctor = person(db, org_a, Role.DOCTOR, "Doctor Hpr")
+    hd = as_user(client, org_a, doctor)
+    me = client.get("/doctor/me", headers=hd).json()
+    assert me["hpr_id"] is None and me["verified"] is False
+    assert client.put("/doctor/me", headers=hd, json={"hpr_id": "12-34"}).status_code == 422
+    assert client.put("/doctor/me", headers=hd, json={"hpr_id": "71-1234-5678-9012", "evil": 1}).status_code == 422
+    out = client.put("/doctor/me", headers=hd, json={
+        "hpr_id": "71-1234-5678-9012", "registration_number": "DMC/R/12345",
+        "medical_council": "Delhi Medical Council", "qualification": "MBBS, MD, DM (Medical Oncology)"}).json()
+    assert out["hpr_id"] == "71123456789012" and out["medical_council"] == "Delhi Medical Council"
+    assert client.put("/doctor/me", headers=hd, json={"hpr_id": ""}).json()["hpr_id"] is None
+    patient = person(db, org_a, Role.PATIENT, "Not A Doctor")
+    assert client.get("/doctor/me", headers=as_user(client, org_a, patient)).status_code == 403

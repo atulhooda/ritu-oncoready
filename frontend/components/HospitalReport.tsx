@@ -3,8 +3,8 @@
 import { Printer } from "lucide-react";
 import { useState } from "react";
 
-import type { IntakeFact, IntakeSummary, PatientDetails } from "@/lib/types";
-import { LANGUAGES, SEX_LABELS, TREATMENT_LABELS } from "@/lib/types";
+import type { IntakeFact, IntakeSummary, PatientDetails, Practitioner } from "@/lib/types";
+import { formatId14, LANGUAGES, SEX_LABELS, TREATMENT_LABELS } from "@/lib/types";
 
 /** On the fixed urgent-signs list. Matched in code on the backend (app/intake/urgent.py), never by the LLM. */
 const isUrgent = (f: IntakeFact) => !!f.urgent;
@@ -73,12 +73,15 @@ export function HospitalReport({
   details,
   patientName,
   clinic,
+  doctor,
   onTurn,
 }: {
   summary: IntakeSummary;
   details: PatientDetails;
   patientName: string;
   clinic: string;
+  /** The doctor reading the report (self-declared professional details). */
+  doctor?: Practitioner | null;
   onTurn: (t: number) => void;
 }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -170,7 +173,7 @@ export function HospitalReport({
             {row(
               "ABHA",
               details.abha
-                ? `${details.abha.address ?? details.abha.number} (${details.abha.verified_via === "abdm_sandbox" ? "verified, ABDM sandbox" : "demo link, not verified"})`
+                ? `${details.abha.address ?? details.abha.number} · ${details.abha.verified_via === "abdm_sandbox" ? "verified (ABDM sandbox)" : "demo"}`
                 : "not linked",
             )}
             {row("Age / Sex", [details.age !== null ? `${details.age} years` : null, details.sex ? SEX_LABELS[details.sex] : null].filter(Boolean).join(" / "))}
@@ -213,6 +216,24 @@ export function HospitalReport({
         {block("Patient's questions for the doctor", facts("concern"), null)}
       </div>
 
+      {doctor && (
+        <section className="border-t border-line px-8 py-5 text-[14px]">
+          <div className="text-xs uppercase tracking-[0.12em] text-ink/60">Prepared for</div>
+          <div className="mt-1 font-semibold">
+            {doctor.name}
+            {doctor.qualification ? <span className="font-normal text-ink/70">, {doctor.qualification}</span> : null}
+          </div>
+          <div className="text-ink/70">
+            {[
+              doctor.registration_number ? `Reg. No. ${doctor.registration_number}${doctor.medical_council ? ` (${doctor.medical_council})` : ""}` : null,
+              doctor.hpr_id ? `HPR ID ${formatId14(doctor.hpr_id)}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "Registration details not added"}
+            {(doctor.registration_number || doctor.hpr_id) && <span className="text-ink/50"> · self-declared</span>}
+          </div>
+        </section>
+      )}
       <footer className="flex flex-wrap items-end justify-between gap-4 border-t border-line px-8 py-5 text-xs leading-relaxed text-ink/60">
         <p className="max-w-2xl">
           Compiled from the patient&apos;s own words during an automated {checkIn ? "between-visit check-in" : "pre-visit conversation"} with Ritu

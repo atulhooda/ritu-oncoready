@@ -8,7 +8,7 @@ import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Badge, Card, EmptyState, Label, PageHeader, Pill } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { DoctorPatientRow } from "@/lib/types";
+import type { DoctorPatientRow, Practitioner } from "@/lib/types";
 import { detailsLine } from "@/lib/types";
 
 type Filter = "all" | "urgent" | "flags" | "pending" | "today";
@@ -20,13 +20,16 @@ export default function DoctorInbox() {
   const [rows, setRows] = useState<DoctorPatientRow[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [updated, setUpdated] = useState<Date | null>(null);
+  const [doctor, setDoctor] = useState<Practitioner | null>(null);
 
   const load = useCallback(() => api<DoctorPatientRow[]>("/doctor/patients").then((r) => {
     setRows(r);
     setUpdated(new Date());
   }), []);
   useEffect(() => {
-    if (me) load();
+    if (!me) return;
+    load();
+    api<Practitioner>("/doctor/me").then(setDoctor).catch(() => {});
   }, [me, load]);
 
   const today = new Date().toDateString();
@@ -48,6 +51,14 @@ export default function DoctorInbox() {
           </button>
         }
       />
+      {doctor && !doctor.hpr_id && !doctor.registration_number && (
+        <p className="mb-6 rounded-xl border border-line bg-white px-5 py-3.5 text-[15px]">
+          Add your HPR ID and council registration so they appear on the reports you open.{" "}
+          <Link href="/doctor/profile" className="font-medium text-brand hover:underline">
+            Add them →
+          </Link>
+        </p>
+      )}
       <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
         <div>
           <div className="mb-5 flex flex-wrap gap-2">
