@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, DateTime, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, String, Text, UniqueConstraint, false, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +27,7 @@ class IntakeSession(TenantMixin, Base):
         tenant_fk("patient_user_id", "users", ondelete=None),
         CheckConstraint(f"status IN {SESSION_STATUSES}", name="status"),
         CheckConstraint(f"mode IN {SESSION_MODES}", name="mode"),
+        CheckConstraint("recording_key IS NULL OR recording_consent", name="recording_needs_consent"),
     )
 
     case_id: Mapped[uuid.UUID] = mapped_column(index=True)
@@ -39,6 +40,10 @@ class IntakeSession(TenantMixin, Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
     extracted_by: Mapped[str | None] = mapped_column(String(64))
+    # Audio of the conversation (browser-recorded), only when the patient agreed before starting.
+    recording_consent: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    recording_key: Mapped[str | None] = mapped_column(String(500))
+    recording_mime: Mapped[str | None] = mapped_column(String(60))
     # Extraction candidates that failed validation: [{candidate, reason, detail}] (audit only)
     rejected_facts: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
 
