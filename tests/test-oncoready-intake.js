@@ -262,6 +262,15 @@ const REQUEST = {
     assert.match(p, /WHAT YOU ALREADY KNOW: cancer type: lung cancer/);
     assert.ok(p.indexOf('[step_0]') < p.indexOf('[step_7]'));
   });
+  await check('a between-visit check-in sets its own framing and opening; pre-visit keeps the defaults', () => {
+    const v = oncoready.validateRequest({ ...REQUEST, script: { ...SCRIPT, intro: 'a short check-in between clinic visits', opening: 'Greet them and ask how they have been since their last check-in.' } }).value;
+    const s = oncoready.createSession(v);
+    assert.match(oncoready.buildIntakePrompt(s, 'English'), /doing a short check-in between clinic visits/);
+    assert.match(oncoready.openingInstruction(s), /since their last check-in/);
+    const plain = oncoready.createSession(oncoready.validateRequest(REQUEST).value);
+    assert.match(oncoready.buildIntakePrompt(plain, 'English'), /PRE-VISIT check-in/);
+    assert.strictEqual(oncoready.openingInstruction(plain), oncoready.OPENING_INSTRUCTION);
+  });
   await check('closing follows the guidance instead of a fixed line', () => {
     const s = oncoready.createSession(oncoready.validateRequest({ ...REQUEST, script: { ...SCRIPT, closing: 'Only if they have records, ask them to upload them.' } }).value);
     assert.match(oncoready.buildIntakePrompt(s, 'Hindi'), /following this guidance: Only if they have records/);

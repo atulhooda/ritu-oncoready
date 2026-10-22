@@ -112,6 +112,9 @@ function validateRequest(body) {
       clinicName: str(ctx.clinic_display_name, 120),
       script: {
         purpose: str(s.purpose, 60) || 'pre_visit_intake',
+        // What kind of conversation this is, and how to open it (defaults: a pre-visit check-in).
+        intro: str(s.intro, 200),
+        opening: str(s.opening, 400),
         rules: Array.isArray(s.rules) ? s.rules.map((r) => str(r, 400)).filter(Boolean).slice(0, 8) : [],
         background: str(s.background, 800),
         steps: cleanSteps,
@@ -193,7 +196,7 @@ function buildIntakePrompt(session, languageName) {
     (st.prompts.length ? `\n   Example questions (say them in ${languageName}, naturally): ${st.prompts.map((p) => `"${p}"`).join(' / ')}` : '')
   ).join('\n');
   const rules = s.rules.length ? s.rules.map((r) => `- ${r}`).join('\n') : '';
-  return `You are Ritu, a warm voice assistant doing a short PRE-VISIT check-in${session.clinicName ? ` for ${session.clinicName}` : ''}.
+  return `You are Ritu, a warm voice assistant doing ${s.intro || 'a short PRE-VISIT check-in'}${session.clinicName ? ` for ${session.clinicName}` : ''}.
 You are talking to ${session.patientName || 'the patient'} in their web browser. This is NOT a booking call.
 
 ${s.background ? `WHAT YOU ALREADY KNOW: ${s.background}
@@ -229,6 +232,11 @@ function parseReply(raw) {
 }
 
 const OPENING_INSTRUCTION = 'The session has just connected. Greet the patient by name, say in one short sentence that you will ask a few questions for their doctor before the visit, and ask the first question.';
+
+function openingInstruction(session) {
+  const opening = session && session.script && session.script.opening;
+  return opening ? `The session has just connected. ${opening}` : OPENING_INSTRUCTION;
+}
 
 // ─── THE RESULT BACK TO ONCOREADY ──────────────────────────────────────────
 function buildResult(session, { transcript, startedAt, endedAt, endTrigger, criticalErrors, emergency }) {
@@ -293,5 +301,6 @@ module.exports = {
   buildResult,
   postResult,
   OPENING_INSTRUCTION,
+  openingInstruction,
   _sessions: sessions,
 };

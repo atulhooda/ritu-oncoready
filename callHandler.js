@@ -4842,7 +4842,7 @@ class CallHandler {
         return n;
       };
 
-      this.conversationHistory.push({ role: 'user', content: oncoready.OPENING_INSTRUCTION });
+      this.conversationHistory.push({ role: 'user', content: oncoready.openingInstruction(this.intake) });
       // A failed first generation must not cost the session: fall back to a
       // canned opening and let the next turn try the model again.
       let reply = { text: '', endCall: false };
