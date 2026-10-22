@@ -78,11 +78,11 @@ function validateRequest(body) {
   if (!callbackUrl) return { error: 'callback_url must be an http(s) URL' };
 
   const s = body.script || {};
-  const steps = Array.isArray(s.steps) ? s.steps.slice(0, 6) : [];
+  const steps = Array.isArray(s.steps) ? s.steps.slice(0, 10) : [];
   const cleanSteps = steps.map((st) => ({
     id: str(st && st.id, 60),
     goal: str(st && st.goal, 1000),
-    prompts: Array.isArray(st && st.prompts) ? st.prompts.map((p) => str(p, 300)).filter(Boolean).slice(0, 6) : [],
+    prompts: Array.isArray(st && st.prompts) ? st.prompts.map((p) => str(p, 300)).filter(Boolean).slice(0, 8) : [],
   })).filter((st) => st.id && st.goal);
   if (!cleanSteps.length) return { error: 'script.steps must contain at least one step with id and goal' };
 
@@ -112,7 +112,8 @@ function validateRequest(body) {
       clinicName: str(ctx.clinic_display_name, 120),
       script: {
         purpose: str(s.purpose, 60) || 'pre_visit_intake',
-        rules: Array.isArray(s.rules) ? s.rules.map((r) => str(r, 300)).filter(Boolean).slice(0, 8) : [],
+        rules: Array.isArray(s.rules) ? s.rules.map((r) => str(r, 400)).filter(Boolean).slice(0, 8) : [],
+        background: str(s.background, 800),
         steps: cleanSteps,
         closing: str(s.closing, 400),
       },
@@ -195,7 +196,9 @@ function buildIntakePrompt(session, languageName) {
   return `You are Ritu, a warm voice assistant doing a short PRE-VISIT check-in${session.clinicName ? ` for ${session.clinicName}` : ''}.
 You are talking to ${session.patientName || 'the patient'} in their web browser. This is NOT a booking call.
 
-LANGUAGE: Speak ONLY ${languageName}, in the script ${languageName} is normally written in. Short, simple spoken sentences.
+${s.background ? `WHAT YOU ALREADY KNOW: ${s.background}
+
+` : ''}LANGUAGE: Speak ONLY ${languageName}, in the script ${languageName} is normally written in. Short, simple spoken sentences.
 
 YOUR JOB: collect information for the doctor, in this order:
 ${steps}

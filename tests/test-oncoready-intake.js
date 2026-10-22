@@ -254,6 +254,14 @@ const REQUEST = {
     h3._intakeFollowLanguage('some words in a language with no voice here', { languageCode: 'ur-IN' });
     assert.strictEqual(h3._langCode(), 'en-IN');
   });
+  await check('longer oncology scripts and patient background are carried into the prompt', () => {
+    const steps = Array.from({ length: 8 }, (_, i) => ({ id: `step_${i}`, goal: `goal ${i}`, prompts: ['q'] }));
+    const v = oncoready.validateRequest({ ...REQUEST, script: { ...SCRIPT, steps, background: 'cancer type: lung cancer; treatment status: not started' } }).value;
+    assert.strictEqual(v.script.steps.length, 8);
+    const p = oncoready.buildIntakePrompt(oncoready.createSession(v), 'English');
+    assert.match(p, /WHAT YOU ALREADY KNOW: cancer type: lung cancer/);
+    assert.ok(p.indexOf('[step_0]') < p.indexOf('[step_7]'));
+  });
   await check('closing follows the guidance instead of a fixed line', () => {
     const s = oncoready.createSession(oncoready.validateRequest({ ...REQUEST, script: { ...SCRIPT, closing: 'Only if they have records, ask them to upload them.' } }).value);
     assert.match(oncoready.buildIntakePrompt(s, 'Hindi'), /following this guidance: Only if they have records/);
