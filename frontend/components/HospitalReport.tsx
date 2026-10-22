@@ -167,6 +167,12 @@ export function HospitalReport({
         <section className="grid gap-x-10 text-[15px] sm:grid-cols-2">
           <dl>
             {row("Patient", patientName)}
+            {row(
+              "ABHA",
+              details.abha
+                ? `${details.abha.address ?? details.abha.number} (${details.abha.verified_via === "abdm_sandbox" ? "verified, ABDM sandbox" : "demo link, not verified"})`
+                : "not linked",
+            )}
             {row("Age / Sex", [details.age !== null ? `${details.age} years` : null, details.sex ? SEX_LABELS[details.sex] : null].filter(Boolean).join(" / "))}
             {row("Diagnosis (as told)", [details.cancer_type, found ? `found ${found}` : null].filter(Boolean).join(", "))}
             {row("Stage (as told)", details.stage_reported)}

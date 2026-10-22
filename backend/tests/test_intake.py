@@ -656,3 +656,71 @@ def test_ritu_gets_the_check_in_script(client, db, org_a, monkeypatch):
     assert client.post("/me/sessions", headers=h, json={"kind": "check_in"}).json()["kind"] == "check_in"
     assert sent["script"]["opening"].startswith("Greet the patient by name") and "check-in" in sent["script"]["opening"]
     assert client.post("/me/sessions", headers=h, json={"kind": "visit"}).status_code == 422
+
+
+# --- ABHA link (ABDM sandbox, or demo) ------------------------------------------------------
+
+from app.identity import abdm  # noqa: E402
+from app.repositories.intake import PatientProfileRepository  # noqa: E402
+
+
+def test_abha_demo_link_keeps_only_the_last_four_digits(client, db, org_a):
+    patient = person(db, org_a, Role.PATIENT, "Abha Patient")
+    doctor = person(db, org_a, Role.DOCTOR, "Doctor Abha")
+    h = as_user(client, org_a, patient)
+    assert client.post("/me/abha/otp", headers=h, json={"abha_number": "1234"}).status_code == 422
+    otp = client.post("/me/abha/otp", headers=h, json={"abha_number": "91-1234-5678-9012"}).json()
+    assert otp["mode"] == "demo" and otp["demo_otp"] == "123456"
+    wrong = {"abha_number": "91-1234-5678-9012", "txn_id": otp["txn_id"], "otp": "000000"}
+    assert client.post("/me/abha/verify", headers=h, json=wrong).status_code == 400
+    link = client.post("/me/abha/verify", headers=h, json={**wrong, "otp": "123456"}).json()
+    assert link["number"] == "XX-XXXX-XXXX-9012" and link["verified_via"] == "demo"
+    prof = client.get("/me/profile", headers=h).json()
+    assert prof["details"]["abha"]["number"] == "XX-XXXX-XXXX-9012" and prof["abha_mode"] == "demo"
+    p = PatientProfileRepository(db, org_a.org.id).get_for(patient.id)
+    assert not any("5678" in str(getattr(p, c.key)) for c in p.__table__.columns)  # the full number is never stored
+
+    _, _ = finished_session(client, db, org_a, patient)
+    client.post("/me/publish", headers=h)
+    hd = as_user(client, org_a, doctor)
+    case_id = client.get("/doctor/patients", headers=hd).json()[0]["case_id"]
+    assert client.get(f"/doctor/patients/{case_id}", headers=hd).json()["details"]["abha"]["verified_via"] == "demo"
+
+    assert client.delete("/me/abha", headers=h).status_code == 204
+    assert client.get("/me/profile", headers=h).json()["details"]["abha"] is None
+
+
+def test_abdm_is_sandbox_only(monkeypatch):
+    monkeypatch.setattr(get_settings(), "abdm_client_id", "SBX_1")
+    monkeypatch.setattr(get_settings(), "abdm_client_secret", "s")
+    monkeypatch.setattr(get_settings(), "abdm_gateway_url", "https://apis.abdm.gov.in")  # production
+    with pytest.raises(abdm.AbdmError, match="only the ABDM sandbox"):
+        abdm.request_otp("91-1234-5678-9012")
+
+
+def test_abdm_sandbox_flow_checks_the_returned_abha(monkeypatch):
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    monkeypatch.setattr(get_settings(), "abdm_client_id", "SBX_1")
+    monkeypatch.setattr(get_settings(), "abdm_client_secret", "s")
+    monkeypatch.setattr(abdm, "_public_key", rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key())
+    monkeypatch.setattr(abdm, "_session", {})
+    calls = []
+
+    def post(url, body, token=None):
+        calls.append((url, body, token))
+        if url.endswith("/gateway/v3/sessions"):
+            return {"accessToken": "gw", "expiresIn": 1800}
+        if url.endswith("/request/otp"):
+            return {"txnId": "txn-1", "message": "OTP sent"}
+        return {"token": "user", "accounts": [{"ABHANumber": "91-1234-5678-9012", "preferredAbhaAddress": "ravi@sbx", "name": "Ravi Kumar"}]}
+
+    monkeypatch.setattr(abdm, "_post", post)
+    assert abdm.request_otp("91 1234 5678 9012") == "txn-1"
+    req = calls[-1][1]
+    assert req["loginHint"] == "abha-number" and req["loginId"] != "91123456789012" and calls[-1][2] == "gw"  # encrypted
+    acc = abdm.verify_otp("txn-1", "654321", "91-1234-5678-9012")
+    assert acc == abdm.AbhaAccount("91123456789012", "ravi@sbx", "Ravi Kumar")
+    assert calls[-1][1]["authData"]["otp"]["otpValue"] != "654321"
+    with pytest.raises(abdm.AbdmError, match="different ABHA"):
+        abdm.verify_otp("txn-1", "654321", "91-0000-0000-0000")

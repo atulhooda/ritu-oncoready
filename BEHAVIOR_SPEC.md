@@ -115,6 +115,20 @@ not allowed.
 - Each patient has exactly one intake case, created on first use. Their sessions, records and
   summary all hang off it.
 
+### ABHA (health ID) link
+
+- **Linking.** On Profile, the patient enters their 14-digit ABHA number. ABDM sends an OTP to the
+  mobile linked with it; the patient enters it. The link is stored only when ABDM accepts the OTP
+  and returns the same ABHA number that was typed. Only the last four digits are stored
+  (`XX-XXXX-XXXX-9012`), with the ABHA address and name ABDM returned, the time and how it was checked.
+- **Sandbox only.** `app/identity/abdm.py` is the only module that calls ABDM and refuses any host
+  that is not an ABDM sandbox host (rule 2: synthetic personas only). Credentials come from
+  `ABDM_CLIENT_ID` / `ABDM_CLIENT_SECRET`.
+- **Demo mode.** Without credentials, no request leaves the server: any 14-digit number is
+  accepted with OTP `123456`, and the link is marked "demo" everywhere it is shown.
+- **Who sees it.** The patient (Profile), and the doctor (report particulars, inbox badge:
+  "ABHA verified" for the sandbox, "ABHA (demo)" for demo links). Unlinking clears it.
+
 ### Patient pages
 
 Patients see four destinations: **Check-in** (`/patient`), **Diary** (`/patient/diary`, check-ins

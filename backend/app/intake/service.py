@@ -67,7 +67,34 @@ def patient_details(db: Session, org_id: uuid.UUID, patient_user_id: uuid.UUID) 
     out["preferred_language"] = out["preferred_language"] or "en-IN"
     out["age"] = age_on(out["date_of_birth"], date.today())
     out["updated_at"] = p.updated_at or p.created_at if p else None
+    out["abha"] = abha_link(p)
     return out
+
+
+def abha_link(p) -> dict[str, Any] | None:
+    if p is None or p.abha_verified_at is None:
+        return None
+    return {"number": p.abha_number_masked, "address": p.abha_address, "name": p.abha_name,
+            "verified_at": p.abha_verified_at, "verified_via": p.abha_verified_via}
+
+
+def link_abha(db: Session, user: User, account, verified_via: str) -> dict[str, Any] | None:
+    """Store an ABHA after a completed OTP check (app/identity/abdm.py). Only the last 4 digits are kept."""
+    from app.identity.abdm import masked
+
+    profiles = PatientProfileRepository(db, user.org_id)
+    p = profiles.get_for(user.id) or profiles.add(patient_user_id=user.id)
+    p.abha_number_masked, p.abha_address, p.abha_name = masked(account.abha_number), account.abha_address, account.name
+    p.abha_verified_at, p.abha_verified_via = datetime.now(UTC), verified_via
+    db.flush()
+    return abha_link(p)
+
+
+def unlink_abha(db: Session, user: User) -> None:
+    p = PatientProfileRepository(db, user.org_id).get_for(user.id)
+    if p is not None:
+        p.abha_number_masked = p.abha_address = p.abha_name = p.abha_verified_at = p.abha_verified_via = None
+        db.flush()
 
 
 def update_details(db: Session, user: User, values: dict[str, Any]) -> dict[str, Any]:

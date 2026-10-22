@@ -1,5 +1,6 @@
 "use client";
 
+import { AbhaCard } from "@/components/patient/AbhaCard";
 import { DetailsForm } from "@/components/patient/DetailsForm";
 import { Shell } from "@/components/Shell";
 import { usePatient } from "@/components/usePatient";
@@ -10,13 +11,14 @@ export default function ProfilePage() {
   return (
     <Shell me={me}>
       {profile && (
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-4xl space-y-6">
           <PageHeader size="sm" eyebrow="Profile" title="Your details" subtitle={`${profile.email} · your care team sees these after you send your check-in.`} />
+          <AbhaCard profile={profile} onChange={reload} />
           <Card className="p-6 sm:p-8">
             <DetailsForm key={profile.case_id} profile={profile} onSaved={reload} submitLabel="Save changes" />
           </Card>
           {profile.details.updated_at && (
-            <p className="mt-3 text-sm text-muted">Last saved {new Date(profile.details.updated_at).toLocaleString()}</p>
+            <p className="-mt-3 text-sm text-muted">Last saved {new Date(profile.details.updated_at).toLocaleString()}</p>
           )}
         </div>
       )}

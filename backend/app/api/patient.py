@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app import storage
 from app.auth.deps import CurrentUser, require_role
 from app.db import get_db
+from app.identity import abdm
 from app.intake import service, tasks as intake_tasks, uploads
 from app.models import Role
 from app.models.intake import SESSION_KINDS
@@ -75,6 +76,16 @@ class DetailsIn(BaseModel):
         return v
 
 
+class AbhaOtpIn(BaseModel):
+    abha_number: str = Field(max_length=20)
+
+
+class AbhaVerifyIn(BaseModel):
+    abha_number: str = Field(max_length=20)
+    txn_id: str = Field(min_length=1, max_length=200)
+    otp: str = Field(max_length=8)
+
+
 def _user(db: Session, current: CurrentUser):
     return UserRepository(db, current.org_id).get(current.id)
 
@@ -98,6 +109,7 @@ def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(
         "case_id": case.id,
         "published_at": case.published_at,
         "voice_mode": "ritu" if service.ritu.enabled() else "simulator",
+        "abha_mode": abdm.mode(),  # abdm_sandbox | demo
         "sessions": [_session_out(s) for s in sessions],
         "summary": service.build_summary(db, user.org_id, case.id),
         # between-visit check-ins, newest first (shared with the care team once the profile is sent)
@@ -112,6 +124,38 @@ def update_details(body: DetailsIn, current: CurrentUser = Depends(patient_only)
     details = service.update_details(db, _user(db, current), body.model_dump())
     db.commit()
     return details
+
+
+@router.post("/abha/otp")
+def abha_otp(body: AbhaOtpIn, current: CurrentUser = Depends(patient_only)) -> dict[str, Any]:
+    """Step 1 of linking an ABHA: ABDM sends an OTP to the mobile linked with it (sandbox, or demo)."""
+    try:
+        txn_id = abdm.request_otp(body.abha_number)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    except abdm.AbdmError as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+    return {"txn_id": txn_id, "mode": abdm.mode(), "demo_otp": abdm.DEMO_OTP if abdm.mode() == "demo" else None}
+
+
+@router.post("/abha/verify")
+def abha_verify(body: AbhaVerifyIn, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    """Step 2: the OTP checks out and ABDM returns this same ABHA, so it is linked to the profile."""
+    try:
+        account = abdm.verify_otp(body.txn_id, body.otp, body.abha_number)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    except abdm.AbdmError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    link = service.link_abha(db, _user(db, current), account, abdm.mode())
+    db.commit()
+    return link
+
+
+@router.delete("/abha", status_code=status.HTTP_204_NO_CONTENT)
+def abha_unlink(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    service.unlink_abha(db, _user(db, current))
+    db.commit()
 
 
 @router.get("/intake-script")

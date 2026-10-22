@@ -211,6 +211,17 @@ export interface PatientDetails {
   other_conditions: string | null;
   age: number | null;
   updated_at: string | null;
+  /** Linked ABHA (number masked to the last 4 digits), or null. */
+  abha: AbhaLink | null;
+}
+
+export interface AbhaLink {
+  number: string;
+  address: string | null;
+  name: string | null;
+  verified_at: string;
+  /** abdm_sandbox: OTP checked by the ABDM sandbox. demo: ABDM not connected (no credentials). */
+  verified_via: "abdm_sandbox" | "demo";
 }
 
 export const LANGUAGES: Record<string, string> = {
@@ -256,6 +267,7 @@ export interface PatientProfile {
   case_id: string;
   published_at: string | null;
   voice_mode: "ritu" | "simulator";
+  abha_mode: "abdm_sandbox" | "demo";
   sessions: IntakeSession[];
   summary: IntakeSummary | null;
   /** Between-visit check-ins, newest first. */
@@ -276,6 +288,7 @@ export interface DoctorPatientRow {
   age: number | null;
   sex: PatientDetails["sex"];
   cancer_type: string | null;
+  abha_verified_via: AbhaLink["verified_via"] | null;
   published_at: string;
   symptoms: string[];
   conversations: number;

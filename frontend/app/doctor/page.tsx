@@ -70,7 +70,11 @@ export default function DoctorInbox() {
                           <div className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
                             sent {new Date(r.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
                           </div>
-                          <div className="mt-1 text-xl font-semibold">{r.name}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="text-xl font-semibold">{r.name}</span>
+                            {r.abha_verified_via === "abdm_sandbox" && <Badge tone="green">ABHA verified</Badge>}
+                            {r.abha_verified_via === "demo" && <Badge>ABHA (demo)</Badge>}
+                          </div>
                           {urgentCheckIn(r) && (
                             <div className="mt-2 rounded-lg border border-red-600/70 px-3 py-1.5 text-sm text-red-800">
                               Check-in {r.last_check_in!.ended_at ? new Date(r.last_check_in!.ended_at).toLocaleDateString([], { day: "numeric", month: "short" }) : ""}: reported{" "}

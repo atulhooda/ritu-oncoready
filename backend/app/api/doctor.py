@@ -36,6 +36,7 @@ def list_patients(current: CurrentUser = Depends(doctor_only), db: Session = Dep
             "age": details["age"],
             "sex": details["sex"],
             "cancer_type": details["cancer_type"],
+            "abha_verified_via": details["abha"]["verified_via"] if details["abha"] else None,
             "published_at": case.published_at,
             "symptoms": service.current_symptom_labels(history),
             "conversations": len(history),

@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     ritu_voice_pace: float = 1.0
     ritu_voice_temperature: float = 0.45
 
+    # ABDM (ABHA linking). SANDBOX ONLY: app/identity/abdm.py refuses any other host (CLAUDE.md rule 2).
+    # Register at https://sandbox.abdm.gov.in for a client id/secret. Empty -> demo verification.
+    abdm_client_id: str = ""
+    abdm_client_secret: str = ""
+    abdm_gateway_url: str = "https://dev.abdm.gov.in"
+    abdm_abha_url: str = "https://abhasbx.abdm.gov.in/abha/api"
+    abdm_cert_url: str = ""  # default: {abdm_abha_url}/v3/profile/public/certificate
+    abdm_cm_id: str = "sbx"
+
     # LLM (extraction only, see app/llm/client.py)
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
