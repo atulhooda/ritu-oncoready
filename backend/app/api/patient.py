@@ -17,7 +17,7 @@ from app.models.patient import LANGUAGES, SEXES, TREATMENT_STATUSES
 from app.repositories.cases import SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.users import UserRepository
-from app.voice.script import INTAKE_SCRIPT
+from app.voice.script import build_intake_script
 
 router = APIRouter(prefix="/me", tags=["patient"])
 patient_only = require_role(Role.PATIENT)
@@ -101,8 +101,8 @@ def update_details(body: DetailsIn, current: CurrentUser = Depends(patient_only)
 
 
 @router.get("/intake-script")
-def intake_script(current: CurrentUser = Depends(patient_only)) -> dict[str, Any]:
-    return INTAKE_SCRIPT
+def intake_script(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return build_intake_script(service.patient_details(db, current.org_id, current.id))
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)

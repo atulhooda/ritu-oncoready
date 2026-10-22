@@ -88,7 +88,7 @@ def test_patient_session_to_doctor(client, db, org_a, no_background):
     assert sections["medication"]["facts"][0]["quote"] == "I take trastuzumab every three weeks"
     assert sections["previous_record"]["facts"][0]["details"] == {"facility": "Heart Associates"}
     assert [s["section"] for s in prof["summary"]["sections"]] == [
-        "current_symptom", "medication", "allergy", "past_history", "previous_record"]
+        "current_symptom", "treatment", "medication", "allergy", "recent_care", "past_history", "previous_record", "concern"]
 
     session = IntakeSessionRepository(db, org_a.org.id).get(sid)
     assert sorted(r["reason"] for r in session.rejected_facts) == ["invalid_candidate", "not_a_patient_turn", "quote_not_in_turn"]
@@ -129,7 +129,7 @@ def test_simulated_transcript_rules(client, db, org_a):
 
 def test_ritu_mode_returns_browser_connection(client, db, org_a, monkeypatch):
     monkeypatch.setattr(ritu, "enabled", lambda: True)
-    monkeypatch.setattr(ritu, "create_browser_session", lambda org, sid, name, lang: ritu.BrowserSession(
+    monkeypatch.setattr(ritu, "create_browser_session", lambda org, sid, name, lang, script: ritu.BrowserSession(
         "rs_1", "wss://ritu.example/media-stream?sample-rate=8000", "tok_1", None))
     patient = person(db, org_a, Role.PATIENT, "Voice Patient")
     h = as_user(client, org_a, patient)
@@ -283,8 +283,9 @@ def test_patient_details_roundtrip_and_validation(client, db, org_a):
 def test_session_uses_preferred_language(client, db, org_a, monkeypatch):
     seen = {}
 
-    def fake_create(org, sid, name, lang):
+    def fake_create(org, sid, name, lang, script):
         seen["lang"] = lang
+        seen["script"] = script
         return ritu.BrowserSession("rs_l", "wss://x", "t", None)
 
     monkeypatch.setattr(ritu, "enabled", lambda: True)
@@ -294,6 +295,10 @@ def test_session_uses_preferred_language(client, db, org_a, monkeypatch):
     client.put("/me/details", headers=h, json=DETAILS)
     assert client.post("/me/sessions", headers=h).json()["language"] == "hi-IN"
     assert seen["lang"] == "hi-IN"
+    # The script is tailored to the profile: on-treatment questions + breast-specific questions.
+    ids = [st["id"] for st in seen["script"]["steps"]]
+    assert "treatment_side_effects" in ids and "breast_specific" in ids
+    assert "Breast cancer" in seen["script"]["background"]
 
 
 def test_doctor_sees_details_only_after_send(client, db, org_a, org_b):
@@ -336,7 +341,7 @@ def test_browser_session_request_carries_the_calm_voice(monkeypatch):
 
     monkeypatch.setattr(get_settings(), "ritu_base_url", "http://ritu.test")
     monkeypatch.setattr(ritu.httpx, "post", fake_post)
-    ritu.create_browser_session("org", "sess", "Maria", "hi-IN")
+    ritu.create_browser_session("org", "sess", "Maria", "hi-IN", {"steps": []})
     assert sent["body"]["voice"] == {"speaker": "roopa", "pace": 1.0, "temperature": 0.45}
     assert sent["body"]["language"] == "hi-IN"
     ts, sig = sent["headers"]["X-Ritu-Timestamp"], sent["headers"]["X-Ritu-Signature"]
@@ -362,3 +367,61 @@ def test_doctor_sees_every_conversation(client, db, org_a):
     assert [str(s["session_id"]) for s in detail["sessions"]] == [s2["id"], first]  # newest first
     assert sum(len(sec["facts"]) for sec in detail["sessions"][0]["sections"]) == 0
     assert sum(len(sec["facts"]) for sec in detail["sessions"][1]["sections"]) == 4
+
+
+# --- oncology question set ---------------------------------------------------------------
+
+from app.voice.script import build_intake_script  # noqa: E402
+
+
+@pytest.mark.parametrize("details, expect_present, expect_absent", [
+    ({"cancer_type": "Lung cancer", "treatment_status": "not_started"},
+     ["before_treatment", "lung_specific"], ["treatment_side_effects", "breast_specific"]),
+    ({"cancer_type": "Breast cancer (HER2 positive)", "treatment_status": "on_treatment"},
+     ["treatment_side_effects", "breast_specific"], ["before_treatment"]),
+    ({"cancer_type": "Hodgkin lymphoma", "treatment_status": "completed"},
+     ["after_treatment", "blood_cancer_specific"], []),
+    ({}, ["treatment"], ["lung_specific", "breast_specific"]),
+])
+def test_questions_adapt_to_the_profile(details, expect_present, expect_absent):
+    script = build_intake_script(details)
+    ids = [s["id"] for s in script["steps"]]
+    assert ids[:2] == ["main_concerns", "symptom_check"]
+    assert ids[-3:] == ["since_last_visit", "previous_records", "questions_for_doctor"]
+    for i in expect_present:
+        assert i in ids
+    for i in expect_absent:
+        assert i not in ids
+    assert len(ids) <= 10  # Ritu accepts at most 10 steps
+    assert any("emergency services" in r for r in script["rules"])
+
+
+def test_background_tells_ritu_what_is_already_known():
+    script = build_intake_script({"cancer_type": "Lung cancer", "treatment_status": "not_started", "other_conditions": "High BP"})
+    assert script["background"].startswith("Patient-reported, not verified")
+    assert "Lung cancer" in script["background"] and "High BP" in script["background"]
+    assert build_intake_script({})["background"] is None
+
+
+def test_new_summary_sections_are_stored(db, org_a):
+    patient = person(db, org_a, Role.PATIENT, "Section Patient")
+    from tests.conftest import login as _login  # noqa: F401
+    from app.intake import service
+
+    session, _ = service.start_session(db, UserRepository(db, org_a.org.id).get(patient.id))
+    service.record_transcript(db, org_a.org.id, session, [
+        {"role": "ritu", "text": "When was your last cycle?"},
+        {"role": "patient", "text": "My last chemo cycle was on Monday and I missed one tablet."},
+        {"role": "ritu", "text": "What would you like to ask the doctor?"},
+        {"role": "patient", "text": "I want to know if I can travel next month."},
+    ])
+    run_intake_extraction(db, org_a.org.id, session.id, extract=fake_llm([
+        {"section": "treatment", "label": "Chemo cycle Monday, one missed tablet", "turn_index": 1,
+         "quote": "My last chemo cycle was on Monday", "details": {"last_dose": "Monday", "missed_doses": "one tablet"}},
+        {"section": "concern", "label": "Can I travel next month?", "turn_index": 3, "quote": "if I can travel next month"},
+    ]))
+    summary = service.build_summary(db, org_a.org.id, session.case_id)
+    by = {s["section"]: s for s in summary["sections"]}
+    assert by["treatment"]["facts"][0]["details"]["missed_doses"] == "one tablet"
+    assert by["concern"]["label"] == "What they want to ask the doctor"
+    assert [s["section"] for s in summary["sections"]][:2] == ["current_symptom", "treatment"]

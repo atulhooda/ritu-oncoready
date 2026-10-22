@@ -10,7 +10,6 @@ from datetime import datetime
 import httpx
 
 from app.config import get_settings
-from app.voice.script import INTAKE_SCRIPT
 
 MAX_SKEW_SECONDS = 300
 
@@ -53,13 +52,13 @@ def external_ref(org_id, session_id) -> str:
     return f"oncoready:{org_id}:{session_id}"
 
 
-def create_browser_session(org_id, session_id, patient_name: str, language: str) -> BrowserSession:
+def create_browser_session(org_id, session_id, patient_name: str, language: str, script: dict) -> BrowserSession:
     s = get_settings()
     body = json.dumps({
         "external_ref": external_ref(org_id, session_id),
         "language": language,
         "context": {"patient_display_name": patient_name, "clinic_display_name": s.clinic_display_name},
-        "script": INTAKE_SCRIPT,
+        "script": script,
         "callback_url": f"{s.public_api_url.rstrip('/')}/integrations/ritu/sessions",
         "voice": {"speaker": s.ritu_voice_speaker, "pace": s.ritu_voice_pace, "temperature": s.ritu_voice_temperature},
         "max_duration_s": 600,

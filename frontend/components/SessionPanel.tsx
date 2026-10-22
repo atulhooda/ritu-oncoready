@@ -27,7 +27,8 @@ function SimulatedSession({ session, onFinished }: { session: IntakeSession; onF
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
-  const prompts = script ? script.steps.flatMap((s) => s.prompts.map((p) => ({ step: s.id, prompt: p }))) : [];
+  // Typing is slower than talking: the simulator asks the first two questions of each step.
+  const prompts = script ? script.steps.flatMap((s) => s.prompts.slice(0, 2).map((p) => ({ step: s.id, prompt: p }))) : [];
   const asked = turns.filter((t) => t.role === "ritu").length;
   const done = script !== null && asked >= prompts.length && turns[turns.length - 1]?.role === "patient";
 
@@ -71,11 +72,11 @@ function SimulatedSession({ session, onFinished }: { session: IntakeSession; onF
         <Badge>typing mode</Badge>
       </div>
       <div className="flex gap-2 px-7 pt-5">
-        {script?.steps.map((s, i) => (
-          <Badge key={s.id} tone={currentStep === s.id ? "blue" : "slate"}>
-            {i + 1}. {s.id === "current_symptoms" ? "How you feel now" : "Earlier records"}
+        {script && (
+          <Badge tone="blue">
+            Part {Math.max(1, script.steps.findIndex((s) => s.id === currentStep) + 1)} of {script.steps.length}
           </Badge>
-        ))}
+        )}
       </div>
       <div className="max-h-[420px] space-y-3 overflow-y-auto px-7 py-5">
         {turns.map((t, i) => (

@@ -2,7 +2,8 @@ import { Badge, Card, Label } from "@/components/ui";
 import type { IntakeSummary } from "@/lib/types";
 
 const DETAIL_LABELS: Record<string, string> = {
-  onset: "since", duration: "for", severity: "severity", location: "where", frequency: "how often",
+  onset: "since", duration: "for", severity: "severity", score: "score", location: "where", frequency: "how often",
+  last_dose: "last dose", missed_doses: "missed",
   triggers: "triggers", dose: "dose", record_type: "type", record_date: "when", facility: "where", notes: "note",
 };
 

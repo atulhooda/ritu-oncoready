@@ -15,13 +15,17 @@ from app.repositories.intake import (
     SessionTurnRepository,
 )
 from app.voice import client as ritu
+from app.voice.script import build_intake_script
 
 SECTION_LABELS = {
     "current_symptom": "Current symptoms",
+    "treatment": "Cancer treatment",
     "medication": "Current medicines",
     "allergy": "Allergies",
+    "recent_care": "Hospital or emergency visits",
     "past_history": "Past history",
     "previous_record": "Previous records mentioned",
+    "concern": "What they want to ask the doctor",
 }
 
 
@@ -76,7 +80,8 @@ def update_details(db: Session, user: User, values: dict[str, Any]) -> dict[str,
 
 def start_session(db: Session, user: User, language: str | None = None) -> tuple[IntakeSession, ritu.BrowserSession | None]:
     case = profile_case(db, user)
-    language = language or patient_details(db, user.org_id, user.id)["preferred_language"]
+    details = patient_details(db, user.org_id, user.id)
+    language = language or details["preferred_language"]
     mode = "ritu" if ritu.enabled() else "simulator"
     session = IntakeSessionRepository(db, user.org_id).add(
         case_id=case.id, patient_user_id=user.id, mode=mode, language=language, status="created"
@@ -84,7 +89,9 @@ def start_session(db: Session, user: User, language: str | None = None) -> tuple
     connection = None
     if mode == "ritu":
         try:
-            connection = ritu.create_browser_session(user.org_id, session.id, user.full_name, language)
+            connection = ritu.create_browser_session(
+                user.org_id, session.id, user.full_name, language, build_intake_script(details)
+            )
         except ritu.RituError as e:
             session.status, session.error = "failed", str(e)[:2000]
             db.flush()

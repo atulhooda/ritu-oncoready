@@ -14,8 +14,8 @@ from app.models.intake import FACT_SECTIONS
 from app.pipeline.extraction import align_span
 from app.repositories.intake import IntakeFactRepository, IntakeSessionRepository, SessionTurnRepository
 
-DETAIL_KEYS = ("onset", "duration", "severity", "location", "frequency", "triggers", "dose", "record_type",
-               "record_date", "facility", "notes")
+DETAIL_KEYS = ("onset", "duration", "severity", "score", "location", "frequency", "triggers", "dose", "last_dose",
+               "missed_doses", "record_type", "record_date", "facility", "notes")
 
 
 class FactCandidate(BaseModel):
@@ -35,10 +35,14 @@ class LlmFacts(BaseModel):
 INSTRUCTIONS = f"""Below is a transcript of a pre-visit conversation between Ritu (an assistant) and a
 patient. Extract what the PATIENT said into `facts`. Each fact:
 - section: one of {list(FACT_SECTIONS)}
-  current_symptom = a problem they have now; medication = something they currently take;
-  allergy; past_history = earlier illnesses, operations, treatments; previous_record = a report,
-  scan, prescription or discharge summary they say they have.
+  current_symptom = a problem they have now, including treatment side effects; treatment = their
+  cancer treatment (what, last dose or cycle, missed or delayed doses); medication = another medicine
+  they currently take; allergy; recent_care = a hospital admission, emergency visit, test or scan
+  since their last visit; past_history = earlier illnesses, operations, treatments; previous_record =
+  a report, scan, prescription or discharge summary they say they have; concern = something they
+  want to ask or discuss with their doctor.
 - label: a short, neutral English restatement (e.g. "Breathlessness on climbing stairs").
+  If they gave a 0-10 score, put it in details.score (e.g. "7/10").
 - turn_index: the [n] of the PATIENT turn the fact comes from.
 - quote: the patient's words copied EXACTLY from that turn (keep the original language).
 - details: optional strings, only if the patient said them: {list(DETAIL_KEYS)}.
