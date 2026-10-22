@@ -6,17 +6,8 @@ import { useState } from "react";
 import type { IntakeFact, IntakeSummary, PatientDetails } from "@/lib/types";
 import { LANGUAGES, SEX_LABELS, TREATMENT_LABELS } from "@/lib/types";
 
-/** Patient-reported items on a fixed list of urgent signs (matched in code, never by the LLM).
- *  Keep in step with the safety rule in backend/app/voice/script.py; clinically reviewed list. */
-const URGENT = [
-  /\bcough\w*( up| with)? blood|\bblood in (the )?(stool|urine|vomit|sputum|cough)|\bvomit\w* blood|\bblack stool|\bbleed/i,
-  /\bfever|\bchills/i,
-  /\bchest pain/i,
-  /\bconfus|\bfaint|\bseizure|\bfits\b/i,
-  /\bsuicid|\bself[- ]?harm|\bharm (my|them)sel/i,
-  /\bcan'?t breathe|\bsevere(ly)? (short(ness)? of )?breath/i,
-];
-const isUrgent = (f: IntakeFact) => URGENT.some((re) => re.test(`${f.label} ${Object.values(f.details).join(" ")}`));
+/** On the fixed urgent-signs list. Matched in code on the backend (app/intake/urgent.py), never by the LLM. */
+const isUrgent = (f: IntakeFact) => !!f.urgent;
 
 function painScore(f: IntakeFact): number | null {
   const m = (f.details.score || f.details.severity || "").match(/(\d+(?:\.\d+)?)/);
@@ -98,6 +89,8 @@ export function HospitalReport({
     return n;
   });
   const facts = (key: string) => summary.sections.find((s) => s.section === key)?.facts ?? [];
+  const checkIn = summary.kind === "check_in";
+  const occasion = checkIn ? "the between-visit check-in" : "the pre-visit check-in";
 
   // Numbering for the [n] references, in reading order.
   let refNo = 0;
@@ -120,8 +113,8 @@ export function HospitalReport({
   const history = [
     `The patient is a ${details.age !== null ? `${details.age}-year-old ` : ""}${details.sex && details.sex !== "prefer_not_to_say" ? `${SEX_LABELS[details.sex].toLowerCase()} ` : ""}with ${details.cancer_type ? details.cancer_type.toLowerCase() : "a reported cancer diagnosis"}${found ? `, found in ${found}` : ""}${details.treatment_status ? `; treatment status: ${TREATMENT_LABELS[details.treatment_status].toLowerCase()}` : ""}.`,
     complaints.length
-      ? `At the pre-visit check-in the patient reported ${complaints.length} complaint${complaints.length === 1 ? "" : "s"}${worst ? `, most significantly ${worst.label.toLowerCase()}${clinicalDetail(worst) ? ` (${clinicalDetail(worst)})` : ""}` : ""}.`
-      : "At the pre-visit check-in the patient reported no new complaints.",
+      ? `At ${occasion} the patient reported ${complaints.length} complaint${complaints.length === 1 ? "" : "s"}${worst ? `, most significantly ${worst.label.toLowerCase()}${clinicalDetail(worst) ? ` (${clinicalDetail(worst)})` : ""}` : ""}.`
+      : `At ${occasion} the patient reported no new complaints.`,
     urgent.length ? `The patient also reported ${urgent.map((u) => u.label.toLowerCase()).join(" and ")}, which is on the urgent-signs list.` : "",
   ].filter(Boolean).join(" ");
 
@@ -160,12 +153,12 @@ export function HospitalReport({
       <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink px-8 pb-5 pt-7">
         <div>
           <div className="text-lg font-bold tracking-tight">{clinic}</div>
-          <div className="text-sm text-ink/60">Department of Medical Oncology · Pre-visit service</div>
+          <div className="text-sm text-ink/60">Department of Medical Oncology · {checkIn ? "Between-visit follow-up" : "Pre-visit service"}</div>
         </div>
         <div className="text-right text-sm">
-          <div className="font-semibold">Pre-visit patient history</div>
+          <div className="font-semibold">{checkIn ? "Between-visit check-in" : "Pre-visit patient history"}</div>
           <div className="text-ink/60">{date ? date.toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" }) : "—"}</div>
-          <div className="text-ink/60">Ref. PV-{String(summary.session_id).slice(0, 8).toUpperCase()}</div>
+          <div className="text-ink/60">Ref. {checkIn ? "CI" : "PV"}-{String(summary.session_id).slice(0, 8).toUpperCase()}</div>
         </div>
       </header>
 
@@ -206,8 +199,8 @@ export function HospitalReport({
         )}
 
         {block("Cancer treatment", facts("treatment"), null)}
-        {block("Current medications", facts("medication"), "None reported.")}
-        {block("Allergies", facts("allergy"), "None reported.")}
+        {block("Current medications", facts("medication"), checkIn ? null : "None reported.")}
+        {block("Allergies", facts("allergy"), checkIn ? null : "None reported.")}
         {block("Hospital visits and investigations since last visit", facts("recent_care"), null)}
         {block("Past history", facts("past_history"), null)}
         {block("Records the patient has", facts("previous_record"), null)}
@@ -216,7 +209,7 @@ export function HospitalReport({
 
       <footer className="flex flex-wrap items-end justify-between gap-4 border-t border-line px-8 py-5 text-xs leading-relaxed text-ink/60">
         <p className="max-w-2xl">
-          Compiled from the patient&apos;s own words during an automated pre-visit conversation with Ritu
+          Compiled from the patient&apos;s own words during an automated {checkIn ? "between-visit check-in" : "pre-visit conversation"} with Ritu
           {lang ? ` (${lang})` : ""}. Not clinically verified; nothing has been interpreted. Numbers in brackets show the patient&apos;s words.
           Synthetic demo patient.
         </p>

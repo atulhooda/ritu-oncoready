@@ -1,4 +1,4 @@
-import { CheckCircle2, FileUp, PencilLine } from "lucide-react";
+import { CheckCircle2, FileUp, HeartPulse, PencilLine } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui";
@@ -19,10 +19,13 @@ export function ReadyScreen({ profile, clinic, onReview }: { profile: PatientPro
         <ol className="mt-3 space-y-2 text-[15px] text-ink/80">
           <li>1. Your doctor reviews this before you arrive, so the visit can start with what matters to you.</li>
           <li>2. Found another report? Add it any time; it is shared automatically.</li>
-          <li>3. If something changes before the visit, you can talk to Ritu again.</li>
+          <li>3. Until then, do a quick check-in with Ritu every few days so your care team can see how you are doing.</li>
         </ol>
       </div>
       <div className="mt-8 flex flex-wrap gap-3">
+        <Link href="/patient/diary" className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-[15px] font-semibold text-white hover:bg-brand/90">
+          <HeartPulse size={17} /> Check in with Ritu
+        </Link>
         <Link href="/patient/records" className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-5 py-3 text-[15px] font-semibold hover:border-ink/30">
           <FileUp size={17} /> Add records
         </Link>

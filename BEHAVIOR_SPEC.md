@@ -117,8 +117,8 @@ not allowed.
 
 ### Patient pages
 
-Patients see three destinations: **Check-in** (`/patient`), **My records** (`/patient/records`) and
-**Profile** (`/patient/profile`). On phones these are a bottom tab bar.
+Patients see four destinations: **Check-in** (`/patient`), **Diary** (`/patient/diary`, check-ins
+between visits), **My records** (`/patient/records`) and **Profile** (`/patient/profile`). On phones these are a bottom tab bar.
 
 Check-in is one guided flow of four steps, shown as a stepper. Every step can be opened directly,
 and each finished step shows a check.
@@ -144,8 +144,8 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
 - **Start.** "Start session" creates an `intake_session`. In `ritu` mode, OncoReady asks Ritu for a
   browser session and gives the browser a short-lived `ws_url` and `token`. In `simulator` mode
   (no Ritu configured), the browser shows the same script and the patient types their answers.
-- **Script.** Two steps, in order: current symptoms, then previous records
-  (`backend/app/voice/script.py`). Ritu must not diagnose or advise.
+- **Script.** Built from the patient's profile (`backend/app/voice/script.py`; the full list for
+  clinical review is `docs/INTAKE_QUESTIONS.md`). Ritu must not diagnose or advise.
 - **Statuses.** A session goes `created → in_progress → completed` (transcript stored) `→ summarized`
   (facts extracted). It can also end as `failed` or `expired`; these carry `error`.
 - **Recording the transcript.** It is stored once. Repeat deliveries are ignored, and it must
@@ -165,6 +165,33 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
   same order, with facts ordered by turn. Each fact has a short label, optional details, and the
   patient's quote with its turn number. It includes the full transcript. It never contains a
   diagnosis, a cause, or advice.
+
+### Check-ins between visits
+
+- **What it is.** A short conversation with Ritu (`kind = check_in`), separate from the pre-visit
+  history (`kind = pre_visit`). Suggested every 2–3 days and the day after each treatment while on
+  treatment, otherwise weekly or whenever something changes. There are no reminders yet.
+- **Script** (`build_check_in_script`). How they have been and what is new; a follow-up of up to 4
+  symptoms reported before (urgent ones and the highest scores first): better, same or worse, and
+  0–10 now; the warning signs (fever or chills, bleeding, breathing, confusion or fainting);
+  treatment and missed doses (only when on treatment or status unknown); anything else. Ritu is
+  told what was reported last time, so it does not re-ask, and gets its own framing and opening line.
+- **Extraction.** The same rules and validation as the pre-visit history. For a check-in, the
+  extractor is given the labels reported before and asked to reuse them, so one symptom lines up
+  across conversations. Absences ("no bleeding") are not stored as facts.
+- **Urgent signs.** Matched in code (`app/intake/urgent.py`) on each fact's label and details:
+  coughing or vomiting blood and other bleeding, fever or chills, chest pain, confusion, fainting or
+  seizures, self-harm, severe breathlessness. The patient sees "If this is happening now, contact
+  your care team or emergency services" on their latest check-in; Ritu says the same during the call.
+- **Symptom course.** Built in code: each current symptom (matched by label, case-insensitive)
+  across the last 8 conversations of either kind, oldest to newest, with the patient's 0–10 score
+  and trend. A dash means not mentioned that time, never "resolved". Urgent rows first, then the
+  most recently mentioned. Both the patient (Diary) and the doctor see it.
+- **Sharing.** Check-ins reach the doctor once the profile has been sent, like records. A check-in
+  never replaces the pre-visit history the patient reviews, and cannot be sent on its own.
+- **Doctor.** A Check-ins tab with the symptom course (click a date to open that conversation) and
+  each check-in as a report. The inbox shows the last check-in date, flags urgent signs from the
+  latest check-in, and sorts those patients first.
 
 ### Records
 

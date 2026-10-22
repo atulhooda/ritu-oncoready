@@ -11,7 +11,9 @@ import { api } from "@/lib/api";
 import type { DoctorPatientRow } from "@/lib/types";
 import { detailsLine } from "@/lib/types";
 
-type Filter = "all" | "flags" | "pending" | "today";
+type Filter = "all" | "urgent" | "flags" | "pending" | "today";
+
+const urgentCheckIn = (r: DoctorPatientRow) => (r.last_check_in?.urgent.length ?? 0) > 0;
 
 export default function DoctorInbox() {
   const me = useMe(["doctor"]);
@@ -30,8 +32,8 @@ export default function DoctorInbox() {
   const today = new Date().toDateString();
   const isToday = (r: DoctorPatientRow) => new Date(r.published_at).toDateString() === today;
   const shown = rows.filter((r) =>
-    filter === "flags" ? r.flags + r.discrepancies > 0 : filter === "pending" ? r.pending_tests > 0 : filter === "today" ? isToday(r) : true,
-  );
+    filter === "urgent" ? urgentCheckIn(r) : filter === "flags" ? r.flags + r.discrepancies > 0 : filter === "pending" ? r.pending_tests > 0 : filter === "today" ? isToday(r) : true,
+  ).sort((a, b) => Number(urgentCheckIn(b)) - Number(urgentCheckIn(a)));
 
   return (
     <Shell me={me}>
@@ -49,7 +51,7 @@ export default function DoctorInbox() {
       <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
         <div>
           <div className="mb-5 flex flex-wrap gap-2">
-            {([["all", "All"], ["today", "Sent today"], ["flags", "Flags or discrepancies"], ["pending", "Pending tests"]] as const).map(([k, label]) => (
+            {([["all", "All"], ["urgent", "Urgent in check-in"], ["today", "Sent today"], ["flags", "Flags or discrepancies"], ["pending", "Pending tests"]] as const).map(([k, label]) => (
               <Pill key={k} active={filter === k} onClick={() => setFilter(k)}>
                 {label}
               </Pill>
@@ -69,6 +71,12 @@ export default function DoctorInbox() {
                             sent {new Date(r.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
                           </div>
                           <div className="mt-1 text-xl font-semibold">{r.name}</div>
+                          {urgentCheckIn(r) && (
+                            <div className="mt-2 rounded-lg border border-red-600/70 px-3 py-1.5 text-sm text-red-800">
+                              Check-in {r.last_check_in!.ended_at ? new Date(r.last_check_in!.ended_at).toLocaleDateString([], { day: "numeric", month: "short" }) : ""}: reported{" "}
+                              {r.last_check_in!.urgent.map((u) => u.toLowerCase()).join(", ")}
+                            </div>
+                          )}
                           {detailsLine(r) && <div className="text-muted">{detailsLine(r)}</div>}
                           <div className="mt-2 flex flex-wrap gap-2">
                             {r.symptoms.length ? r.symptoms.map((s) => <Badge key={s}>{s}</Badge>) : <span className="text-muted">No symptoms noted</span>}
@@ -77,7 +85,13 @@ export default function DoctorInbox() {
                         <ArrowRight size={18} className="mt-1 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-ink" />
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                        <Badge>{r.conversations} conversation{r.conversations === 1 ? "" : "s"}</Badge>
+                        {r.last_check_in ? (
+                          <Badge>
+                            {r.check_ins} check-in{r.check_ins === 1 ? "" : "s"} · last {r.last_check_in.ended_at ? new Date(r.last_check_in.ended_at).toLocaleDateString([], { day: "numeric", month: "short" }) : "—"}
+                          </Badge>
+                        ) : (
+                          <Badge>No check-ins yet</Badge>
+                        )}
                         <Badge>{r.records} record{r.records === 1 ? "" : "s"}</Badge>
                         {r.flags > 0 && <Badge tone="red">{r.flags} flag{r.flags === 1 ? "" : "s"}</Badge>}
                         {r.discrepancies > 0 && <Badge tone="blue">{r.discrepancies} discrepanc{r.discrepancies === 1 ? "y" : "ies"}</Badge>}
@@ -95,6 +109,7 @@ export default function DoctorInbox() {
             <Label>Inbox</Label>
             <dl className="mt-5 space-y-3 text-[17px]">
               {[
+                ["urgent in check-in", rows.filter(urgentCheckIn).length],
                 ["sent today", rows.filter(isToday).length],
                 ["with flags", rows.filter((r) => r.flags > 0).length],
                 ["with discrepancies", rows.filter((r) => r.discrepancies > 0).length],
@@ -110,7 +125,7 @@ export default function DoctorInbox() {
           <Card className="p-6">
             <Label>About these summaries</Label>
             <p className="mt-4 text-[15px] text-ink/80">
-              Ritu collects symptoms and record details in the patient&apos;s own words. Every line links to what they said, and every record fact to its page. Nothing is diagnosed.
+              Ritu collects symptoms and record details in the patient&apos;s own words, before the visit and in short check-ins between visits. Every line links to what they said, and every record fact to its page. Nothing is diagnosed.
             </p>
           </Card>
         </aside>

@@ -11,17 +11,16 @@ class IntakeSessionRepository(TenantRepository[IntakeSession]):
     def for_case(self, case_id: uuid.UUID) -> Sequence[IntakeSession]:
         return self.list(IntakeSession.case_id == case_id, limit=1000)
 
-    def summarized(self, case_id: uuid.UUID) -> Sequence[IntakeSession]:
-        """Every summarized conversation for the case, newest first."""
-        stmt = (
-            self.select()
-            .where(IntakeSession.case_id == case_id, IntakeSession.status == "summarized")
-            .order_by(IntakeSession.ended_at.desc().nulls_last(), IntakeSession.created_at.desc())
-        )
+    def summarized(self, case_id: uuid.UUID, kind: str | None = None) -> Sequence[IntakeSession]:
+        """Every summarized conversation for the case (of one kind, or all), newest first."""
+        stmt = self.select().where(IntakeSession.case_id == case_id, IntakeSession.status == "summarized")
+        if kind is not None:
+            stmt = stmt.where(IntakeSession.kind == kind)
+        stmt = stmt.order_by(IntakeSession.ended_at.desc().nulls_last(), IntakeSession.created_at.desc())
         return self.session.scalars(stmt).all()
 
-    def latest_summarized(self, case_id: uuid.UUID) -> IntakeSession | None:
-        sessions = self.summarized(case_id)
+    def latest_summarized(self, case_id: uuid.UUID, kind: str | None = None) -> IntakeSession | None:
+        sessions = self.summarized(case_id, kind=kind)
         return sessions[0] if sessions else None
 
 

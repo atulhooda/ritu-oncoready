@@ -33,11 +33,11 @@ function SimulatedSession({ session, onFinished }: { session: IntakeSession; onF
   const done = script !== null && asked >= prompts.length && turns[turns.length - 1]?.role === "patient";
 
   useEffect(() => {
-    api<IntakeScript>("/me/intake-script").then((s) => {
+    api<IntakeScript>(`/me/intake-script?kind=${session.kind ?? "pre_visit"}`).then((s) => {
       setScript(s);
       setTurns([{ role: "ritu", text: s.steps[0].prompts[0] }]);
     });
-  }, []);
+  }, [session.kind]);
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); // returns a Promise in newer Chrome
   }, [turns]);

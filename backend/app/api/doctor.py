@@ -28,6 +28,7 @@ def list_patients(current: CurrentUser = Depends(doctor_only), db: Session = Dep
     out = []
     for case in CaseRepository(db, current.org_id).published_intake():
         history = service.session_history(db, current.org_id, case.id)
+        check_ins = [h for h in history if h["kind"] == "check_in"]
         details = service.patient_details(db, current.org_id, case.patient_user_id)
         out.append({
             "case_id": case.id,
@@ -38,6 +39,11 @@ def list_patients(current: CurrentUser = Depends(doctor_only), db: Session = Dep
             "published_at": case.published_at,
             "symptoms": service.current_symptom_labels(history),
             "conversations": len(history),
+            "check_ins": len(check_ins),
+            "last_check_in": {
+                "ended_at": check_ins[0]["ended_at"],
+                "urgent": [f["label"] for sec in check_ins[0]["sections"] for f in sec["facts"] if f["urgent"]],
+            } if check_ins else None,
             "records": len(SourceDocumentRepository(db, current.org_id).for_case(case.id)),
             "pending_tests": len(PendingTestRepository(db, current.org_id).for_case(case.id)),
             "discrepancies": len(DiscrepancyRepository(db, current.org_id).for_case(case.id)),
@@ -49,13 +55,15 @@ def list_patients(current: CurrentUser = Depends(doctor_only), db: Session = Dep
 @router.get("/patients/{case_id}")
 def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
     case = visible_case_or_404(db, current, case_id)  # published intake cases only
+    history = service.session_history(db, current.org_id, case.id)
     return {
         "case_id": case.id,
         "name": case.title,
         "published_at": case.published_at,
         "details": service.patient_details(db, current.org_id, case.patient_user_id),
         "summary": service.build_summary(db, current.org_id, case.id),
-        "sessions": service.session_history(db, current.org_id, case.id),
+        "sessions": history,
+        "symptom_course": service.symptom_course(history),
         "records": service.records(db, current.org_id, case.id),
         "timeline": build_timeline(db, current.org_id, case.id),
     }

@@ -1,3 +1,4 @@
+import re
 import secrets
 import uuid
 from datetime import UTC, date, datetime
@@ -15,7 +16,8 @@ from app.repositories.intake import (
     SessionTurnRepository,
 )
 from app.voice import client as ritu
-from app.voice.script import build_intake_script
+from app.intake.urgent import is_urgent
+from app.voice.script import build_check_in_script, build_intake_script
 
 SECTION_LABELS = {
     "current_symptom": "Current symptoms",
@@ -78,23 +80,43 @@ def update_details(db: Session, user: User, values: dict[str, Any]) -> dict[str,
     return patient_details(db, user.org_id, user.id)
 
 
+def previous_symptoms(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> list[dict[str, Any]]:
+    """Symptoms the patient reported before, newest first, each label once with its latest details.
+    Urgent ones and the worst scores come first, so a check-in follows up what matters most."""
+    seen: dict[str, dict[str, Any]] = {}
+    for summary in session_history(db, org_id, case_id):
+        for section in summary["sections"]:
+            if section["section"] != "current_symptom":
+                continue
+            for f in section["facts"]:
+                seen.setdefault(f["label"].lower(), {"label": f["label"], "details": f["details"], "urgent": f["urgent"]})
+    items = list(seen.values())
+    return sorted(items, key=lambda p: (not p["urgent"], -(score_of(p["details"]) or -1)))
+
+
+def script_for(db: Session, org_id: uuid.UUID, patient_user_id: uuid.UUID, case_id: uuid.UUID, kind: str) -> dict[str, Any]:
+    details = patient_details(db, org_id, patient_user_id)
+    if kind == "check_in":
+        return build_check_in_script(details, previous_symptoms(db, org_id, case_id))
+    return build_intake_script(details)
+
+
 def start_session(
-    db: Session, user: User, language: str | None = None, record_audio: bool = False
+    db: Session, user: User, language: str | None = None, record_audio: bool = False, kind: str = "pre_visit"
 ) -> tuple[IntakeSession, ritu.BrowserSession | None]:
     case = profile_case(db, user)
     details = patient_details(db, user.org_id, user.id)
     language = language or details["preferred_language"]
     mode = "ritu" if ritu.enabled() else "simulator"
+    script = script_for(db, user.org_id, user.id, case.id, kind)  # before the new session exists
     session = IntakeSessionRepository(db, user.org_id).add(
-        case_id=case.id, patient_user_id=user.id, mode=mode, language=language, status="created",
+        case_id=case.id, patient_user_id=user.id, mode=mode, kind=kind, language=language, status="created",
         recording_consent=record_audio and mode == "ritu",  # only voice sessions have audio
     )
     connection = None
     if mode == "ritu":
         try:
-            connection = ritu.create_browser_session(
-                user.org_id, session.id, user.full_name, language, build_intake_script(details)
-            )
+            connection = ritu.create_browser_session(user.org_id, session.id, user.full_name, language, script)
         except ritu.RituError as e:
             session.status, session.error = "failed", str(e)[:2000]
             db.flush()
@@ -128,15 +150,52 @@ def record_transcript(
 
 
 def build_summary(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> dict[str, Any] | None:
-    """The latest summarized conversation (what the patient sees and reviews)."""
-    session = IntakeSessionRepository(db, org_id).latest_summarized(case_id)
+    """The latest summarized pre-visit history (what the patient reviews before sending)."""
+    session = IntakeSessionRepository(db, org_id).latest_summarized(case_id, kind="pre_visit")
     return summarize_session(db, org_id, session) if session else None
 
 
-def session_history(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> list[dict[str, Any]]:
-    """Every summarized conversation, newest first. A later "nothing new" conversation must not hide
-    what the patient said earlier, so doctors get all of them."""
-    return [summarize_session(db, org_id, s) for s in IntakeSessionRepository(db, org_id).summarized(case_id)]
+def session_history(
+    db: Session, org_id: uuid.UUID, case_id: uuid.UUID, kind: str | None = None
+) -> list[dict[str, Any]]:
+    """Every summarized conversation (of one kind, or all), newest first. A later "nothing new"
+    conversation must not hide what the patient said earlier, so doctors get all of them."""
+    return [summarize_session(db, org_id, s) for s in IntakeSessionRepository(db, org_id).summarized(case_id, kind=kind)]
+
+
+def score_of(details: dict[str, Any]) -> float | None:
+    """The 0-10 number in "7/10" (or a bare "7"), when the patient gave one."""
+    m = re.search(r"(\d+(?:\.\d+)?)", details.get("score") or "")
+    n = float(m.group(1)) if m else None
+    return n if n is not None and 0 <= n <= 10 else None
+
+
+MAX_COURSE_SESSIONS = 8
+
+
+def symptom_course(history: list[dict[str, Any]]) -> dict[str, Any]:
+    """Each symptom across conversations, oldest to newest (the last MAX_COURSE_SESSIONS), matched by
+    label. A blank cell means it was not mentioned in that conversation, not that it has gone."""
+    sessions = list(reversed(history[:MAX_COURSE_SESSIONS]))
+    rows: dict[str, dict[str, Any]] = {}
+    for i, summary in enumerate(sessions):
+        for section in summary["sections"]:
+            if section["section"] != "current_symptom":
+                continue
+            for f in section["facts"]:
+                row = rows.setdefault(f["label"].lower(), {"label": f["label"], "urgent": False, "cells": [None] * len(sessions)})
+                row["label"] = f["label"]  # newest wording
+                row["urgent"] = row["urgent"] or f["urgent"]
+                row["cells"][i] = {
+                    "fact_id": f["id"], "score": score_of(f["details"]), "trend": f["details"].get("trend"),
+                    "severity": f["details"].get("severity"), "urgent": f["urgent"],
+                }
+    # newest reports first: rows mentioned in the latest conversation lead
+    ordered = sorted(rows.values(), key=lambda r: (not r["urgent"], -max((i for i, c in enumerate(r["cells"]) if c), default=-1)))
+    return {
+        "sessions": [{"session_id": s["session_id"], "kind": s["kind"], "ended_at": s["ended_at"]} for s in sessions],
+        "rows": ordered,
+    }
 
 
 def current_symptom_labels(history: list[dict[str, Any]]) -> list[str]:
@@ -166,7 +225,7 @@ def summarize_session(db: Session, org_id: uuid.UUID, session) -> dict[str, Any]
             "section": key,
             "label": SECTION_LABELS[key],
             "facts": [
-                {"id": f.id, "label": f.label,
+                {"id": f.id, "label": f.label, "urgent": is_urgent(f.label, f.details),
                  "details": {k: v for k, v in f.details.items() if k != "evidence"},
                  "quote": f.source_text_span, "turn_index": turns[f.source_turn_id].turn_index,
                  # every verified quote about this problem, primary first
@@ -178,7 +237,7 @@ def summarize_session(db: Session, org_id: uuid.UUID, session) -> dict[str, Any]
         for key in FACT_SECTIONS
     ]
     return {
-        "session_id": session.id, "mode": session.mode, "language": session.language,
+        "session_id": session.id, "kind": session.kind, "mode": session.mode, "language": session.language,
         "has_recording": bool(session.recording_key),
         "started_at": session.started_at, "ended_at": session.ended_at, "extracted_by": session.extracted_by,
         "sections": sections,
@@ -189,7 +248,7 @@ def summarize_session(db: Session, org_id: uuid.UUID, session) -> dict[str, Any]
 
 def publish(db: Session, user: User) -> PatientCase:
     case = profile_case(db, user)
-    if IntakeSessionRepository(db, user.org_id).latest_summarized(case.id) is None:
+    if IntakeSessionRepository(db, user.org_id).latest_summarized(case.id, kind="pre_visit") is None:
         raise IntakeError("finish a session with Ritu before sending to the doctor")
     case.published_at = datetime.now(UTC)
     db.flush()

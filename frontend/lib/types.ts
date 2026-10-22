@@ -157,10 +157,16 @@ export interface IntakeFact {
   turn_index: number;
   /** Every verified quote about this problem, primary first. */
   evidence?: { turn_index: number; quote: string }[];
+  /** On the fixed urgent-signs list (matched in code on the backend). */
+  urgent?: boolean;
 }
+
+/** pre_visit: the full history before a visit; check_in: a short conversation between visits. */
+export type SessionKind = "pre_visit" | "check_in";
 
 export interface IntakeSummary {
   session_id: string;
+  kind?: SessionKind;
   mode: "ritu" | "simulator";
   language?: string;
   has_recording?: boolean;
@@ -172,6 +178,7 @@ export interface IntakeSummary {
 
 export interface IntakeSession {
   id: string;
+  kind?: SessionKind;
   recording_consent?: boolean;
   has_recording?: boolean;
   status: "created" | "in_progress" | "completed" | "summarized" | "failed" | "expired";
@@ -251,6 +258,9 @@ export interface PatientProfile {
   voice_mode: "ritu" | "simulator";
   sessions: IntakeSession[];
   summary: IntakeSummary | null;
+  /** Between-visit check-ins, newest first. */
+  check_ins: IntakeSummary[];
+  symptom_course: SymptomCourse;
   records: RecordInfo[];
 }
 
@@ -269,6 +279,8 @@ export interface DoctorPatientRow {
   published_at: string;
   symptoms: string[];
   conversations: number;
+  check_ins: number;
+  last_check_in: { ended_at: string | null; urgent: string[] } | null;
   records: number;
   pending_tests: number;
   discrepancies: number;
@@ -282,6 +294,17 @@ export interface DoctorPatientDetail {
   details: PatientDetails;
   summary: IntakeSummary | null;
   sessions: IntakeSummary[];
+  symptom_course: SymptomCourse;
   records: RecordInfo[];
   timeline: Timeline;
+}
+
+/** Each symptom across conversations, oldest to newest. A null cell: not mentioned that time. */
+export interface SymptomCourse {
+  sessions: { session_id: string; kind: SessionKind; ended_at: string | null }[];
+  rows: {
+    label: string;
+    urgent: boolean;
+    cells: ({ fact_id: string; score: number | null; trend: string | null; severity: string | null; urgent: boolean } | null)[];
+  }[];
 }

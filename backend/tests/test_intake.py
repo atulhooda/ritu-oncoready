@@ -555,3 +555,104 @@ def test_simulator_sessions_never_record(client, db, org_a):
     h = as_user(client, org_a, patient)
     s = client.post("/me/sessions", headers=h, json={"record_audio": True}).json()
     assert s["mode"] == "simulator" and s["recording_consent"] is False
+
+
+# --- between-visit check-ins ---------------------------------------------------------------
+
+from app.intake.urgent import is_urgent  # noqa: E402
+from app.voice.script import build_check_in_script  # noqa: E402
+
+CHECK_IN_TURNS = [
+    {"role": "ritu", "text": "How have you been since we last spoke?"},
+    {"role": "patient", "text": "The breathlessness is worse, now 7 out of 10 even walking slowly."},
+    {"role": "ritu", "text": "Any fever or chills?"},
+    {"role": "patient", "text": "Yes, I had a fever last night."},
+]
+CHECK_IN_FACTS = [
+    {"section": "current_symptom", "label": "Breathlessness on stairs", "turn_index": 1,
+     "quote": "The breathlessness is worse, now 7 out of 10", "details": {"score": "7/10", "trend": "worsening"}},
+    {"section": "current_symptom", "label": "Fever last night", "turn_index": 3, "quote": "I had a fever last night"},
+]
+
+
+def check_in(client, db, tenant, h, turns=CHECK_IN_TURNS, facts=CHECK_IN_FACTS):
+    s = client.post("/me/sessions", headers=h, json={"kind": "check_in"}).json()
+    assert s["kind"] == "check_in"
+    client.post(f"/me/sessions/{s['id']}/simulate", headers=h, json={"turns": turns})
+    seen = {}
+
+    def llm(text, schema, instructions):
+        seen["instructions"] = instructions
+        return Extraction(LlmFacts(facts=facts), "fake:intake")
+
+    run_intake_extraction(db, tenant.org.id, s["id"], extract=llm)
+    return s["id"], seen["instructions"]
+
+
+@pytest.mark.parametrize("text, urgent", [
+    ("Cough with blood", True), ("Coughing up blood", True), ("Fever last night", True), ("New confusion", True),
+    ("Blood pressure high", False), ("Tiredness", False), ("Back pain", False),
+])
+def test_urgent_signs_are_matched_in_code(text, urgent):
+    assert is_urgent(text, {}) is urgent
+
+
+def test_check_in_script_follows_up_what_was_reported():
+    previous = [{"label": "Back pain", "details": {"score": "6/10", "trend": "worsening"}}, {"label": "Tiredness", "details": {}}]
+    script = build_check_in_script({"cancer_type": "Breast cancer", "treatment_status": "on_treatment"}, previous)
+    ids = [s["id"] for s in script["steps"]]
+    assert ids == ["how_now", "follow_up", "warning_signs", "treatment_since", "anything_else"]
+    assert script["purpose"] == "between_visit_check_in" and "CHECK-IN" in script["intro"]
+    assert "back pain" in script["steps"][1]["prompts"][0] and "tiredness" in script["steps"][1]["prompts"][1]
+    assert "Reported last time: back pain (6/10, worsening); tiredness." in script["background"]
+    # finished treatment, nothing reported yet: no follow-up, no treatment step
+    assert [s["id"] for s in build_check_in_script({"treatment_status": "completed"}, [])["steps"]] == [
+        "how_now", "warning_signs", "anything_else"]
+
+
+def test_check_in_is_its_own_conversation(client, db, org_a, monkeypatch):
+    patient = person(db, org_a, Role.PATIENT, "Diary Patient")
+    doctor = person(db, org_a, Role.DOCTOR, "Doctor Menon")
+    h = as_user(client, org_a, patient)
+    # a check-in alone cannot be sent as the pre-visit history
+    sid, _ = check_in(client, db, org_a, h, facts=[])
+    assert client.post("/me/publish", headers=h).status_code == 409
+    assert client.get("/me/profile", headers=h).json()["summary"] is None
+
+    _, first = finished_session(client, db, org_a, patient)
+    script = client.get("/me/intake-script?kind=check_in", headers=h).json()
+    assert script["purpose"] == "between_visit_check_in"
+    assert "breathlessness on stairs" in " ".join(script["steps"][1]["prompts"])
+
+    second, instructions = check_in(client, db, org_a, h)
+    assert '"Breathlessness on stairs"' in instructions  # the same label, so the trend lines up
+    prof = client.get("/me/profile", headers=h).json()
+    assert str(prof["summary"]["session_id"]) == first  # the pre-visit history is not replaced
+    assert [str(c["session_id"]) for c in prof["check_ins"]] == [second, sid]
+    assert [f["urgent"] for f in prof["check_ins"][0]["sections"][0]["facts"]] == [False, True]
+
+    client.post("/me/publish", headers=h)
+    hd = as_user(client, org_a, doctor)
+    row = client.get("/doctor/patients", headers=hd).json()[0]
+    assert row["check_ins"] == 2 and row["last_check_in"]["urgent"] == ["Fever last night"]
+    course = client.get(f"/doctor/patients/{row['case_id']}", headers=hd).json()["symptom_course"]
+    assert [str(s["session_id"]) for s in course["sessions"]] == [sid, first, second]  # oldest to newest
+    rows = {r["label"]: r for r in course["rows"]}
+    assert list(rows)[0] == "Fever last night"  # urgent first
+    breath = rows["Breathlessness on stairs"]["cells"]
+    assert breath[0] is None and breath[1]["score"] is None and breath[2]["score"] == 7 and breath[2]["trend"] == "worsening"
+
+
+def test_ritu_gets_the_check_in_script(client, db, org_a, monkeypatch):
+    sent = {}
+    monkeypatch.setattr(ritu, "enabled", lambda: True)
+
+    def create(org, sid, name, lang, script):
+        sent["script"] = script
+        return ritu.BrowserSession("rs_ci", "wss://x", "t", None)
+
+    monkeypatch.setattr(ritu, "create_browser_session", create)
+    h = as_user(client, org_a, person(db, org_a, Role.PATIENT, "Voice Diary"))
+    assert client.post("/me/sessions", headers=h, json={"kind": "check_in"}).json()["kind"] == "check_in"
+    assert sent["script"]["opening"].startswith("Greet the patient by name") and "check-in" in sent["script"]["opening"]
+    assert client.post("/me/sessions", headers=h, json={"kind": "visit"}).status_code == 422

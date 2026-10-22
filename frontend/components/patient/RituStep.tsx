@@ -14,7 +14,7 @@ export function RituStep({ profile, clinic, reload }: { profile: PatientProfile;
   const [live, setLive] = useState<IntakeSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState(true);
-  const latest = profile.sessions[profile.sessions.length - 1];
+  const latest = profile.sessions.filter((s) => (s.kind ?? "pre_visit") === "pre_visit").at(-1);
   const writing = latest?.status === "completed";
   const voice = profile.voice_mode === "ritu";
   const language = LANGUAGES[profile.details.preferred_language] ?? profile.details.preferred_language;

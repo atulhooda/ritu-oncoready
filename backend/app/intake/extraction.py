@@ -40,8 +40,8 @@ class LlmFacts(BaseModel):
     facts: list[dict[str, Any]]
 
 
-INSTRUCTIONS = f"""Below is a transcript of a pre-visit conversation between Ritu (an assistant) and a
-patient. Extract what the PATIENT said into `facts`: ONE fact per distinct problem or item. Merge
+INSTRUCTIONS = f"""Below is a transcript of a conversation between Ritu (an assistant) and a cancer
+patient: a pre-visit history or a short check-in between visits. Extract what the PATIENT said into `facts`: ONE fact per distinct problem or item. Merge
 everything said about the same problem (where, how bad, since when, getting better or worse)
 into that one fact, even when it was said across several turns. Each fact:
 - section: one of {list(FACT_SECTIONS)}
@@ -60,7 +60,19 @@ into that one fact, even when it was said across several turns. Each fact:
   {list(DETAIL_KEYS)}. score = a 0-10 rating as "7/10"; trend = "worsening", "improving" or "same";
   onset = when it started ("3 weeks ago"); location = body site in plain English.
 Only use what the patient said. Do not add diagnoses, causes, interpretations, or advice.
+Do not record the absence of something ("no bleeding", "no missed doses", "nothing new") as a fact.
 Return {{"facts": []}} if there is nothing."""
+
+# Check-ins follow up earlier problems; the same label lets the care team see each one over time.
+KNOWN_LABELS = """
+The patient reported these problems before. When they talk about the same problem, use exactly
+the same label (and put better / same / worse in details.trend): {labels}"""
+
+
+def instructions_for(known_labels: list[str]) -> str:
+    if not known_labels:
+        return INSTRUCTIONS
+    return INSTRUCTIONS + KNOWN_LABELS.format(labels="; ".join(f'"{label}"' for label in known_labels[:20]))
 
 
 def format_transcript(turns) -> str:
@@ -75,7 +87,12 @@ def run_intake_extraction(db: Session, org_id: uuid.UUID, session_id: uuid.UUID,
     facts = IntakeFactRepository(db, org_id)
     facts.delete_where(facts.model.session_id == session.id)  # re-running replaces earlier output
 
-    result = extract(format_transcript(turns.values()), LlmFacts, INSTRUCTIONS)
+    known = []
+    if session.kind == "check_in":
+        from app.intake.service import previous_symptoms  # this session is not summarized yet, so not included
+
+        known = [p["label"] for p in previous_symptoms(db, org_id, session.case_id)]
+    result = extract(format_transcript(turns.values()), LlmFacts, instructions_for(known))
     threshold = get_settings().span_match_threshold
     accepted, rejected = 0, []
     for raw in result.data.facts:

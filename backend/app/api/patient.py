@@ -1,4 +1,5 @@
-"""Patient profile: start a session with Ritu, upload previous records, send to the doctor."""
+"""Patient profile: talk to Ritu (pre-visit history, or a check-in between visits), upload previous
+records, send to the doctor."""
 
 import uuid
 from datetime import date
@@ -13,11 +14,11 @@ from app.auth.deps import CurrentUser, require_role
 from app.db import get_db
 from app.intake import service, tasks as intake_tasks, uploads
 from app.models import Role
+from app.models.intake import SESSION_KINDS
 from app.models.patient import LANGUAGES, SEXES, TREATMENT_STATUSES
 from app.repositories.cases import SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.users import UserRepository
-from app.voice.script import build_intake_script
 
 router = APIRouter(prefix="/me", tags=["patient"])
 patient_only = require_role(Role.PATIENT)
@@ -27,6 +28,7 @@ MAX_PAGES = 20
 
 class StartSessionIn(BaseModel):
     record_audio: bool = False  # the patient ticked "record the audio for my care team"
+    kind: Literal[*SESSION_KINDS] = "pre_visit"
 
 
 AUDIO_TYPES = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav"}
@@ -78,7 +80,7 @@ def _user(db: Session, current: CurrentUser):
 
 
 def _session_out(s) -> dict[str, Any]:
-    return {"id": s.id, "status": s.status, "mode": s.mode, "language": s.language,
+    return {"id": s.id, "kind": s.kind, "status": s.status, "mode": s.mode, "language": s.language,
             "started_at": s.started_at, "ended_at": s.ended_at, "error": s.error,
             "recording_consent": s.recording_consent, "has_recording": bool(s.recording_key)}
 
@@ -98,6 +100,9 @@ def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(
         "voice_mode": "ritu" if service.ritu.enabled() else "simulator",
         "sessions": [_session_out(s) for s in sessions],
         "summary": service.build_summary(db, user.org_id, case.id),
+        # between-visit check-ins, newest first (shared with the care team once the profile is sent)
+        "check_ins": service.session_history(db, user.org_id, case.id, kind="check_in"),
+        "symptom_course": service.symptom_course(service.session_history(db, user.org_id, case.id)),
         "records": service.records(db, user.org_id, case.id),
     }
 
@@ -110,8 +115,12 @@ def update_details(body: DetailsIn, current: CurrentUser = Depends(patient_only)
 
 
 @router.get("/intake-script")
-def intake_script(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> dict[str, Any]:
-    return build_intake_script(service.patient_details(db, current.org_id, current.id))
+def intake_script(
+    kind: Literal[*SESSION_KINDS] = "pre_visit", current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    case = service.profile_case(db, _user(db, current))
+    db.commit()
+    return service.script_for(db, current.org_id, current.id, case.id, kind)
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
@@ -119,7 +128,8 @@ def start_session(
     body: StartSessionIn | None = None, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
     try:
-        session, connection = service.start_session(db, _user(db, current), record_audio=bool(body and body.record_audio))
+        body = body or StartSessionIn()
+        session, connection = service.start_session(db, _user(db, current), record_audio=body.record_audio, kind=body.kind)
     except service.IntakeError as e:
         db.commit()  # keep the failed session for the record
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))

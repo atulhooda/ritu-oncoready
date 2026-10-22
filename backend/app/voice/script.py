@@ -1,4 +1,5 @@
-"""The pre-visit intake conversation OncoReady asks Ritu to run. OncoReady owns *what* is asked;
+"""The conversations OncoReady asks Ritu to run: the pre-visit history, and a short check-in
+between visits (build_check_in_script). OncoReady owns *what* is asked;
 Ritu owns *how* (voice, language, turn-taking, safety). The typed simulator uses the same steps.
 
 The questions follow standard oncology pre-visit check-ins and are tailored to the patient's
@@ -250,3 +251,115 @@ def build_intake_script(details: dict[str, Any] | None = None) -> dict[str, Any]
 
 # Default (no profile yet); kept for callers that need a script without a patient.
 INTAKE_SCRIPT = build_intake_script()
+
+
+# ─── Between-visit check-in ────────────────────────────────────────────────────
+# Two to three minutes, every few days or after a treatment cycle. It follows up the problems the
+# patient reported before (so the care team sees a trend), screens for the urgent signs, and asks
+# what is new. Same rules: information gathering only.
+
+CHECK_IN_INTRO = "a short CHECK-IN between clinic visits (two to three minutes)"
+CHECK_IN_OPENING = (
+    "Greet the patient by name, say in one short sentence that this is a quick check-in for their care team, and ask "
+    "how they have been since they last spoke to you."
+)
+CHECK_IN_RULES = [
+    *RULES,
+    "This is a quick check-in, not a full history: keep it to a few minutes and do not ask about past illnesses or records.",
+]
+
+CHECK_IN_HOW_NOW = {
+    "id": "how_now",
+    "goal": "Ask how they have been since their last check-in, and whether anything new has started or anything has "
+    "got worse. For anything new: since when, and how bad from 0 to 10.",
+    "prompts": [
+        "How have you been since we last spoke?",
+        "Has anything new started, or has anything got worse?",
+    ],
+}
+
+CHECK_IN_WARNING_SIGNS = {
+    "id": "warning_signs",
+    "goal": "Ask, one or two at a time, whether since the last check-in they have had: fever or chills, any bleeding, "
+    "trouble breathing, or new confusion or fainting. Accept a simple no.",
+    "prompts": [
+        "Since we last spoke, have you had any fever or chills?",
+        "Any bleeding, trouble breathing, or feeling confused or faint?",
+    ],
+}
+
+CHECK_IN_TREATMENT = {
+    "id": "treatment_since",
+    "goal": "Ask whether they have taken their cancer treatment and medicines as planned since the last check-in, any "
+    "missed or delayed doses, and any side effects since the last dose.",
+    "prompts": [
+        "Have you been able to take your treatment and medicines as planned? Any missed doses?",
+        "Any side effects since your last dose?",
+    ],
+}
+
+CHECK_IN_ANYTHING_ELSE = {
+    "id": "anything_else",
+    "goal": "Ask whether there is anything else they want their care team to know before the next visit.",
+    "prompts": ["Is there anything else you want your care team to know?"],
+}
+
+CHECK_IN_CLOSING = (
+    "Thank the patient and say their care team will see what they shared. Say they can check in again in a few days, "
+    "or sooner if something changes."
+)
+CHECK_IN_CLOSING_EXAMPLE = "Thank you. Your care team will see this. Check in again in a few days, or sooner if anything changes."
+
+MAX_FOLLOW_UPS = 4
+
+
+def follow_up_step(previous: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Ask about each problem the patient reported before: better, same or worse, and how bad now."""
+    if not previous:
+        return None
+    items = previous[:MAX_FOLLOW_UPS]
+    labels = "; ".join(p["label"] for p in items)
+    return {
+        "id": "follow_up",
+        "goal": f"Ask about each problem they reported last time ({labels}): is it better, the same, or worse, and how "
+        "bad is it now from 0 to 10. If it has gone, note that and move on.",
+        "prompts": [f"Last time you mentioned {p['label'].lower()}. Is it better, the same or worse?" for p in items],
+    }
+
+
+def last_reported(previous: list[dict[str, Any]]) -> str | None:
+    """'Reported last time: back pain (6/10, worsening); tiredness.'"""
+    if not previous:
+        return None
+    parts = []
+    for p in previous[:MAX_FOLLOW_UPS]:
+        d = p.get("details") or {}
+        extra = ", ".join(v for v in (d.get("score"), d.get("trend")) if v)
+        parts.append(f"{p['label'].lower()}{f' ({extra})' if extra else ''}")
+    return "Reported last time: " + "; ".join(parts) + "."
+
+
+def build_check_in_script(details: dict[str, Any] | None = None, previous: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """A short check-in between visits. `previous`: symptoms the patient reported before, newest first,
+    each {label, details}."""
+    details = details or {}
+    previous = previous or []
+    steps = [CHECK_IN_HOW_NOW]
+    follow_up = follow_up_step(previous)
+    if follow_up:
+        steps.append(follow_up)
+    steps.append(CHECK_IN_WARNING_SIGNS)
+    if details.get("treatment_status") in ("on_treatment", None, "not_sure"):
+        steps.append(CHECK_IN_TREATMENT)
+    steps.append(CHECK_IN_ANYTHING_ELSE)
+    known = " ".join(x for x in (background(details), last_reported(previous)) if x) or None
+    return {
+        "purpose": "between_visit_check_in",
+        "intro": CHECK_IN_INTRO,
+        "opening": CHECK_IN_OPENING,
+        "rules": CHECK_IN_RULES,
+        "background": known[:800] if known else None,
+        "steps": steps,
+        "closing": CHECK_IN_CLOSING,
+        "closing_example": CHECK_IN_CLOSING_EXAMPLE,
+    }

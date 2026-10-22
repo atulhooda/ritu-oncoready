@@ -170,3 +170,47 @@ Thank the patient and say their doctor will see what they shared. Only if they s
 
 Reviewer notes:
 
+---
+
+# Between-visit check-in questions
+
+A short check-in (two to three minutes) the patient can do any time between visits. Same rules as
+above, plus: "This is a quick check-in, not a full history: keep it to a few minutes and do not ask
+about past illnesses or records." Ritu is told what the patient reported last time.
+
+## 1. How they are now (everyone)
+
+**Goal for Ritu:** Ask how they have been since their last check-in, and whether anything new has started or anything has got worse. For anything new: since when, and how bad from 0 to 10.
+
+- [ ] How have you been since we last spoke?
+- [ ] Has anything new started, or has anything got worse?
+
+## 2. Follow-up of what they reported before (when there is something)
+
+**Goal for Ritu:** For each of up to 4 earlier symptoms (urgent ones and the highest scores first): is it better, the same, or worse, and how bad is it now from 0 to 10. If it has gone, note that and move on.
+
+- [ ] Last time you mentioned <symptom>. Is it better, the same or worse?
+
+## 3. Warning signs (everyone)
+
+**Goal for Ritu:** Ask, one or two at a time, whether since the last check-in they have had: fever or chills, any bleeding, trouble breathing, or new confusion or fainting. Accept a simple no.
+
+- [ ] Since we last spoke, have you had any fever or chills?
+- [ ] Any bleeding, trouble breathing, or feeling confused or faint?
+
+## 4. Treatment (on treatment, or status not known)
+
+**Goal for Ritu:** Ask whether they have taken their cancer treatment and medicines as planned since the last check-in, any missed or delayed doses, and any side effects since the last dose.
+
+- [ ] Have you been able to take your treatment and medicines as planned? Any missed doses?
+- [ ] Any side effects since your last dose?
+
+## 5. Anything else (everyone)
+
+- [ ] Is there anything else you want your care team to know?
+
+## Closing
+
+Thank the patient and say their care team will see what they shared. Say they can check in again in a few days, or sooner if something changes.
+
+Reviewer notes:

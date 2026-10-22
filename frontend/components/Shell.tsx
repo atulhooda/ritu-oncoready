@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, ClipboardList, FileUp, FolderOpen, LogOut, Menu, Stethoscope, UserRound, Users, X } from "lucide-react";
+import { ClipboardCheck, ClipboardList, FileUp, FolderOpen, HeartPulse, LogOut, Menu, Stethoscope, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -18,6 +18,7 @@ const NAV = {
   ],
   patient: [
     { href: "/patient", label: "Check-in", icon: ClipboardList },
+    { href: "/patient/diary", label: "Diary", icon: HeartPulse },
     { href: "/patient/records", label: "My records", icon: FileUp },
     { href: "/patient/profile", label: "Profile", icon: UserRound },
   ],

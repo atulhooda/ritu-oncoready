@@ -96,7 +96,9 @@ Signed with the same HMAC headers as below. Body:
   "script": { "purpose": "pre_visit_intake", "rules": ["..."], "steps": [
       {"id": "current_symptoms", "goal": "...", "prompts": ["..."]},
       {"id": "previous_records", "goal": "...", "prompts": ["..."]}
-  ], "closing": "..." },
+  ], "closing": "...",
+      "intro": "(optional) what kind of conversation, e.g. a short CHECK-IN between clinic visits",
+      "opening": "(optional) how to open it; default: a pre-visit greeting" },
   "callback_url": "https://<oncoready>/integrations/ritu/sessions",
   "max_duration_s": 600
 }

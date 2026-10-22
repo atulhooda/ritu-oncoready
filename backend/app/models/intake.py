@@ -11,6 +11,8 @@ from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
 # created -> in_progress -> completed (transcript received) -> summarized | failed; or expired
 SESSION_STATUSES = ("created", "in_progress", "completed", "summarized", "failed", "expired")
 SESSION_MODES = ("ritu", "simulator")  # simulator: typed stand-in until Ritu browser sessions exist
+# pre_visit: the full history before a visit; check_in: a short conversation between visits
+SESSION_KINDS = ("pre_visit", "check_in")
 TURN_ROLES = ("patient", "ritu", "system")
 # Display order. treatment / recent_care / concern added with the oncology question set (0012).
 FACT_SECTIONS = (
@@ -19,7 +21,7 @@ FACT_SECTIONS = (
 
 
 class IntakeSession(TenantMixin, Base):
-    """One pre-visit conversation between Ritu and a patient."""
+    """One conversation between Ritu and a patient: a pre-visit history or a between-visit check-in."""
 
     __tablename__ = "intake_sessions"
     __table_args__ = tenant_args(
@@ -27,6 +29,7 @@ class IntakeSession(TenantMixin, Base):
         tenant_fk("patient_user_id", "users", ondelete=None),
         CheckConstraint(f"status IN {SESSION_STATUSES}", name="status"),
         CheckConstraint(f"mode IN {SESSION_MODES}", name="mode"),
+        CheckConstraint(f"kind IN {SESSION_KINDS}", name="kind"),
         CheckConstraint("recording_key IS NULL OR recording_consent", name="recording_needs_consent"),
     )
 
@@ -34,6 +37,7 @@ class IntakeSession(TenantMixin, Base):
     patient_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
     status: Mapped[str] = mapped_column(String(16), server_default="created")
     mode: Mapped[str] = mapped_column(String(16))
+    kind: Mapped[str] = mapped_column(String(16), server_default="pre_visit")
     language: Mapped[str] = mapped_column(String(8), server_default="en")
     ritu_session_id: Mapped[str | None] = mapped_column(String(100))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
