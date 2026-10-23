@@ -266,3 +266,35 @@ def test_a_fact_and_its_page_line_are_shown_once(db, org_a, asha):
     db.flush()
     a = ask(db, org_a, case, "Allergies?", picks(("Penicillin allergy", "Penicillin allergy (rash)"), ("Allergies: penicillin", "Allergies: penicillin (rash).")))
     assert texts(a) == ["In the records:", "Document dated 15 October 2026: “Allergies: penicillin (rash).”"]
+
+
+def test_answers_are_read_aloud_in_ritus_voice(client, db, org_a, monkeypatch):
+    from app.config import get_settings
+    from app.voice import client as ritu
+
+    doctor = UserRepository(db, org_a.org.id).create("voice@org-a.example.com", "Doc V", PASSWORD, Role.DOCTOR)
+    patient = UserRepository(db, org_a.org.id).create("pv@org-a.example.com", "Pv", PASSWORD, Role.PATIENT)
+    db.commit()
+    h = login(client, org_a, doctor)
+    monkeypatch.setattr(get_settings(), "ritu_base_url", "")
+    assert client.post("/doctor/assistant/speech", headers=h, json={"text": "Hello"}).status_code == 503  # browser falls back
+    monkeypatch.setattr(get_settings(), "ritu_base_url", "http://ritu.test")
+    monkeypatch.setattr(get_settings(), "ritu_shared_secret", "s3cret")
+    sent = {}
+
+    class Reply:
+        content = b"RIFF....WAVEfmt "
+        def raise_for_status(self): pass
+
+    def post(url, content, headers, timeout):
+        sent.update(url=url, body=content, headers=headers)
+        return Reply()
+
+    monkeypatch.setattr(ritu.httpx, "post", post)
+    r = client.post("/doctor/assistant/speech", headers=h, json={"text": "The recorded pulse rate was 80 bpm."})
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/wav" and r.content.startswith(b"RIFF")
+    assert sent["url"] == "http://ritu.test/v1/speech"
+    assert sent["headers"]["X-Ritu-Signature"] == ritu.sign(sent["headers"]["X-Ritu-Timestamp"], sent["body"], "s3cret")
+    import json
+    assert json.loads(sent["body"])["voice"]["speaker"] == get_settings().ritu_voice_speaker
+    assert client.post("/doctor/assistant/speech", headers=login(client, org_a, patient), json={"text": "x"}).status_code == 403

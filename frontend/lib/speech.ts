@@ -1,10 +1,13 @@
 /**
- * Browser speech for the doctor's records assistant (a prototype fallback, see BEHAVIOR_SPEC.md):
- *  - recognition: the Web Speech API (Chrome / Edge). These browsers send the audio to their own
- *    speech service, so it is NOT offline. Firefox has no recognition; Safari's is partial.
- *  - speaking: speechSynthesis, using the device's installed voices (works offline).
- * No speech logic lives on OncoReady's server.
+ * Speech for the doctor's records assistant (see BEHAVIOR_SPEC.md):
+ *  - speaking: Ritu's Sarvam voice (POST /doctor/assistant/speech -> Ritu /v1/speech, 24 kHz WAV).
+ *    When Ritu is not connected, the browser's own speechSynthesis voice is used instead.
+ *  - recognition: the browser's Web Speech API (Chrome / Edge). These browsers send the audio to
+ *    their own speech service, so it is NOT offline. Firefox has none; Safari's is partial.
+ * No speech logic lives on OncoReady's server; Ritu does the speaking.
  */
+
+import { API_URL, getToken } from "@/lib/api";
 
 type Recognition = {
   lang: string;
@@ -102,15 +105,75 @@ export function spoken(text: string): string {
     .replace(/(\d)\/(\d)/g, "$1 over $2");
 }
 
-export function speak(text: string, onEnd: () => void): void {
-  if (!canSpeak()) return onEnd();
-  window.speechSynthesis.cancel();
+export type PlayState = "loading" | "playing" | "paused" | "stopped";
+export type VoiceEngine = "sarvam" | "browser";
+
+/** One answer is read at a time, across the whole page. */
+let current: { audio: HTMLAudioElement | null; url: string | null; onState: (s: PlayState) => void } | null = null;
+
+export function stopSpeech(): void {
+  if (current) {
+    current.audio?.pause();
+    if (current.url) URL.revokeObjectURL(current.url);
+    const done = current.onState;
+    current = null;
+    done("stopped");
+  }
+  if (canSpeak()) window.speechSynthesis.cancel();
+}
+
+export function pauseSpeech(): void {
+  if (!current) return;
+  if (current.audio) current.audio.pause();
+  else window.speechSynthesis.pause();
+  current.onState("paused");
+}
+
+export function resumeSpeech(): void {
+  if (!current) return;
+  if (current.audio) void current.audio.play();
+  else window.speechSynthesis.resume();
+  current.onState("playing");
+}
+
+function browserVoice(text: string, me: NonNullable<typeof current>): void {
+  if (!canSpeak()) return stopSpeech();
   const u = new SpeechSynthesisUtterance(spoken(text));
   u.lang = "en-IN";
   u.rate = 0.98;
-  const voice = window.speechSynthesis.getVoices().find((v) => v.lang === "en-IN") ?? window.speechSynthesis.getVoices().find((v) => v.lang.startsWith("en"));
+  const voices = window.speechSynthesis.getVoices();
+  const voice = voices.find((v) => v.lang === "en-IN") ?? voices.find((v) => v.lang.startsWith("en"));
   if (voice) u.voice = voice;
-  u.onend = onEnd;
-  u.onerror = onEnd;
+  u.onend = u.onerror = () => current === me && stopSpeech();
   window.speechSynthesis.speak(u);
+  me.onState("playing");
+}
+
+/** Read text aloud in Ritu's Sarvam voice; the browser's voice if Ritu is not connected. */
+export async function speak(text: string, onState: (s: PlayState) => void): Promise<VoiceEngine> {
+  stopSpeech();
+  const me = { audio: null as HTMLAudioElement | null, url: null as string | null, onState };
+  current = me;
+  onState("loading");
+  try {
+    const r = await fetch(`${API_URL}/doctor/assistant/speech`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ text: spoken(text).slice(0, 2000) }),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const blob = await r.blob();
+    if (current !== me) return "sarvam"; // stopped or replaced while loading
+    me.url = URL.createObjectURL(blob);
+    me.audio = new Audio(me.url);
+    me.audio.onended = () => current === me && stopSpeech();
+    await me.audio.play();
+    onState("playing");
+    return "sarvam";
+  } catch {
+    if (current !== me) return "browser";
+    me.audio = null;
+    browserVoice(text, me);
+    return "browser";
+  }
 }

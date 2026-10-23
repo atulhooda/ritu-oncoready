@@ -60,7 +60,7 @@ def create_browser_session(org_id, session_id, patient_name: str, language: str,
         "context": {"patient_display_name": patient_name, "clinic_display_name": s.clinic_display_name},
         "script": script,
         "callback_url": f"{s.public_api_url.rstrip('/')}/integrations/ritu/sessions",
-        "voice": {"speaker": s.ritu_voice_speaker, "pace": s.ritu_voice_pace, "temperature": s.ritu_voice_temperature},
+        "voice": _voice(),
         "max_duration_s": 600,
     }).encode()
     ts = str(int(time.time()))
@@ -79,3 +79,28 @@ def create_browser_session(org_id, session_id, patient_name: str, language: str,
         )
     except (httpx.HTTPError, KeyError, ValueError) as e:
         raise RituError(f"could not start Ritu session: {e}") from e
+
+
+def _voice() -> dict:
+    s = get_settings()
+    return {"speaker": s.ritu_voice_speaker, "pace": s.ritu_voice_pace, "temperature": s.ritu_voice_temperature}
+
+
+def synthesize(text: str, language: str = "en-IN") -> bytes:
+    """Text -> WAV in Ritu's (Sarvam) voice, for reading the records assistant's answers aloud."""
+    s = get_settings()
+    body = json.dumps({"text": text, "language": language, "voice": _voice()}).encode()
+    ts = str(int(time.time()))
+    try:
+        r = httpx.post(
+            f"{s.ritu_base_url.rstrip('/')}/v1/speech",
+            content=body,
+            headers={"Content-Type": "application/json", "X-Ritu-Timestamp": ts, "X-Ritu-Signature": sign(ts, body)},
+            timeout=45,
+        )
+        r.raise_for_status()
+    except httpx.HTTPError as e:
+        raise RituError(f"Ritu speech failed: {e}") from e
+    if not r.content.startswith(b"RIFF"):
+        raise RituError("Ritu speech did not return audio")
+    return r.content

@@ -4,7 +4,7 @@ import { AlertTriangle, ChevronDown, FileText, Info, MessageSquare, Mic, MicOff,
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
-import { canRecognize, canSpeak, checkMicrophone, listen, speak } from "@/lib/speech";
+import { canRecognize, checkMicrophone, listen, pauseSpeech, resumeSpeech, speak, stopSpeech, type PlayState, type VoiceEngine } from "@/lib/speech";
 import type { AssistantAnswer, AssistantSource } from "@/lib/types";
 
 const SUGGESTIONS = [
@@ -40,15 +40,17 @@ function speechText(a: AssistantAnswer): string {
 }
 
 function AnswerView({ answer, onOpenSource, compact }: { answer: AssistantAnswer; onOpenSource: (s: AssistantSource) => void; compact?: boolean }) {
-  const [reading, setReading] = useState(false);
+  const [reading, setReading] = useState<PlayState>("stopped");
   const bySource = new Map(answer.sources.map((s) => [s.n, s]));
   const open = (n: number) => {
     const s = bySource.get(n);
     if (s) onOpenSource(s.source);
   };
+  const readingRef = useRef(reading);
+  readingRef.current = reading;
   useEffect(() => () => {
-    if (reading && canSpeak()) window.speechSynthesis.cancel();
-  }, [reading]);
+    if (readingRef.current !== "stopped") stopSpeech();
+  }, []);
 
   return (
     <div className="space-y-3">
@@ -122,20 +124,13 @@ function AnswerView({ answer, onOpenSource, compact }: { answer: AssistantAnswer
           Searched {answer.searched.documents} document{answer.searched.documents === 1 ? "" : "s"} ({answer.searched.pages} page{answer.searched.pages === 1 ? "" : "s"}) and{" "}
           {answer.searched.conversations} conversation{answer.searched.conversations === 1 ? "" : "s"}
         </span>
-        {canSpeak() && !compact && (
+        {!compact && (
           <button
-            onClick={() => {
-              if (reading) {
-                window.speechSynthesis.cancel();
-                setReading(false);
-              } else {
-                setReading(true);
-                speak(speechText(answer), () => setReading(false));
-              }
-            }}
+            onClick={() => (reading === "stopped" ? speak(speechText(answer), setReading) : stopSpeech())}
             className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
           >
-            {reading ? <Square size={12} /> : <Volume2 size={13} />} {reading ? "Stop" : "Read aloud"}
+            {reading === "stopped" ? <Volume2 size={13} /> : <Square size={12} />}{" "}
+            {reading === "loading" ? "Preparing…" : reading === "stopped" ? "Read aloud" : "Stop"}
           </button>
         )}
       </div>
@@ -160,17 +155,16 @@ function VoiceMode({
   const [heard, setHeard] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState<AssistantAnswer | null>(null);
-  const [audio, setAudio] = useState<"playing" | "paused" | "stopped">("stopped");
+  const [audio, setAudio] = useState<PlayState>("stopped");
+  const [engine, setEngine] = useState<VoiceEngine | null>(null);
   const rec = useRef<{ stop: () => void; abort: () => void } | null>(null);
 
   const play = useCallback((a: AssistantAnswer) => {
-    setAudio("playing");
-    speak(speechText(a), () => setAudio("stopped"));
+    speak(speechText(a), setAudio).then(setEngine);
   }, []);
 
   const start = useCallback(async () => {
-    if (canSpeak()) window.speechSynthesis.cancel();
-    setAudio("stopped");
+    stopSpeech();
     setError(null);
     setAnswer(null);
     setHeard("");
@@ -219,7 +213,7 @@ function VoiceMode({
 
   useEffect(() => () => {
     rec.current?.abort();
-    if (canSpeak()) window.speechSynthesis.cancel();
+    stopSpeech();
   }, []);
 
   return (
@@ -262,35 +256,35 @@ function VoiceMode({
         )}
         {answer && (
           <div className="rounded-xl border border-line bg-white px-4 py-3">
-            {canSpeak() && (
-              <div className="mb-3 flex items-center gap-2">
-                {audio === "playing" ? (
-                  <button onClick={() => { window.speechSynthesis.pause(); setAudio("paused"); }} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium">
-                    <Pause size={14} /> Pause
-                  </button>
-                ) : audio === "paused" ? (
-                  <button onClick={() => { window.speechSynthesis.resume(); setAudio("playing"); }} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium">
-                    <Play size={14} /> Resume
-                  </button>
-                ) : (
-                  <button onClick={() => play(answer)} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium">
-                    <Play size={14} /> Play answer
-                  </button>
-                )}
-                {audio !== "stopped" && (
-                  <button onClick={() => { window.speechSynthesis.cancel(); setAudio("stopped"); }} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium">
-                    <Square size={13} /> Stop
-                  </button>
-                )}
-                <span className="text-[12px] text-ink/50">{audio === "playing" ? "Reading aloud…" : ""}</span>
-              </div>
-            )}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {audio === "playing" ? (
+                <button onClick={pauseSpeech} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium">
+                  <Pause size={14} /> Pause
+                </button>
+              ) : audio === "paused" ? (
+                <button onClick={resumeSpeech} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium">
+                  <Play size={14} /> Resume
+                </button>
+              ) : (
+                <button onClick={() => play(answer)} disabled={audio === "loading"} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium disabled:opacity-50">
+                  <Play size={14} /> {audio === "loading" ? "Preparing voice…" : "Play answer"}
+                </button>
+              )}
+              {(audio === "playing" || audio === "paused") && (
+                <button onClick={stopSpeech} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium">
+                  <Square size={13} /> Stop
+                </button>
+              )}
+              {engine && (
+                <span className="text-[12px] text-ink/50">{engine === "sarvam" ? "Ritu's voice (Sarvam)" : "Browser voice (Ritu not connected)"}</span>
+              )}
+            </div>
             <AnswerView answer={answer} onOpenSource={onOpenSource} compact />
           </div>
         )}
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 text-[11.5px] text-ink/50">
-        <span>Browser speech: Chrome/Edge send audio to their speech service; answers are read by your device&apos;s voice.</span>
+        <span>Your question is recognised by the browser (Chrome/Edge send audio to their speech service). Answers are read in Ritu&apos;s voice.</span>
         <button onClick={onClose} className="shrink-0 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium text-ink hover:border-ink/30">
           Back to chat
         </button>

@@ -54,9 +54,10 @@ pending?", "What symptoms did the patient report recently?".
 
 ## Limitations
 
-- **Voice** uses the browser: Chrome / Edge speech recognition sends audio to the browser vendor's
-  service (not offline); Firefox has none. Speech output uses the device's voices. The voice path
-  was tested with a stand-in recogniser (headless Chrome has no speech service), not a real mic.
+- **Voice**: answers are read in Ritu's Sarvam voice (needs the Ritu container and `SARVAM_API_KEY`;
+  otherwise the browser's voice, labelled). A 20-second answer takes about 4–5 s to prepare.
+  Recognition is the browser's: Chrome / Edge send audio to their own service (not offline); Firefox
+  has none. It was tested with a stand-in recogniser (headless Chrome has no speech service).
 - **Highlighting**: OCR word positions are not stored, so a source opens at the right page with the
   passage shown above it, not drawn on the image.
 - **Measurements** cover pulse, BP, temperature, weight, hemoglobin, SpO2 and LVEF. Other lab values

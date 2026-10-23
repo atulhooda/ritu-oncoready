@@ -284,6 +284,9 @@ or treatment tool. Code: `backend/app/assistant/`, `frontend/components/RituAssi
   verbatim text. Clicking opens the document viewer at that page with the text shown above it
   (OCR word positions are not stored, so the passage is not drawn on the page image), or the
   conversation turn.
-- **Voice** (prototype fallback): browser speech recognition (Chrome / Edge, which send audio to
-  their speech service; not offline) and the device's speech synthesis. The transcript is shown
-  for checking before the answer; the answer is read aloud with play / pause / stop.
+- **Voice.** Recognition: the browser's (Chrome / Edge, which send audio to their speech service;
+  not offline), a prototype fallback. The transcript is shown for checking before the answer.
+  Speaking: `POST /doctor/assistant/speech` (doctors only, ≤ 2000 chars) → Ritu `/v1/speech`
+  (HMAC-signed) → Sarvam bulbul:v3 in the clinic's Ritu voice, 24 kHz WAV, long text split at
+  sentence ends. If Ritu is not connected (503) or fails, the browser's own voice is used and
+  labelled. Play / pause / stop; one answer plays at a time.

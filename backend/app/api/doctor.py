@@ -5,7 +5,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.repositories.cases import CaseRepository, SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository
 from app.repositories.users import PractitionerProfileRepository, UserRepository
+from app.voice import client as ritu
 from app.services.timeline import build_timeline
 
 router = APIRouter(prefix="/doctor", tags=["doctor"])
@@ -139,6 +140,23 @@ def ask_records_assistant(
     no conversation is kept on the server, so nothing carries over between patients."""
     case = visible_case_or_404(db, current, case_id)  # sent intake cases in the doctor's org only
     return answer_question(db, current.org_id, case.id, body.question.strip())
+
+
+class SpeechIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/assistant/speech", responses={200: {"content": {"audio/wav": {}}}})
+def assistant_speech(body: SpeechIn, current: CurrentUser = Depends(doctor_only)) -> Response:
+    """Read an assistant answer aloud in Ritu's Sarvam voice. 503 when Ritu is not connected
+    (the browser then falls back to its own voice)."""
+    if not ritu.enabled():
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Ritu voice is not connected")
+    try:
+        audio = ritu.synthesize(body.text)
+    except ritu.RituError as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+    return Response(audio, media_type="audio/wav", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/patients/{case_id}/sessions/{session_id}/recording", response_class=FileResponse)

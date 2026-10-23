@@ -96,8 +96,9 @@ docker compose exec backend python /seed/seed.py --intake        # doctor + pati
   audio *transport* (mic -> Ritu's `/media-stream`, playback of Ritu's audio).
 - All Ritu calls go through `backend/app/voice/client.py`; Ritu's callbacks are HMAC-verified in
   `backend/app/api/integrations.py`.
-- The doctor's records assistant uses the browser's speech APIs (`frontend/lib/speech.ts`) as a
-  labelled prototype fallback; no speech logic runs on OncoReady's server.
+- The doctor's records assistant reads answers aloud through Ritu (`POST /v1/speech`, Sarvam,
+  via `voice/client.synthesize`); its speech *recognition* is the browser's Web Speech API, a
+  labelled prototype fallback (`frontend/lib/speech.ts`). No speech logic runs on OncoReady's server.
 - Until Ritu ships browser sessions, intake runs in **simulator** mode (typed answers to the same
   script). Keep both paths feeding `intake.service.record_transcript`.
 
