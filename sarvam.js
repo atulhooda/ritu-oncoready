@@ -596,6 +596,58 @@ async function textToSpeech(text, retryCount = 0, opts = {}) {
   }
 }
 
+// ─── WIDEBAND TTS FOR OncoReady (doctor's records assistant) ────────────────
+// Not a phone call: the audio is played in a browser, so ask for 24 kHz instead
+// of the 8 kHz phone band (which is what makes speech sound thin). Long answers
+// are split at sentence ends and the PCM joined into one WAV.
+const WAV_RATE = 24000;
+const TTS_CHUNK_CHARS = 450;
+
+function splitForTTS(text, max = TTS_CHUNK_CHARS) {
+  const sentences = String(text).replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]*\s*/g) || [];
+  const chunks = [];
+  let cur = '';
+  for (const s of sentences) {
+    if ((cur + s).length > max && cur) { chunks.push(cur.trim()); cur = ''; }
+    cur += s.length > max ? s.slice(0, max) : s;
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks;
+}
+
+function pcmToWav(pcm, sampleRate) {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0); header.writeUInt32LE(36 + pcm.length, 4); header.write('WAVE', 8);
+  header.write('fmt ', 12); header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24); header.writeUInt32LE(sampleRate * 2, 28); header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34);
+  header.write('data', 36); header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+async function textToSpeechWav(text, opts = {}, post = axios.post) {
+  const languageCode = opts.languageCode || 'en-IN';
+  const speaker = opts.speaker || config.sarvam.speaker;
+  const parts = [];
+  for (const chunk of splitForTTS(text)) {
+    const response = await post(
+      'https://api.sarvam.ai/text-to-speech',
+      {
+        text: chunk,
+        target_language_code: languageCode,
+        speaker,
+        ..._ttsStyleFields(languageCode, { pace: opts.pace, temperature: opts.temperature }),
+        speech_sample_rate: WAV_RATE,
+        enable_preprocessing: true, // numbers and dates read naturally
+        model: 'bulbul:v3'
+      },
+      { headers: { 'api-subscription-key': config.sarvam.apiKey, 'Content-Type': 'application/json' }, timeout: 15000, httpsAgent }
+    );
+    const { pcmData, sampleRate } = parseWav(Buffer.from(response.data.audios[0], 'base64'));
+    parts.push(sampleRate !== WAV_RATE ? resamplePcm16(pcmData, sampleRate, WAV_RATE) : pcmData);
+  }
+  return pcmToWav(Buffer.concat(parts), WAV_RATE);
+}
+
 // ─── STREAMING STT ──────────────────────────────────────────────────────────
 // Input: PCM16 @ 8kHz (direct from Exotel, no mulaw conversion needed).
 
@@ -861,4 +913,4 @@ function createStreamingSTT(onTranscript, onSpeechStart, onSpeechEnd, opts = {})
 // ─── STARTUP CODEC LOG ──────────────────────────────────────────────────────
 console.log('[SARVAM] Codec config: TTS=linear16 8kHz, STT=pcm_s16le 8kHz (Exotel native PCM16)');
 
-module.exports = { textToSpeech, streamTTS, createStreamingSTT, mulawToPcm16, detectLanguageCode, looksLikeHindi, looksLikeMarathi, pairLanguage, prewarmTTS, discardTTSPrewarm, _ttsConfigMessage };
+module.exports = { textToSpeech, textToSpeechWav, splitForTTS, streamTTS, createStreamingSTT, mulawToPcm16, detectLanguageCode, looksLikeHindi, looksLikeMarathi, pairLanguage, prewarmTTS, discardTTSPrewarm, _ttsConfigMessage };

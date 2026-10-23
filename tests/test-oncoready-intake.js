@@ -77,6 +77,42 @@ const REQUEST = {
     assert.strictEqual(oncoready.consumeToken('nope', now), null);
   });
 
+  await check('POST /v1/speech: signed only, validated, returns one 24 kHz WAV for long answers', async () => {
+    const speech = require('../oncoreadySpeech');
+    const sarvam = require('../sarvam');
+    const res = () => ({ code: 200, body: null, headers: {}, status(c) { this.code = c; return this; }, json(j) { this.body = j; return this; },
+      set(k, v) { this.headers[k] = v; return this; }, send(b) { this.body = b; return this; } });
+    const call = async (payload, signed = true, synth) => {
+      const body = JSON.stringify(payload);
+      const ts = String(Math.floor(Date.now() / 1000));
+      const headers = signed ? { 'X-Ritu-Timestamp': ts, 'X-Ritu-Signature': oncoready.sign(ts, body) } : {};
+      const r = res();
+      await speech.speechHandler({ rawBody: Buffer.from(body), body: payload, get: (h) => headers[h] }, r, synth);
+      return r;
+    };
+    assert.strictEqual((await call({ text: 'Hello' }, false)).code, 401);
+    assert.strictEqual((await call({ text: '' })).code, 422);
+    assert.strictEqual((await call({ text: 'x'.repeat(2001) })).code, 422);
+    assert.strictEqual((await call({ text: 'Hi', voice: { pace: 9 } })).code, 422);
+    // Real textToSpeechWav with Sarvam stubbed: each chunk is a 24 kHz WAV of 100 samples.
+    const sent = [];
+    const fakePost = async (url, body) => {
+      sent.push(body);
+      const pcm = Buffer.alloc(200);
+      const head = Buffer.alloc(44); head.write('RIFF', 0); head.write('WAVE', 8); head.write('fmt ', 12); head.writeUInt32LE(16, 16);
+      head.writeUInt32LE(24000, 24); head.write('data', 36); head.writeUInt32LE(pcm.length, 40);
+      return { data: { audios: [Buffer.concat([head, pcm]).toString('base64')] } };
+    };
+    const long = 'The recorded pulse rate was 80 bpm on 20 July 2026. '.repeat(20);
+    const r = await call({ text: long, voice: { speaker: 'roopa', pace: 1, temperature: 0.45 } }, true, (t, o) => sarvam.textToSpeechWav(t, o, fakePost));
+    assert.strictEqual(r.code, 200);
+    assert.strictEqual(r.headers['Content-Type'], 'audio/wav');
+    assert.ok(sent.length > 1 && sent.every((b) => b.text.length <= 450 && b.speech_sample_rate === 24000 && b.speaker === 'roopa'));
+    assert.strictEqual(r.body.readUInt32LE(24), 24000);
+    assert.strictEqual(r.body.readUInt32LE(40), 200 * sent.length);
+    assert.strictEqual((await call({ text: 'Hi' }, true, async () => { throw new Error('down'); })).code, 502);
+  });
+
   await check('POST /v1/browser-sessions: 401 unsigned, 201 signed with ws_url + token', () => {
     process.env.ONCOREADY_PUBLIC_WS_BASE = 'wss://ritu.example';
     const body = JSON.stringify(REQUEST);

@@ -79,6 +79,8 @@ app.post('/whatsapp/incoming', handleIncomingWhatsApp);
 
 // ─── ONCOREADY BROWSER SESSIONS (pre-visit intake; see oncoreadyIntake.js) ───
 app.post('/v1/browser-sessions', oncoready.createSessionHandler);
+// Doctor's records assistant: read an answer aloud in Sarvam's voice (see oncoreadySpeech.js).
+app.post('/v1/speech', (req, res) => require('./oncoreadySpeech').speechHandler(req, res));
 
 // ─── EXOTEL PASSTHRU (optional — App Builder can GET this on call end) ───────
 app.get('/exotel/call-end', (req, res) => {
