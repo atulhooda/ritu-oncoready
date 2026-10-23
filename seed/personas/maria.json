@@ -5,7 +5,9 @@
   "records": [
     "SYN-003/docs/syn-003_pathology.pdf",
     "SYN-003/docs/syn-003_outside_echo.pdf",
-    "SYN-003/docs/syn-003_oncology_notes.pdf"
+    "SYN-003/docs/syn-003_oncology_notes.pdf",
+    "personas/records/maria_clinic_note_2026-07-20.pdf",
+    "personas/records/maria_clinic_note_2026-10-15.pdf"
   ],
   "publish": true,
   "transcript": [

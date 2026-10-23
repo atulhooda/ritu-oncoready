@@ -1,0 +1,43 @@
+{
+  "_notice": "SYNTHETIC. Fictional patient and facility. Demo records for the doctor's records assistant (vitals over time, a conflicting allergy entry). Not real data.",
+  "documents": [
+    {
+      "filename": "maria_clinic_note_2026-07-20.pdf",
+      "source": "internal",
+      "facility": "Synthetic General Hospital - Medical Oncology",
+      "pages": [
+        [
+          "MEDICAL ONCOLOGY CLINIC NOTE",
+          "Patient: Maria Placeholder        MRN: SYN-0003",
+          "Date of service: 07/20/2026",
+          "",
+          "Vitals: pulse rate 80 bpm; blood pressure 124/78 mmHg; temperature 98.4 F.",
+          "Weight: 64.0 kg.",
+          "Allergies: no known drug allergies.",
+          "Hemoglobin: 11.8 g/dL (07/18/2026).",
+          "Current medications: pantoprazole 40 mg once daily; ondansetron 4 mg as needed.",
+          "Follow-up visit in 3 months."
+        ]
+      ]
+    },
+    {
+      "filename": "maria_clinic_note_2026-10-15.pdf",
+      "source": "outside",
+      "facility": "Synthetic City Clinic (outside oncology follow-up)",
+      "pages": [
+        [
+          "ONCOLOGY FOLLOW-UP NOTE",
+          "Patient: Maria Placeholder        DOB: 1971-09-30",
+          "Date of service: 10/15/2026",
+          "",
+          "Vitals: pulse rate 115 bpm; blood pressure 132/84 mmHg; temperature 99.1 F.",
+          "Weight: 61.5 kg.",
+          "Allergies: penicillin (rash).",
+          "Hemoglobin: 10.2 g/dL (10/13/2026).",
+          "Current medications: pantoprazole 40 mg once daily; furosemide 20 mg once daily.",
+          "Repeat echocardiogram ordered."
+        ]
+      ]
+    }
+  ]
+}

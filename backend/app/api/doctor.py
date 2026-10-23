@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.assistant.answer import answer_question
 from app.auth.access import visible_case_or_404
 from app.auth.deps import CurrentUser, require_role
 from app import storage
@@ -123,6 +124,21 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only),
         "records": service.records(db, current.org_id, case.id),
         "timeline": build_timeline(db, current.org_id, case.id),
     }
+
+
+class AssistantQuestion(BaseModel):
+    question: str = Field(min_length=2, max_length=500)
+
+
+@router.post("/patients/{case_id}/assistant")
+def ask_records_assistant(
+    case_id: uuid.UUID, body: AssistantQuestion,
+    current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """RITU records assistant: answers from THIS patient's records only (app/assistant). Stateless:
+    no conversation is kept on the server, so nothing carries over between patients."""
+    case = visible_case_or_404(db, current, case_id)  # sent intake cases in the doctor's org only
+    return answer_question(db, current.org_id, case.id, body.question.strip())
 
 
 @router.get("/patients/{case_id}/sessions/{session_id}/recording", response_class=FileResponse)

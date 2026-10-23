@@ -64,6 +64,20 @@ def render_case(case_dir: Path) -> None:
         print(f"  {case['case_code']}/{doc['filename']}: {len(pages)} page(s), {doc['source']}")
 
 
+def render_persona_records() -> None:
+    """Extra synthetic records for the demo personas (seed/personas/records/*.json -> PDFs beside them)."""
+    out = HERE / "personas" / "records"
+    for spec_path in sorted(out.glob("*.json")):
+        spec = json.loads(spec_path.read_text())
+        rng = random.Random(spec_path.stem)
+        for doc in spec["documents"]:
+            pages = [render_page(lines, doc["facility"], i, len(doc["pages"])) for i, lines in enumerate(doc["pages"], start=1)]
+            if doc["source"] == "outside":
+                pages = [degrade(p, rng) for p in pages]
+            pages[0].save(out / doc["filename"], save_all=True, append_images=pages[1:], resolution=150)
+            print(f"  personas/records/{doc['filename']}: {len(pages)} page(s), {doc['source']}")
+
+
 def check_answer_key(case_dir: Path) -> None:
     """Every answer-key span must be verbatim text from the cited page."""
     case = json.loads((case_dir / "case.json").read_text())
@@ -122,6 +136,7 @@ def main() -> None:
         render_case(case_dir)
     write_review(case_dirs)
     print("wrote REVIEW_FOR_DOCTOR.md")
+    render_persona_records()
 
 
 if __name__ == "__main__":

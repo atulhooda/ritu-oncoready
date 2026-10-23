@@ -244,3 +244,46 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
   sees and reviews their latest conversation. Records uploaded after sending are visible too.
 - **Who sees what.** Patients see only their own profile. Residents and faculty never see intake
   cases, and doctors never see training cases.
+
+## Records assistant (doctor only)
+
+RITU AI Assistant: a floating chat / voice panel on the doctor's dashboard that answers questions
+about the patient on screen from that patient's records. It is a retrieval tool, not a diagnostic
+or treatment tool. Code: `backend/app/assistant/`, `frontend/components/RituAssistant.tsx`.
+
+- **Scope.** `POST /doctor/patients/{case_id}/assistant` with `{question}`. Access is checked
+  with `visible_case_or_404` (doctor, same org, sent profile; else 404; other roles 403). The
+  corpus is built per request from repositories filtered by that case. Nothing is stored on the
+  server; the browser keeps the conversation per patient and starts a new one on patient change.
+- **What is searched.** Extracted record facts, every OCR'd page line (so facts the summary or
+  the extractor left out are still found), pending tests, and patient-reported facts from Ritu
+  conversations (labelled "Reported by the patient to Ritu (not a clinical observation)").
+- **Measurements, in code** (pulse, blood pressure, temperature, weight, hemoglobin, SpO2, LVEF).
+  Values and units are read from record text (`measures.py`) and from extracted values; one
+  reading per page and value, dated if any copy is dated. Date: written with the value, else the
+  document's date (shown as such on the source). Question dates ("yesterday", "three months ago",
+  "on 10 January", "in March 2026") are resolved in the clinic time zone; "N months ago" matches
+  within ±15 days per month (max ±45). "Compare" without a date: previous vs latest. With a date
+  and "latest": that one vs latest. No reading in the window: "I couldn't find … recorded …",
+  then the nearest dated reading. Differences are computed only for the same unit (blood
+  pressure: systolic and diastolic separately); otherwise "The units differ … not compared".
+  Two different values on one date are both shown with a conflict note.
+- **Pending tests, in code**: tests ordered with no result (`pending_tests`).
+- **Other questions.** Lexical retrieval (local, per case) offers up to 40 items to the LLM,
+  which may only return item ids plus quotes. A quote is kept only if it aligns (rapidfuzz ≥
+  0.85) with that item; ids not offered are dropped. The answer shows the WHOLE source sentence
+  of each kept item (never the fragment), oldest first, documented before patient-reported.
+  Nothing kept: "I couldn't find this in the available records."
+- **Conflicts.** Allergy statements that are negated ("no known drug allergies") and named
+  ("penicillin") are a conflict in code; the LLM may also flag one. All statements are shown with
+  dates and sources and none is chosen.
+- **Untrusted text.** Record text is data. It is shown, never obeyed; a line addressed to an AI
+  ("ignore previous instructions", "note to AI") is flagged when shown.
+- **Without an LLM**: open questions fall back to the top 5 keyword matches, labelled as such.
+- **Sources.** Each line cites numbered sources: file, page, date (and what that date is), and the
+  verbatim text. Clicking opens the document viewer at that page with the text shown above it
+  (OCR word positions are not stored, so the passage is not drawn on the page image), or the
+  conversation turn.
+- **Voice** (prototype fallback): browser speech recognition (Chrome / Edge, which send audio to
+  their speech service; not offline) and the device's speech synthesis. The transcript is shown
+  for checking before the answer; the answer is read aloud with play / pause / stop.

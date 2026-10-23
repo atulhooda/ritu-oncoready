@@ -4,6 +4,7 @@ import { ArrowRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { RituAssistant } from "@/components/RituAssistant";
 import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Badge, Card, EmptyState, Label, PageHeader, Pill } from "@/components/ui";
@@ -145,6 +146,7 @@ export default function DoctorInbox() {
           </Card>
         </aside>
       </div>
+      {me && <RituAssistant caseId={null} patientName={null} />}
     </Shell>
   );
 }

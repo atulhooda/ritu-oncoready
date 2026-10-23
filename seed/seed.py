@@ -86,11 +86,12 @@ def load_intake_personas(sync: bool) -> None:
                     k: date.fromisoformat(v) if k in ("date_of_birth", "diagnosed_on") and v else v
                     for k, v in p["details"].items()
                 })
-            if IntakeSessionRepository(db, org.id).for_case(case.id):
-                print(f"  {p['name']}: already has a session")
-                continue
+            # Records are added by filename, so existing personas pick up new ones.
+            have = {d.filename for d in SourceDocumentRepository(db, org.id).for_case(case.id)}
             for rel in p["records"]:
-                src = HERE / "cases" / rel
+                src = HERE / rel if rel.startswith("personas/") else HERE / "cases" / rel
+                if src.name in have:
+                    continue
                 doc_id = uuid_mod.uuid4()
                 key = f"{org.id}/{case.id}/{doc_id}.pdf"
                 storage.write_bytes(key, src.read_bytes())
@@ -99,6 +100,10 @@ def load_intake_personas(sync: bool) -> None:
                     storage_key=key, uploaded_by_user_id=user.id,
                 )
                 to_process.append((doc_id, case.id))
+                print(f"  {p['name']}: added record {src.name}")
+            if IntakeSessionRepository(db, org.id).for_case(case.id):
+                print(f"  {p['name']}: already has a session")
+                continue
             if p["transcript"]:
                 session, _ = service.start_session(db, user)
                 service.record_transcript(db, org.id, session, p["transcript"])

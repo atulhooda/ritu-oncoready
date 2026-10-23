@@ -64,8 +64,11 @@ docker compose exec backend python /seed/seed.py --intake        # doctor + pati
 - Every call passes a Pydantic schema; output is validated before it is used. Invalid output
   -> try fallback -> raise. Never store unvalidated LLM output.
 - Allowed uses: extracting facts from documents and from intake transcripts (quotes verified
-  against the patient's turn), and **proposing** brief-to-rubric matches. A
-  match is accepted only with a quote verified verbatim in the brief (`app/scoring/matching.py`).
+  against the patient's turn), **proposing** brief-to-rubric matches (a match is accepted only
+  with a quote verified verbatim in the brief, `app/scoring/matching.py`), and **selecting**
+  evidence for the doctor's records assistant (`app/assistant/`): ids + quotes, each verified
+  against the offered record text. The assistant's answer text is built in code from verified
+  records; the LLM never writes it, and measurement / pending-test questions do not use the LLM.
 - LLMs are **not** used for scoring, grading, or generating clinical content.
 
 ### 4. Scoring is deterministic
@@ -93,6 +96,8 @@ docker compose exec backend python /seed/seed.py --intake        # doctor + pati
   audio *transport* (mic -> Ritu's `/media-stream`, playback of Ritu's audio).
 - All Ritu calls go through `backend/app/voice/client.py`; Ritu's callbacks are HMAC-verified in
   `backend/app/api/integrations.py`.
+- The doctor's records assistant uses the browser's speech APIs (`frontend/lib/speech.ts`) as a
+  labelled prototype fallback; no speech logic runs on OncoReady's server.
 - Until Ritu ships browser sessions, intake runs in **simulator** mode (typed answers to the same
   script). Keep both paths feeding `intake.service.record_transcript`.
 

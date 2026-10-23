@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { DocViewer, TimelineView, type Viewer } from "@/components/CaseViews";
 import { HospitalReport } from "@/components/HospitalReport";
+import { RituAssistant } from "@/components/RituAssistant";
 import { SessionRecording } from "@/components/SessionRecording";
 import { SymptomCourse } from "@/components/SymptomCourse";
 import { TranscriptView } from "@/components/IntakeSummaryView";
@@ -13,7 +14,7 @@ import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Card, EmptyState, Label, PageHeader, Pill } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { DocumentInfo, DoctorPatientDetail, IntakeSummary, Practitioner, SourceRef } from "@/lib/types";
+import type { AssistantSource, DocumentInfo, DoctorPatientDetail, IntakeSummary, Practitioner, SourceRef } from "@/lib/types";
 import { detailsLine, LANGUAGES } from "@/lib/types";
 
 type Tab = "summary" | "check_ins" | "records";
@@ -97,6 +98,23 @@ export default function DoctorPatientPage() {
   const openSource = (s: SourceRef) => {
     setViewer({ docId: s.document_id, page: s.page_number, highlight: s.text_span });
     setTimeout(() => document.getElementById("records-viewer")?.scrollIntoView({ behavior: "smooth" }), 50);
+  };
+  // A source cited by the records assistant: the page in the document viewer, or the conversation turn.
+  const openAssistantSource = (s: AssistantSource) => {
+    if (s.type === "document") {
+      setTab("records");
+      setViewer({ docId: s.document_id, page: s.page_number, highlight: s.text_span });
+      setTimeout(() => document.getElementById("records-viewer")?.scrollIntoView({ behavior: "smooth" }), 80);
+      return;
+    }
+    if (s.session_kind === "check_in") {
+      setCheckInId(s.session_id);
+      setTab("check_ins");
+    } else {
+      setSessionId(s.session_id);
+      setTab("summary");
+    }
+    showTurn(s.turn_index);
   };
 
   return (
@@ -199,6 +217,7 @@ export default function DoctorPatientPage() {
             ))}
         </>
       )}
+      {p && <RituAssistant key={p.case_id} caseId={p.case_id} patientName={p.name} onOpenSource={openAssistantSource} />}
     </Shell>
   );
 }

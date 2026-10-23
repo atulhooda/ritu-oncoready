@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Keep the dev badge away from the sidebar footer.
-  devIndicators: { position: "bottom-right" },
+  // No dev badge: bottom-left covers the sidebar footer, bottom-right the RITU assistant.
+  // Build and runtime errors still open the dev overlay.
+  devIndicators: false,
 };
 
 export default nextConfig;

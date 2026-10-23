@@ -338,3 +338,28 @@ export function formatId14(digits: string): string {
   const d = digits.replace(/\D/g, "").slice(0, 14);
   return [d.slice(0, 2), d.slice(2, 6), d.slice(6, 10), d.slice(10, 14)].filter(Boolean).join("-");
 }
+
+/** Where a statement in a records-assistant answer comes from. */
+export type AssistantSource =
+  | { type: "document"; document_id: string; filename: string; page_number: number; text_span: string }
+  | { type: "conversation"; session_id: string; session_kind: SessionKind; turn_index: number; quote: string; label: string };
+
+/** RITU records assistant answer. Every line is built in code from cited record text. */
+export interface AssistantAnswer {
+  question: string;
+  method: "measurements" | "pending_tests" | "records_search" | "keyword_search";
+  status: "answered" | "not_found";
+  lines: { text: string; refs: number[]; kind: "statement" | "missing" | "note" | "computed" | "heading" | "quote"; flag?: string }[];
+  sources: {
+    n: number;
+    source: AssistantSource;
+    date: string | null;
+    /** stated: the date written with the fact; document: the document's date; conversation: when the patient said it. */
+    date_basis: "stated" | "document" | "conversation" | null;
+    value?: string;
+    unit?: string | null;
+  }[];
+  conflict: string | null;
+  notice: string | null;
+  searched: { documents: number; pages: number; conversations: number };
+}
