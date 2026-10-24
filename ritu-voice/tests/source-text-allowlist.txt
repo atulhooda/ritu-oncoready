@@ -1,0 +1,37 @@
+# Tests that read production .js as text. A RATCHET, not an endorsement: no new
+# file may join without a reason; each of these is to be converted or justified.
+# Legitimate structural checks (same regex literal in two files; no hardcoded
+# credential) stay. Generated 2026-09-03 from the files that did so that day.
+test-affirm-strength.js
+test-cancel-staff-only.js
+test-clinic-faqs.js
+test-cost-instrumentation-driven.js
+test-fee-policy-block.js
+test-garble-history.js
+test-gujarati-greeting.js
+test-holiday-offer-parity.js
+test-language-coverage.js
+test-latency-split-driven.js
+test-latency-split.js
+test-log-redaction.js
+test-meta-signature.js
+test-migration-no-transaction.js
+test-multi-visit-driven.js
+test-name-guard.js
+test-offer-window.js
+test-price-disclosure.js
+test-prior-meds.js
+test-recording-capture.js
+test-second-booking-truth.js
+test-speculative-translit.js
+test-symptom-drift.js
+test-symptom-invention.js
+test-whatsapp-language-reminder.js
+test-deterministic-chokepoint.js   # structural: no this.speak() outside the chokepoint; behaviour driven in test-twin-parity [guards]
+test-whatsapp-load-order.js   # structural: no top-level callHandler require in whatsappChannel; the load-order behaviour is driven in child processes above
+test-google-optional.js   # one structural line: the lazy calendar require in bookAppointment; the boot behaviour is driven in child processes
+test-greeting-takes-driven.js  # wiring check only: preloadGreeting cannot be driven without three live Sarvam calls; the take logic itself is driven above
+test-meta-templates.js  # pins the five senders' variable COUNTS against tools/metaTemplates VARS (whatsapp.js + scheduler.js); driving five senders needs the Meta client stubbed — the texts themselves are driven above
+test-roster-refresh-driven.js  # one wiring line: the two hook sites call refreshRoster(); the refresh itself is driven above
+test-whatsapp-clinic-creds-driven.js  # three senders are driven with axios captured; the inbound path (needs the whole brain) and the two jobs are pinned by shape
+test-tts-abort-resolves-driven.js  # the mutant is a source rewrite of the one guard line; the behaviour is driven with the real ws library

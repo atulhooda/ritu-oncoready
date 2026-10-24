@@ -1,0 +1,67 @@
+#!/bin/sh
+# ─── IMMUNE-SUITE PRE-PUSH GATE (S8-T2 v1) ───────────────────────────────────
+# Any push to main (= production deploy for hospital + demo) must pass the
+# frozen offline suite first (~2s). Bypass ONLY for a genuine emergency:
+#   SUITE_BYPASS=1 git push ...   (bypass is loud and shame-logged)
+# Local hook (not committed): guards every push from this machine, which is
+# where all deploys originate. The branch-gate upgrade (Railway watching a
+# gated 'deploy' branch) is documented in ritu-evals/S8-proof-plane-spec.md.
+while read local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      if [ "$SUITE_BYPASS" = "1" ]; then
+        echo "[GATE] ⚠⚠ SUITE BYPASSED (SUITE_BYPASS=1) — deploying UNGATED to production ⚠⚠"
+        echo "$(date '+%Y-%m-%d %H:%M') BYPASSED push to main" >> /Users/siddharthpathania/Developer/ritu-evals/suite/runs/bypass.log
+        continue
+      fi
+      # ── FIRST, because it guards the only failure that removes the whole
+      # product, and it is the cheapest check we have (no DB, no network).
+      # 2026-08-03: a `git add -A` swept an untracked migration containing
+      # CREATE INDEX CONCURRENTLY into a deploy. db/migrate.js wraps every file
+      # in BEGIN/COMMIT, Postgres refused it (25001), prestart exited 1, `start`
+      # never ran, and the voice line was 502 for an hour. All three gates below
+      # were GREEN on that commit — none of them runs prestart.
+      echo "[GATE] migration safety (would prestart survive this deploy?)..."
+      node /Users/siddharthpathania/Developer/engageo-server-v2/tools/check-migration-safety.js > /tmp/migration-safety.log 2>&1
+      rc=$?
+      tail -12 /tmp/migration-safety.log
+      if [ $rc -ne 0 ]; then
+        echo "[GATE] ✗ A MIGRATION WOULD CRASH prestart — the server would never boot. Push BLOCKED."
+        exit 1
+      fi
+      echo "[GATE] ✓ migrations transaction-safe"
+      echo "[GATE] push to main = production deploy — running the immune suite..."
+      node /Users/siddharthpathania/Developer/ritu-evals/suite/run-suite.js > /tmp/suite-gate.log 2>&1
+      rc=$?
+      tail -3 /tmp/suite-gate.log
+      if [ $rc -ne 0 ]; then
+        echo "[GATE] ✗ SUITE FAILED (exit $rc) — push to main BLOCKED. Full output: /tmp/suite-gate.log"
+        exit 1
+      fi
+      echo "[GATE] ✓ suite green"
+      echo "[GATE] boot-smoke matrix (env-shape crash check)..."
+      node /Users/siddharthpathania/Developer/ritu-evals/suite/smoke-boot-matrix.js > /tmp/boot-smoke.log 2>&1
+      rc=$?
+      tail -2 /tmp/boot-smoke.log
+      if [ $rc -ne 0 ]; then
+        echo "[GATE] ✗ BOOT-SMOKE FAILED — a deploy could crash-loop at boot. Push BLOCKED. Full output: /tmp/boot-smoke.log"
+        exit 1
+      fi
+      echo "[GATE] ✓ boot-smoke green"
+      # 2026-07-26: added after we shipped negative_frames_count=8 on a GUESS
+      # about its semantics (it is N-of-M within a window, not trailing silence)
+      # and cut a caller's "Dolo 650" in half for weeks. Every third-party
+      # parameter must now carry DOC:/MEASURED:/ASSUMED evidence.
+      echo "[GATE] vendor-claim check (every third-party param cites its evidence)..."
+      node /Users/siddharthpathania/Developer/ritu-evals/tools/check-vendor-claims.js > /tmp/vendor-claims.log 2>&1
+      rc=$?
+      tail -3 /tmp/vendor-claims.log
+      if [ $rc -ne 0 ]; then
+        echo "[GATE] ✗ VENDOR-CLAIM CHECK FAILED — a parameter is a guess about someone else's system. Push BLOCKED."
+        exit 1
+      fi
+      echo "[GATE] ✓ vendor claims evidenced — deploy allowed"
+      ;;
+  esac
+done
+exit 0
