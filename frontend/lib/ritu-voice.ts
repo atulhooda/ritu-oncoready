@@ -1,7 +1,7 @@
 /**
  * Audio transport between the browser and the Ritu voice server. Ritu does all speech work
  * (recognition, conversation, synthesis); this only moves audio. Protocol: Ritu's /media-stream
- * (see ritu voice/public/test-harness.html and docs/VOICE_INTEGRATION.md):
+ * (see ritu-voice/public/test-harness.html and docs/VOICE_INTEGRATION.md):
  *   up:   connected, start{customParameters.session_token}, media{payload: base64 PCM16 8 kHz}, mark, stop
  *   down: media (same encoding), mark (echo when played), clear (flush playback),
  *         oncoready_caption {role, text} (live captions, intake sessions only)

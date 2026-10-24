@@ -16,8 +16,10 @@ docker compose exec backend python /seed/seed.py --intake       # doctor + patie
 #   intake:   maria@ / john@ (patients), doctor@demo.example.com
 ```
 
-Real Ritu voice (optional): see `docs/VOICE_INTEGRATION.md` → "Turning on real voice". Without it,
-"Talk to Ritu" runs a typed simulator of the same questions.
+Real Ritu voice (optional): the Ritu voice server is in `ritu-voice/`. Copy
+`ritu-voice/.env.example` to `ritu-voice/.env`, set `SARVAM_API_KEY`, then
+`docker compose --profile voice up -d --build` (details: `docs/VOICE_INTEGRATION.md` →
+"Turning on real voice"). Without it, "Talk to Ritu" runs a typed simulator of the same questions.
 
 After changing frontend dependencies, renew the container's `node_modules` volume:
 `docker compose up -d --build -V frontend`.

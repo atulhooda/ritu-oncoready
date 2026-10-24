@@ -8,6 +8,7 @@ deterministic score against a faculty answer key.
 - `backend/` — FastAPI, Python 3.12, SQLAlchemy 2 (sync, psycopg 3), Alembic, Pydantic v2, Celery
 - `frontend/` — Next.js (App Router), TypeScript, Tailwind
 - `seed/` — synthetic cases only
+- `ritu-voice/` — the Ritu voice server (Node; Sarvam speech); see `ritu-voice/ARCHITECTURE.md`
 - `docker-compose.yml` — postgres, redis, backend, worker, frontend
 
 ## Commands

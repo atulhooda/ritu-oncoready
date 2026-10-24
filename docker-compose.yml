@@ -57,13 +57,13 @@ services:
     ports: ["${FRONTEND_HOST_PORT:-3000}:3000"]
     depends_on: [backend]
 
-  # Ritu voice server (../ritu voice) for browser sessions. Opt-in:
+  # Ritu voice server (./ritu-voice) for browser sessions. Opt-in:
   #   docker compose --profile voice up -d --build
-  # Needs SARVAM_API_KEY + an LLM key in "../ritu voice/.env".
+  # Needs SARVAM_API_KEY in ./ritu-voice/.env (Gemini comes from this .env, below).
   ritu:
     profiles: ["voice"]
-    build: "../ritu voice"
-    env_file: "../ritu voice/.env"
+    build: ./ritu-voice
+    env_file: ./ritu-voice/.env
     environment:
       PORT: "8090"
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ritu
