@@ -21,6 +21,8 @@ Real Ritu voice (optional): the Ritu voice server is in `ritu-voice/`. Copy
 `docker compose --profile voice up -d --build` (details: `docs/VOICE_INTEGRATION.md` →
 "Turning on real voice"). Without it, "Talk to Ritu" runs a typed simulator of the same questions.
 
+Deploying on Railway: see `docs/DEPLOY_RAILWAY.md`.
+
 After changing frontend dependencies, renew the container's `node_modules` volume:
 `docker compose up -d --build -V frontend`.
 

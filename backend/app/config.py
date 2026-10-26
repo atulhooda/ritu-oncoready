@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -48,6 +49,16 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
+
+
+    @field_validator("database_url")
+    @classmethod
+    def psycopg_driver(cls, v: str) -> str:
+        """Hosts such as Railway hand out postgres:// or postgresql:// URLs; use the psycopg 3 driver."""
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
 
 
 @lru_cache
