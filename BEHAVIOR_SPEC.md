@@ -136,6 +136,24 @@ not allowed.
   for test accounts only.
 - **Staff** keep signing in with organization, email and password. Phone-only patients cannot.
 
+### DigiLocker (verified identity, document import)
+
+- **Flow.** OAuth 2.0 authorization code with PKCE (S256), as DigiLocker requires
+  (`app/identity/digilocker.py`, Meri Pehchaan Requester API v2.4). The state and PKCE verifier
+  are kept in Redis for 10 minutes, are good for one use, and belong to one patient. The token
+  is kept in Redis for at most 15 minutes, never in the database.
+- **Identity.** Name, date of birth (DDMMYYYY) and sex (M/F/T) from DigiLocker's token response
+  are stored on the profile as the verified identity (`identity_*`), with when and how it was
+  verified. Date of birth and sex on the profile are filled from it. Doctors see it in the report.
+- **Documents.** Issued documents and the patient's own DigiLocker uploads are listed. A PDF or
+  image can be added to "My records"; it goes through the same pipeline as an upload, and the same
+  DigiLocker document can be imported once per patient (`source_documents.external_ref`).
+- **Live vs demo.** Live needs `DIGILOCKER_CLIENT_ID`, `DIGILOCKER_CLIENT_SECRET`,
+  `DIGILOCKER_REDIRECT_URI` (the frontend's `/patient/digilocker`) **and** `REAL_PATIENT_DATA=true`,
+  because DigiLocker returns real Aadhaar-backed identity (rule 2). Otherwise demo: no request
+  leaves the server, a labelled stand-in consent screen is shown, the identity is the patient's own
+  entries marked "DigiLocker demo, not a real check", and the documents are synthetic seed PDFs.
+
 ### ABHA (health ID) link
 
 - **Linking.** On Profile, the patient enters their 14-digit ABHA number. ABDM sends an OTP to the

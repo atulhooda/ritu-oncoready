@@ -47,6 +47,7 @@ class SourceDocument(TenantMixin, Base):
         tenant_fk("case_id", "patient_cases"),
         tenant_fk("uploaded_by_user_id", "users", ondelete=None),
         CheckConstraint(f"status IN {DOCUMENT_STATUSES}", name="status"),
+        UniqueConstraint("case_id", "external_ref"),
     )
 
     case_id: Mapped[uuid.UUID] = mapped_column(index=True)
@@ -57,6 +58,8 @@ class SourceDocument(TenantMixin, Base):
     uploaded_by_user_id: Mapped[uuid.UUID]
     status: Mapped[str] = mapped_column(String(16), server_default="uploaded")
     error: Mapped[str | None] = mapped_column(Text)
+    # Where an imported record came from, e.g. "digilocker:in.gov.xyz-DISCH-123"; one import per case.
+    external_ref: Mapped[str | None] = mapped_column(String(300))
 
 
 class DocumentPage(TenantMixin, Base):

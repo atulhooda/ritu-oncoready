@@ -1,6 +1,7 @@
 "use client";
 
 import { AbhaCard } from "@/components/patient/AbhaCard";
+import { DigiLockerCard } from "@/components/patient/DigiLockerCard";
 import { DetailsForm } from "@/components/patient/DetailsForm";
 import { Shell } from "@/components/Shell";
 import { usePatient } from "@/components/usePatient";
@@ -22,6 +23,7 @@ export default function ProfilePage() {
               </div>
             </Card>
           )}
+          <DigiLockerCard profile={profile} onChange={reload} />
           <AbhaCard profile={profile} onChange={reload} />
           <Card className="p-6 sm:p-8">
             <DetailsForm key={profile.case_id} profile={profile} onSaved={reload} submitLabel="Save changes" />

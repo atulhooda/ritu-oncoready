@@ -217,6 +217,27 @@ export interface PatientDetails {
   updated_at: string | null;
   /** Linked ABHA (number masked to the last 4 digits), or null. */
   abha: AbhaLink | null;
+  /** Identity verified through DigiLocker, or null. */
+  identity: VerifiedIdentity | null;
+}
+
+export interface VerifiedIdentity {
+  name: string | null;
+  dob: string | null;
+  gender: "M" | "F" | "T" | null;
+  verified_at: string;
+  /** digilocker: live DigiLocker. digilocker_demo: demo mode (not a real check). */
+  verified_via: "digilocker" | "digilocker_demo";
+}
+
+export interface DigiLockerDocument {
+  uri: string;
+  name: string;
+  issuer: string | null;
+  date: string | null;
+  mime: string;
+  source: "issued" | "uploaded";
+  imported: boolean;
 }
 
 export interface AbhaLink {

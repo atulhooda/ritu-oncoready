@@ -178,6 +178,12 @@ export function HospitalReport({
                 ? `${details.abha.address ?? details.abha.number} · ${details.abha.verified_via === "abdm_sandbox" ? "verified (ABDM sandbox)" : "demo"}`
                 : "not linked",
             )}
+            {row(
+              "Identity",
+              details.identity
+                ? `${details.identity.verified_via === "digilocker" ? "verified with DigiLocker" : "DigiLocker demo, not verified"}${details.identity.name ? ` (${details.identity.name})` : ""}`
+                : "not verified",
+            )}
             {row("Age / Sex", [details.age !== null ? `${details.age} years` : null, details.sex ? SEX_LABELS[details.sex] : null].filter(Boolean).join(" / "))}
             {row("Diagnosis (as told)", [details.cancer_type, found ? `found ${found}` : null].filter(Boolean).join(", "))}
             {row("Stage (as told)", details.stage_reported)}

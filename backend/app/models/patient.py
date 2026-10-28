@@ -12,6 +12,9 @@ LANGUAGES = ("en-IN", "hi-IN", "mr-IN", "kn-IN", "pa-IN", "ta-IN", "te-IN", "bn-
 TREATMENT_STATUSES = ("not_started", "on_treatment", "completed", "follow_up", "not_sure")
 # How an ABHA link was checked: the ABDM sandbox OTP flow, or demo mode (no ABDM credentials).
 ABHA_VERIFIED_VIA = ("abdm_sandbox", "demo")
+# How the patient's identity (name, date of birth, sex) was verified.
+IDENTITY_VERIFIED_VIA = ("digilocker", "digilocker_demo")
+IDENTITY_GENDERS = ("M", "F", "T")  # as DigiLocker reports them
 
 
 class PatientProfile(TenantMixin, Base):
@@ -31,6 +34,9 @@ class PatientProfile(TenantMixin, Base):
             "(abha_number_masked IS NULL) = (abha_verified_at IS NULL) AND (abha_verified_at IS NULL) = (abha_verified_via IS NULL)",
             name="abha_link_complete",
         ),
+        CheckConstraint(f"identity_verified_via IS NULL OR identity_verified_via IN {IDENTITY_VERIFIED_VIA}", name="identity_verified_via"),
+        CheckConstraint(f"identity_gender IS NULL OR identity_gender IN {IDENTITY_GENDERS}", name="identity_gender"),
+        CheckConstraint("(identity_verified_via IS NULL) = (identity_verified_at IS NULL)", name="identity_verified_complete"),
     )
 
     patient_user_id: Mapped[uuid.UUID]
@@ -53,3 +59,9 @@ class PatientProfile(TenantMixin, Base):
     abha_name: Mapped[str | None] = mapped_column(String(200))  # name on the ABHA, as ABDM returned it
     abha_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     abha_verified_via: Mapped[str | None] = mapped_column(String(16))
+    # Identity as DigiLocker returned it (Aadhaar-backed when live). Never edited by the patient.
+    identity_verified_via: Mapped[str | None] = mapped_column(String(24))
+    identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    identity_name: Mapped[str | None] = mapped_column(String(200))
+    identity_dob: Mapped[date | None] = mapped_column(Date)
+    identity_gender: Mapped[str | None] = mapped_column(String(1))

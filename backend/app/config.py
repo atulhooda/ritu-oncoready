@@ -54,6 +54,14 @@ class Settings(BaseSettings):
     # The one switch for real (non-synthetic) people: CLAUDE.md rule 2. Live DigiLocker needs it.
     real_patient_data: bool = False
 
+    # DigiLocker (app/identity/digilocker.py). Partner credentials from API Setu / DigiLocker;
+    # the redirect URI is the frontend's /patient/digilocker page and must match the registration.
+    digilocker_client_id: str = ""
+    digilocker_client_secret: str = ""
+    digilocker_redirect_uri: str = ""
+    digilocker_base_url: str = "https://digilocker.meripehchaan.gov.in/public/oauth2"
+    seed_dir: str = "/seed"  # synthetic PDFs used as DigiLocker documents in demo mode
+
     # LLM (extraction only, see app/llm/client.py)
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"

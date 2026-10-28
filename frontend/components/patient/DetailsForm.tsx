@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import type { PatientDetails, PatientProfile } from "@/lib/types";
 import { LANGUAGES, SEX_LABELS, TREATMENT_LABELS } from "@/lib/types";
 
-type Form = Record<keyof Omit<PatientDetails, "age" | "updated_at" | "abha">, string>;
+type Form = Record<keyof Omit<PatientDetails, "age" | "updated_at" | "abha" | "identity">, string>;
 
 const CANCER_TYPES = ["Breast cancer", "Lung cancer", "Colorectal cancer", "Head and neck cancer", "Cervical cancer",
   "Ovarian cancer", "Prostate cancer", "Stomach cancer", "Blood cancer (leukaemia / lymphoma)"];
