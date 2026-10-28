@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, MessageCircle, ShieldCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -8,8 +8,10 @@ import { Button, Eyebrow, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
 import { rememberClinic } from "@/lib/clinic";
 
-type Clinic = { name: string; code: string; sms: "sms" | "demo" };
-type Step = "phone" | "code" | "name";
+type Clinic = { name: string; code: string; sms: "sms" | "demo"; whatsapp: boolean };
+type Step = "phone" | "code" | "whatsapp" | "name";
+type WhatsAppChallenge = { challenge_id: string; message: string; link: string; to: string };
+type Verified = { access_token?: string; signup_token?: string; waiting?: boolean };
 
 const INPUT =
   "w-full rounded-xl border border-line bg-white px-4 py-3.5 text-lg outline-none focus:border-brand focus:ring-4 focus:ring-brand/15";
@@ -30,6 +32,8 @@ export default function JoinClinicPage() {
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wa, setWa] = useState<WhatsAppChallenge | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     api<Clinic>(`/join/${encodeURIComponent(code)}`)
@@ -57,6 +61,52 @@ export default function JoinClinicPage() {
     router.replace("/patient");
   };
 
+  const afterVerified = (r: Verified) => {
+    if (r.access_token) signedIn(r.access_token);
+    else if (r.signup_token) {
+      setSignupToken(r.signup_token);
+      setStep("name");
+    }
+  };
+
+  const startWhatsApp = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    run(async () => {
+      setWa(await api<WhatsAppChallenge>(`/join/${clinic!.code}/whatsapp`, { method: "POST", body: JSON.stringify({ phone }) }));
+      setCopied(false);
+      setStep("whatsapp");
+    });
+  };
+
+  // While waiting for the WhatsApp message, ask the server every few seconds.
+  useEffect(() => {
+    if (step !== "whatsapp" || !wa || !clinic) return;
+    let stopped = false;
+    const t = setInterval(async () => {
+      try {
+        const r = await api<Verified>(`/join/${clinic.code}/whatsapp/status`, {
+          method: "POST",
+          body: JSON.stringify({ phone, challenge_id: wa.challenge_id }),
+        });
+        if (!stopped && !r.waiting) {
+          clearInterval(t);
+          afterVerified(r);
+        }
+      } catch (err) {
+        clearInterval(t);
+        if (!stopped) {
+          setError(err instanceof Error ? err.message : "Verification stopped");
+          setStep("phone");
+        }
+      }
+    }, 2500);
+    return () => {
+      stopped = true;
+      clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restart only for a new challenge
+  }, [step, wa, clinic]);
+
   const sendCode = (e?: React.FormEvent) => {
     e?.preventDefault();
     run(async () => {
@@ -78,11 +128,7 @@ export default function JoinClinicPage() {
         method: "POST",
         body: JSON.stringify({ phone, code: otp }),
       });
-      if (r.access_token) signedIn(r.access_token);
-      else {
-        setSignupToken(r.signup_token!);
-        setStep("name");
-      }
+      afterVerified(r);
     });
   };
 
@@ -147,7 +193,11 @@ export default function JoinClinicPage() {
                 )}
               </h1>
               <p className="mt-3 text-[16px] text-muted">
-                {step === "phone" && "Use your mobile number. We'll send you a one-time code; no password needed."}
+                {step === "phone" &&
+                  (clinic.whatsapp
+                    ? "Use your mobile number. You'll confirm it by sending us a WhatsApp message; no password needed."
+                    : "Use your mobile number. We'll send you a one-time code; no password needed.")}
+                {step === "whatsapp" && "Send the message below from WhatsApp on this phone. This page continues on its own."}
                 {step === "code" && `Enter the 6-digit code sent to ${sentTo}.`}
                 {step === "name" && "This number is new here. Tell us your name to create your account."}
               </p>
@@ -173,10 +223,64 @@ export default function JoinClinicPage() {
                       required
                     />
                   </label>
-                  <Button disabled={busy || phone.replace(/\D/g, "").length < 10} className="w-full py-3.5">
-                    {busy ? "Sending…" : "Send code"}
-                  </Button>
+                  {clinic.whatsapp ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startWhatsApp()}
+                        disabled={busy || phone.replace(/\D/g, "").length < 10}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1f8f4e] py-3.5 text-[15px] font-semibold text-white hover:bg-[#197a42] disabled:opacity-50"
+                      >
+                        <MessageCircle size={18} /> {busy ? "Starting…" : "Verify on WhatsApp"}
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={busy || phone.replace(/\D/g, "").length < 10}
+                        className="w-full text-center text-sm font-medium text-muted hover:text-ink disabled:opacity-50"
+                      >
+                        {clinic.sms === "sms" ? "Get a code by SMS instead" : "No WhatsApp? Get a code instead"}
+                      </button>
+                    </>
+                  ) : (
+                    <Button disabled={busy || phone.replace(/\D/g, "").length < 10} className="w-full py-3.5">
+                      {busy ? "Sending…" : "Send code"}
+                    </Button>
+                  )}
                 </form>
+              )}
+
+              {step === "whatsapp" && wa && (
+                <div className="mt-7 space-y-5">
+                  <div className="rounded-xl border border-line bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted">Message to send</div>
+                    <div className="mt-1 font-mono text-2xl font-semibold tracking-wider">{wa.message}</div>
+                    <div className="mt-1 text-sm text-muted">to {wa.to} on WhatsApp</div>
+                  </div>
+                  <a
+                    href={wa.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1f8f4e] py-3.5 text-[15px] font-semibold text-white hover:bg-[#197a42]"
+                  >
+                    <MessageCircle size={18} /> Open WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(wa.message).then(() => setCopied(true), () => setCopied(false));
+                    }}
+                    className="w-full text-center text-sm font-medium text-brand hover:underline"
+                  >
+                    {copied ? "Copied" : "Copy the message"}
+                  </button>
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+                    Waiting for your message…
+                  </div>
+                  <button type="button" onClick={() => setStep("phone")} className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
+                    <ArrowLeft size={14} /> Change number
+                  </button>
+                </div>
               )}
 
               {step === "code" && (

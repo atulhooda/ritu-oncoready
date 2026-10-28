@@ -131,6 +131,14 @@ not allowed.
   login token) and gives a name and agrees that this is a pilot with test accounts only.
 - **Patient ID.** Each new patient gets an OncoReady ID like `OR-7K3F-9Q2D` (8 random characters
   without I, L, O, U), unique across all clinics, shown on their profile and to doctors.
+- **WhatsApp (free).** When `WHATSAPP_NUMBER` and `WHATSAPP_APP_SECRET` are set, the page offers
+  "Verify on WhatsApp" first. The patient sends `JOIN <clinic code> <6 digits>` (opened ready-made
+  through a wa.me link) from their own WhatsApp. `POST /integrations/whatsapp/webhook` accepts only
+  calls signed with the Meta app secret (`X-Hub-Signature-256`). A message confirms the newest open
+  WhatsApp challenge for the sender's own number at that clinic, if the code matches; same expiry,
+  attempt and hourly limits as SMS codes. The page polls with its challenge id and then continues
+  as after an SMS code. Optional free reply "verified" inside the 24-hour service window. WhatsApp
+  and SMS challenges are separate: a code from one does not work in the other.
 - **SMS.** MSG91 when `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` are set. Otherwise demo mode: no
   SMS is sent and the code is returned to the page, which shows it labelled as demo. Demo mode is
   for test accounts only.

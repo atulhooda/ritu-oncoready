@@ -32,7 +32,7 @@ def sign_up(client, phone="98123 45678", name="Asha Placeholder"):
 
 def test_new_patient_signs_up_and_gets_a_patient_id(client, db, clinic):
     info = client.get("/join/ccc").json()
-    assert info == {"name": clinic.org.name, "code": "CCC", "sms": "demo"}
+    assert info == {"name": clinic.org.name, "code": "CCC", "sms": "demo", "whatsapp": False}
     otp = code_for(client)
     assert otp["sent_to"] == "+91 •••••••5678" or otp["sent_to"].endswith("5678")
     assert len(otp["demo_code"]) == 6  # demo mode: no SMS provider configured

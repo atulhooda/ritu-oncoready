@@ -97,6 +97,70 @@ def verify_otp(db: Session, org: Org, raw_phone: str, code: str) -> str:
     return phone
 
 
+# ─── WhatsApp: the patient sends the code; Meta's webhook vouches for the sender ─────────────
+
+JOIN_MESSAGE = re.compile(r"\bJOIN\s+([A-Z0-9]{3,16})\s+(\d{6})\b", re.I)
+
+
+def start_whatsapp(db: Session, org: Org, raw_phone: str) -> tuple[uuid.UUID, str, str]:
+    """A code for the patient to send from their WhatsApp. Returns (challenge id, phone, message)."""
+    s = get_settings()
+    phone = normalize_phone(raw_phone)
+    otps = PhoneOtpRepository(db, org.id)
+    now = datetime.now(UTC)
+    if otps.sent_since(phone, now - timedelta(hours=1)) >= s.otp_max_per_hour:
+        raise SignupError("Too many tries for this number. Try again in an hour.", 429)
+    code = f"{secrets.randbelow(10**6):06d}"
+    otp = otps.add(phone=phone, channel="whatsapp", code_hash=_code_hash(org.id, phone, code),
+                   expires_at=now + timedelta(seconds=s.otp_ttl_seconds))
+    db.flush()
+    return otp.id, phone, f"JOIN {org.join_code} {code}"
+
+
+def confirm_whatsapp(db: Session, sender: str, text: str) -> bool:
+    """A WhatsApp message arrived (webhook, signature already checked). Confirms the sender's open
+    challenge when the clinic code and the 6-digit code match. Returns whether it confirmed one."""
+    from app.repositories.orgs import OrgRepository
+
+    m = JOIN_MESSAGE.search(text or "")
+    if not m:
+        return False
+    org = OrgRepository(db).get_by_join_code(m.group(1))
+    try:
+        phone = normalize_phone("+" + sender.lstrip("+"))
+    except SignupError:
+        return False
+    if org is None:
+        return False
+    otp = PhoneOtpRepository(db, org.id).latest_open(phone, channel="whatsapp")
+    now = datetime.now(UTC)
+    if otp is None or otp.expires_at <= now or otp.attempts >= get_settings().otp_max_attempts:
+        return False
+    if not hmac.compare_digest(otp.code_hash, _code_hash(org.id, phone, m.group(2))):
+        otp.attempts += 1
+        db.flush()
+        return False
+    otp.confirmed_at = now
+    db.flush()
+    return True
+
+
+def whatsapp_status(db: Session, org: Org, challenge_id: uuid.UUID, raw_phone: str) -> str | None:
+    """The page that started a challenge asks if it is done. Returns the phone once confirmed (and
+    uses the challenge up), None while waiting."""
+    phone = normalize_phone(raw_phone)
+    otp = PhoneOtpRepository(db, org.id).get(challenge_id)
+    if otp is None or otp.phone != phone or otp.channel != "whatsapp" or otp.consumed_at is not None:
+        raise SignupError("This verification is not valid any more. Start again.", 404)
+    if otp.confirmed_at is None:
+        if otp.expires_at <= datetime.now(UTC):
+            raise SignupError("The code has expired. Start again.", 410)
+        return None
+    otp.consumed_at = datetime.now(UTC)
+    db.flush()
+    return phone
+
+
 def signup_token(org: Org, phone: str) -> str:
     s = get_settings()
     claims = {"typ": "signup", "org_id": str(org.id), "phone": phone,

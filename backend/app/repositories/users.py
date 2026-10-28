@@ -38,8 +38,8 @@ class PhoneOtpRepository(TenantRepository[PhoneOtp]):
         stmt = self.select().with_only_columns(func.count()).where(PhoneOtp.phone == phone, PhoneOtp.created_at >= since)
         return self.session.scalar(stmt) or 0
 
-    def latest_open(self, phone: str) -> PhoneOtp | None:
-        """The newest unused code for this phone (older ones are superseded)."""
-        stmt = (self.select().where(PhoneOtp.phone == phone, PhoneOtp.consumed_at.is_(None))
+    def latest_open(self, phone: str, channel: str = "sms") -> PhoneOtp | None:
+        """The newest unused code for this phone on this channel (older ones are superseded)."""
+        stmt = (self.select().where(PhoneOtp.phone == phone, PhoneOtp.channel == channel, PhoneOtp.consumed_at.is_(None))
                 .order_by(PhoneOtp.created_at.desc()).limit(1))
         return self.session.scalar(stmt)

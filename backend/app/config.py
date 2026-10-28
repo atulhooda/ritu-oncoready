@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     # API returns them so the page can show them, labelled demo. Never leave it like that with real patients.
     msg91_auth_key: str = ""
     msg91_template_id: str = ""
+    # Free alternative to SMS: the patient sends "JOIN <clinic> <code>" from their own WhatsApp to this
+    # number; Meta's signed webhook (POST /integrations/whatsapp/webhook) proves the sender's number.
+    whatsapp_number: str = ""  # the business number patients message, E.164, e.g. +919876543210
+    whatsapp_app_secret: str = ""  # Meta app secret: checks X-Hub-Signature-256 on webhook calls
+    whatsapp_verify_token: str = ""  # any string; the same one goes in Meta's webhook settings
+    whatsapp_access_token: str = ""  # optional: send a free "verified" reply (24-hour service window)
+    whatsapp_phone_number_id: str = ""
+    whatsapp_graph_version: str = "v21.0"
     otp_ttl_seconds: int = 300
     otp_max_per_hour: int = 5
     otp_max_attempts: int = 5
