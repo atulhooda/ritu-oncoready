@@ -115,6 +115,27 @@ not allowed.
 - Each patient has exactly one intake case, created on first use. Their sessions, records and
   summary all hang off it.
 
+### Patient sign-up (clinic link, phone + one-time code)
+
+- **Clinics.** Each clinic (org) has a join code, e.g. `CCC`, and patients join at `/join/<code>`.
+  Sign-up is closed until the clinic opens it. Create a clinic and its first doctor with
+  `python -m app.cli create-clinic` (or the `BOOTSTRAP_*` variables on Railway). The synthetic demo
+  org's code is `DEMO`.
+- **Codes.** 6 digits, valid 5 minutes, one use; only an HMAC of the code is stored. A new code
+  replaces the previous one. Limits: 5 codes per number per clinic per hour, and 5 wrong tries per
+  code (after that even the right code is refused). Codes are per clinic.
+- **Numbers.** Indian mobiles (6-9, 10 digits; `+91`, `0` or `91` prefixes accepted) or any
+  E.164 number with another country code, stored as E.164.
+- **Sign-in vs sign-up.** After a correct code, a number that already has a patient account at
+  this clinic is signed in. A new number gets a 15-minute sign-up token (bound to the clinic; not a
+  login token) and gives a name and agrees that this is a pilot with test accounts only.
+- **Patient ID.** Each new patient gets an OncoReady ID like `OR-7K3F-9Q2D` (8 random characters
+  without I, L, O, U), unique across all clinics, shown on their profile and to doctors.
+- **SMS.** MSG91 when `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` are set. Otherwise demo mode: no
+  SMS is sent and the code is returned to the page, which shows it labelled as demo. Demo mode is
+  for test accounts only.
+- **Staff** keep signing in with organization, email and password. Phone-only patients cannot.
+
 ### ABHA (health ID) link
 
 - **Linking.** On Profile, the patient enters their 14-digit ABHA number. ABDM sends an OTP to the

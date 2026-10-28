@@ -90,6 +90,7 @@ def list_patients(current: CurrentUser = Depends(doctor_only), db: Session = Dep
         out.append({
             "case_id": case.id,
             "name": case.title,
+            "patient_number": UserRepository(db, current.org_id).get(case.patient_user_id).patient_number,
             "age": details["age"],
             "sex": details["sex"],
             "cancer_type": details["cancer_type"],
@@ -117,6 +118,7 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only),
     return {
         "case_id": case.id,
         "name": case.title,
+        "patient_number": UserRepository(db, current.org_id).get(case.patient_user_id).patient_number,
         "published_at": case.published_at,
         "details": service.patient_details(db, current.org_id, case.patient_user_id),
         "summary": service.build_summary(db, current.org_id, case.id),

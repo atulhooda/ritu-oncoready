@@ -73,7 +73,7 @@ export default function DoctorPatientPage() {
   };
   const conversation = (s: IntakeSummary) => (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <HospitalReport summary={s} details={p!.details} patientName={p!.name} clinic={me?.org_name ?? "Clinic"} doctor={doctor} onTurn={showTurn} />
+      <HospitalReport summary={s} details={p!.details} patientName={p!.name} patientNumber={p!.patient_number} clinic={me?.org_name ?? "Clinic"} doctor={doctor} onTurn={showTurn} />
       <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
         {s.has_recording && <SessionRecording key={s.session_id} caseId={p!.case_id} sessionId={s.session_id} />}
         <Card>

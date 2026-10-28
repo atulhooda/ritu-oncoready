@@ -7,7 +7,11 @@ export function homeFor(role: Role): string {
 export interface Me {
   id: string;
   org_id: string;
-  email: string;
+  /** Staff sign in with email; patients who signed up use their phone. */
+  email: string | null;
+  phone?: string | null;
+  /** The patient's OncoReady ID, e.g. OR-7K3F-9Q2D (patients who signed up). */
+  patient_number?: string | null;
   full_name: string;
   role: Role;
   org_name: string | null;
@@ -262,7 +266,9 @@ export function detailsLine(d: Pick<PatientDetails, "age" | "sex" | "cancer_type
 
 export interface PatientProfile {
   name: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
+  patient_number: string | null;
   details: PatientDetails;
   case_id: string;
   published_at: string | null;
@@ -285,6 +291,7 @@ export interface IntakeScript {
 export interface DoctorPatientRow {
   case_id: string;
   name: string;
+  patient_number: string | null;
   age: number | null;
   sex: PatientDetails["sex"];
   cancer_type: string | null;
@@ -303,6 +310,7 @@ export interface DoctorPatientRow {
 export interface DoctorPatientDetail {
   case_id: string;
   name: string;
+  patient_number: string | null;
   published_at: string;
   details: PatientDetails;
   summary: IntakeSummary | null;

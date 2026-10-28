@@ -194,6 +194,7 @@ def main() -> None:
     with SessionLocal() as db:
         orgs = OrgRepository(db)
         org = orgs.get_by_slug("demo") or orgs.create(name="Demo Teaching Hospital (synthetic)", slug="demo")
+        org.join_code, org.patient_signup_open = "DEMO", True  # patients can sign up at /join/DEMO
         users = UserRepository(db, org.id)
         for role in Role:
             email = f"{role.value}@demo.example.com"

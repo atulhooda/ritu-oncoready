@@ -301,3 +301,15 @@ def test_practitioner_profiles_are_scoped(db, org_a, org_b):
     assert PractitionerProfileRepository(db, org_b.org.id).get(row.id) is None
     assert PractitionerProfileRepository(db, org_b.org.id).get_for(doctor.id) is None
     assert PractitionerProfileRepository(db, org_a.org.id).get_for(doctor.id).id == row.id
+
+
+def test_phone_otps_are_scoped(db, org_a, org_b):
+    from datetime import UTC, datetime, timedelta
+
+    from app.repositories.users import PhoneOtpRepository
+
+    row = PhoneOtpRepository(db, org_a.org.id).add(phone="+919812345678", code_hash="x" * 64,
+                                                   expires_at=datetime.now(UTC) + timedelta(minutes=5))
+    assert PhoneOtpRepository(db, org_b.org.id).get(row.id) is None
+    assert PhoneOtpRepository(db, org_b.org.id).latest_open("+919812345678") is None
+    assert PhoneOtpRepository(db, org_a.org.id).latest_open("+919812345678").id == row.id

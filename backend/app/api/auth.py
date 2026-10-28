@@ -29,7 +29,9 @@ class UserOut(BaseModel):
 
     id: uuid.UUID
     org_id: uuid.UUID
-    email: str
+    email: str | None
+    phone: str | None = None
+    patient_number: str | None = None
     full_name: str
     role: str
     org_name: str | None = None
@@ -42,7 +44,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
     if org is None:
         raise invalid
     user = UserRepository(db, org.id).get_by_email(body.email)
-    if user is None or not user.is_active or not verify_password(body.password, user.password_hash):
+    if user is None or not user.is_active or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise invalid
     return TokenOut(access_token=create_access_token(user.id, org.id, user.role))
 

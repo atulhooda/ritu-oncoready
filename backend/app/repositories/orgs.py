@@ -17,6 +17,9 @@ class OrgRepository:
     def get_by_slug(self, slug: str) -> Org | None:
         return self.session.scalar(select(Org).where(Org.slug == slug))
 
+    def get_by_join_code(self, code: str) -> Org | None:
+        return self.session.scalar(select(Org).where(Org.join_code == code.strip().upper()))
+
     def create(self, name: str, slug: str) -> Org:
         org = Org(name=name, slug=slug)
         self.session.add(org)

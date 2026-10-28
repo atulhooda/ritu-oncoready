@@ -84,6 +84,7 @@ export default function DoctorInbox() {
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-2">
                             <span className="text-xl font-semibold">{r.name}</span>
+                            {r.patient_number && <span className="font-mono text-sm text-muted">{r.patient_number}</span>}
                             {r.abha_verified_via === "abdm_sandbox" && <Badge tone="green">ABHA verified</Badge>}
                             {r.abha_verified_via === "demo" && <Badge>ABHA (demo)</Badge>}
                           </div>

@@ -72,6 +72,7 @@ export function HospitalReport({
   summary,
   details,
   patientName,
+  patientNumber,
   clinic,
   doctor,
   onTurn,
@@ -79,6 +80,7 @@ export function HospitalReport({
   summary: IntakeSummary;
   details: PatientDetails;
   patientName: string;
+  patientNumber?: string | null;
   clinic: string;
   /** The doctor reading the report (self-declared professional details). */
   doctor?: Practitioner | null;
@@ -169,7 +171,7 @@ export function HospitalReport({
         {/* Patient particulars */}
         <section className="grid gap-x-10 text-[15px] sm:grid-cols-2">
           <dl>
-            {row("Patient", patientName)}
+            {row("Patient", patientNumber ? `${patientName} (${patientNumber})` : patientName)}
             {row(
               "ABHA",
               details.abha

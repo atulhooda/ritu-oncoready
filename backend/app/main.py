@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, briefs, cases, doctor, documents, faculty, integrations, patient
+from app.api import auth, briefs, cases, doctor, documents, faculty, integrations, join, patient
 from app.config import get_settings
 
 app = FastAPI(title="Ritu OncoReady")
@@ -13,6 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth.router)
+app.include_router(join.router)
 app.include_router(cases.router)
 app.include_router(documents.router)
 app.include_router(briefs.router)

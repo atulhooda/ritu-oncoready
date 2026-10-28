@@ -32,12 +32,21 @@ uploaded files and Railway cannot share a volume between services.
    GEMINI_API_KEY=<your key>
    CORS_ORIGINS=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}}
    OCR_ENGINES=tesseract
-   SEED_DEMO=1
+   SEED_DEMO=0
+   BOOTSTRAP_CLINIC_NAME=City Cancer Centre
+   BOOTSTRAP_CLINIC_CODE=CCC
+   BOOTSTRAP_DOCTOR_EMAIL=you@example.com
+   BOOTSTRAP_DOCTOR_NAME=Dr. Your Name
+   BOOTSTRAP_DOCTOR_PASSWORD=<at least 10 characters>
    ```
+   - `BOOTSTRAP_*`: creates your clinic and its first doctor on start (safe to repeat). Patients
+     sign up at `https://<frontend domain>/join/CCC`; the doctor signs in at `/login` with
+     organization `ccc` (the code in lower case), the email and the password.
+   - SMS: add `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` to send real one-time codes. Without them the
+     code is shown on screen (demo), which is fine for test accounts only.
    - `OCR_ENGINES=tesseract`: PaddleOCR needs a lot of memory. Add it back later (`paddleocr,tesseract`)
      on a larger plan.
-   - `SEED_DEMO=1`: loads the synthetic demo org, cases, Maria and John on each start. It skips
-     anything already loaded. Set it to `0` once the demo is in.
+   - `SEED_DEMO=1` instead loads the synthetic demo org (code `DEMO`), cases, Maria and John.
 
 ## 2. frontend
 

@@ -105,6 +105,8 @@ def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(
     return {
         "name": user.full_name,
         "email": user.email,
+        "phone": user.phone,
+        "patient_number": user.patient_number,
         "details": service.patient_details(db, user.org_id, user.id),
         "case_id": case.id,
         "published_at": case.published_at,

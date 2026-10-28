@@ -1,10 +1,13 @@
 "use client";
 
+import { Smartphone } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button, Eyebrow, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
+import { lastClinic } from "@/lib/clinic";
 import type { Me } from "@/lib/types";
 import { homeFor } from "@/lib/types";
 
@@ -19,6 +22,9 @@ export default function LoginPage() {
   const [values, setValues] = useState({ org: "demo", email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [clinicCode, setClinicCode] = useState("");
+  const [recent, setRecent] = useState<{ code: string; name: string } | null>(null);
+  useEffect(() => setRecent(lastClinic()), []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,6 +91,40 @@ export default function LoginPage() {
           <Button disabled={busy} className="mt-8 w-full py-3.5">
             {busy ? "Signing in…" : "Sign in"}
           </Button>
+
+          <div className="mt-10 border-t border-line pt-8">
+            <div className="flex items-center gap-2 font-semibold">
+              <Smartphone size={18} className="text-brand" /> Patient? Use your phone
+            </div>
+            <p className="mt-1 text-sm text-muted">Patients sign in with their mobile number at their clinic. No password.</p>
+            {recent && (
+              <Link
+                href={`/join/${recent.code}`}
+                className="mt-4 flex items-center justify-between rounded-xl border border-line bg-white px-4 py-3 text-[15px] font-medium hover:border-brand/50"
+              >
+                <span>Continue at {recent.name}</span>
+                <span className="text-brand">→</span>
+              </Link>
+            )}
+            <div className="mt-3 flex gap-2">
+              <input
+                id="clinic-code"
+                value={clinicCode}
+                onChange={(e) => setClinicCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                placeholder="Clinic code, e.g. CCC"
+                aria-label="Clinic code"
+                className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 font-mono uppercase tracking-wider outline-none focus:border-brand"
+              />
+              <button
+                type="button"
+                disabled={clinicCode.length < 3}
+                onClick={() => router.push(`/join/${clinicCode}`)}
+                className="rounded-xl border border-line bg-white px-4 font-semibold hover:border-ink/30 disabled:opacity-40"
+              >
+                Go
+              </button>
+            </div>
+          </div>
         </form>
       </section>
     </main>

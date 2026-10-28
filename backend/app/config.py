@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     abdm_cert_url: str = ""  # default: {abdm_abha_url}/v3/profile/public/certificate
     abdm_cm_id: str = "sbx"
 
+    # Patient sign-up by phone (app/auth/signup.py). Without an MSG91 key, codes are not sent: the
+    # API returns them so the page can show them, labelled demo. Never leave it like that with real patients.
+    msg91_auth_key: str = ""
+    msg91_template_id: str = ""
+    otp_ttl_seconds: int = 300
+    otp_max_per_hour: int = 5
+    otp_max_attempts: int = 5
+    # The one switch for real (non-synthetic) people: CLAUDE.md rule 2. Live DigiLocker needs it.
+    real_patient_data: bool = False
+
     # LLM (extraction only, see app/llm/client.py)
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
