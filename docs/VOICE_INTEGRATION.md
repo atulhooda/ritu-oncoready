@@ -4,7 +4,7 @@
 
 - **OncoReady:** `backend/app/voice/client.py`, `backend/app/api/integrations.py`,
   `frontend/lib/ritu-voice.ts`
-- **Ritu** (`ritu-voice/` in this repo): `oncoreadyIntake.js`, plus hooks in `index.js` and
+- **Ritu** (its own repo, engageo-server-v2): `oncoreadyIntake.js`, plus hooks in `index.js` and
   `callHandler.js`, with tests in `tests/test-oncoready-intake.js`.
 
 The live wiring was tested, without speech, inside Docker:
@@ -17,7 +17,7 @@ Speech (Sarvam) and the LLM are the only untested parts, because they need real 
 
 ## Turning on real voice (3 steps)
 
-1. In `ritu-voice/.env`, fill in `SARVAM_API_KEY`. Ritu's LLM uses OncoReady's own
+1. In your Ritu checkout's `.env`, fill in `SARVAM_API_KEY`. Ritu's LLM uses OncoReady's own
    `GEMINI_API_KEY`, which docker compose passes through, so the key exists in one place.
    For Groq instead, set `GROQ_API_KEY` and `LLM_PRIMARY_PROVIDER=groq` in Ritu's `.env`.
 2. In `ritu-oncoready/.env`, uncomment the three `RITU_*` / `PUBLIC_API_URL` lines.
@@ -53,7 +53,7 @@ OncoReady over `https://`, serve Ritu over `wss://`, and set `ONCOREADY_PUBLIC_W
 
 ## Where Ritu was before this work
 
-Based on a review of Ritu (`engageo-server-v2`, now `ritu-voice/` in this repo). Paths are relative to that folder.
+Based on a review of Ritu (`engageo-server-v2`, its own repo). Paths are relative to that repo.
 
 | Topic | Today | Reference |
 |---|---|---|

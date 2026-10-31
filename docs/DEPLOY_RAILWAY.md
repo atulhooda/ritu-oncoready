@@ -10,8 +10,6 @@ with the variable `RAILWAY_DOCKERFILE_PATH`.
 | `Redis` | Add → Database → Redis | |
 | `backend` | Add → GitHub repo → ritu-oncoready | `deploy/railway/backend.Dockerfile` |
 | `frontend` | Add → GitHub repo → ritu-oncoready | `deploy/railway/frontend.Dockerfile` |
-| `ritu` (voice, optional) | Add → GitHub repo → ritu-oncoready | `deploy/railway/ritu.Dockerfile` |
-| `Postgres-Ritu` (voice, optional) | Add → Database → PostgreSQL | |
 
 Name the services exactly as above (Settings → Service name): the variables below refer to them by
 name. `${{...}}` are Railway reference variables; paste them as written.
@@ -65,30 +63,35 @@ uploaded files and Railway cannot share a volume between services.
 Open the frontend's domain and sign in: org `demo`, `doctor@demo.example.com` /
 `synthetic-demo-pass` (patients: `maria@…`, `john@…`).
 
-## 3. Voice: ritu (optional)
+## 3. Voice: your existing Ritu (optional)
 
-Without it, "Talk to Ritu" is a typed simulator, and the records assistant reads answers aloud in the
-browser's own voice.
+Ritu is its own repo and Railway service (engageo-server-v2). OncoReady uses it over the internet,
+signed with a shared secret. Without it, "Talk to Ritu" is a typed simulator, and the records
+assistant reads answers aloud in the browser's own voice.
 
-1. **Networking:** Generate Domain (browsers stream audio to it over a websocket).
-2. **Variables:** paste the contents of your local `ritu-voice/.env` into the Raw Editor (Sarvam key,
-   Exotel values, clinic name). Then set or replace these:
+1. **Apply the OncoReady patches to the Ritu repo once** (they are inactive for your clinics until
+   the secret below is set):
    ```
-   RAILWAY_DOCKERFILE_PATH=deploy/railway/ritu.Dockerfile
-   PORT=8090
-   DATABASE_URL=${{Postgres-Ritu.DATABASE_URL}}
-   GEMINI_API_KEY=${{backend.GEMINI_API_KEY}}
+   cd <your engageo-server-v2 checkout>
+   git am /path/to/ritu-oncoready-patches/*.patch
+   git push
+   ```
+2. **Ritu service variables** (add to the ones it already has):
+   ```
    ONCOREADY_SHARED_SECRET=<a long random string>
-   ONCOREADY_PUBLIC_WS_BASE=wss://${{RAILWAY_PUBLIC_DOMAIN}}
+   ONCOREADY_PUBLIC_WS_BASE=wss://<Ritu's public domain>
    ```
-3. **Add to backend's variables:**
+   Ritu's LLM provider and `SARVAM_API_KEY` are already set there.
+3. **OncoReady backend variables:**
    ```
-   RITU_BASE_URL=http://${{ritu.RAILWAY_PRIVATE_DOMAIN}}:8090
-   RITU_SHARED_SECRET=${{ritu.ONCOREADY_SHARED_SECRET}}
+   RITU_BASE_URL=https://<Ritu's public domain>
+   RITU_SHARED_SECRET=<the same string as ONCOREADY_SHARED_SECRET>
    PUBLIC_API_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
    ```
-   OncoReady calls Ritu over Railway's private network. Ritu sends finished conversations back to the
-   backend's public address, signed with the shared secret.
+   OncoReady starts sessions on Ritu and asks it to speak; Ritu sends finished conversations back to
+   the backend's public address. Both directions are HMAC-signed with the shared secret. If both
+   services are in the same Railway project you can use Ritu's private address instead:
+   `RITU_BASE_URL=http://<ritu service>.railway.internal:<its PORT>`.
 
 ## WhatsApp verification (free)
 

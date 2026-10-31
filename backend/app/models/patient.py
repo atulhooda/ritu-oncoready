@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
 
 SEXES = ("female", "male", "intersex", "other", "prefer_not_to_say")
-# Ritu's spoken languages (ritu-voice/spokenLanguages.js), same codes.
+# Ritu's spoken languages (Ritu: spokenLanguages.js), same codes.
 LANGUAGES = ("en-IN", "hi-IN", "mr-IN", "kn-IN", "pa-IN", "ta-IN", "te-IN", "bn-IN", "gu-IN", "ml-IN", "od-IN")
 TREATMENT_STATUSES = ("not_started", "on_treatment", "completed", "follow_up", "not_sure")
 # How an ABHA link was checked: the ABDM sandbox OTP flow, or demo mode (no ABDM credentials).

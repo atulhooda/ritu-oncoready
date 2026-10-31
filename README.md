@@ -16,8 +16,8 @@ docker compose exec backend python /seed/seed.py --intake       # doctor + patie
 #   intake:   maria@ / john@ (patients), doctor@demo.example.com
 ```
 
-Real Ritu voice (optional): the Ritu voice server is in `ritu-voice/`. Copy
-`ritu-voice/.env.example` to `ritu-voice/.env`, set `SARVAM_API_KEY`, then
+Real Ritu voice (optional): Ritu is a separate repo. With a Ritu checkout that has the OncoReady
+patches (by default `../ritu voice`, or set `RITU_DIR`) and `SARVAM_API_KEY` in its `.env`, run
 `docker compose --profile voice up -d --build` (details: `docs/VOICE_INTEGRATION.md` →
 "Turning on real voice"). Without it, "Talk to Ritu" runs a typed simulator of the same questions.
 

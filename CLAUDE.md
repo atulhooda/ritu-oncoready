@@ -8,7 +8,6 @@ deterministic score against a faculty answer key.
 - `backend/` — FastAPI, Python 3.12, SQLAlchemy 2 (sync, psycopg 3), Alembic, Pydantic v2, Celery
 - `frontend/` — Next.js (App Router), TypeScript, Tailwind
 - `seed/` — synthetic cases only
-- `ritu-voice/` — the Ritu voice server (Node; Sarvam speech); see `ritu-voice/ARCHITECTURE.md`
 - `docker-compose.yml` — postgres, redis, backend, worker, frontend
 
 ## Commands
@@ -92,7 +91,8 @@ docker compose exec backend python /seed/seed.py --intake        # doctor + pati
 - Enums are stored as `VARCHAR` + `CHECK` (non-native) so up/down migrations stay clean.
 
 ### 7. Voice
-- Voice is handled by the existing **Ritu voice server** (contract: `docs/VOICE_INTEGRATION.md`).
+- Voice is handled by the existing **Ritu voice server** (contract: `docs/VOICE_INTEGRATION.md`). Ritu
+  is its own repo and deployment (engageo-server-v2); OncoReady reaches it only over HTTP + HMAC.
   Do not build STT/TTS/telephony/voice logic in this repo. `frontend/lib/ritu-voice.ts` is only an
   audio *transport* (mic -> Ritu's `/media-stream`, playback of Ritu's audio).
 - All Ritu calls go through `backend/app/voice/client.py`; Ritu's callbacks are HMAC-verified in
