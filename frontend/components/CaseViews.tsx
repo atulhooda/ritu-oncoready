@@ -21,7 +21,7 @@ export function DocViewer({
 }) {
   const doc = docs.find((d) => d.id === viewer?.docId);
   return (
-    <Card className={`h-fit p-6 ${sticky ? "xl:sticky xl:top-24" : ""}`}>
+    <Card className={`h-fit p-6 ${sticky ? "xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto xl:overscroll-contain" : ""}`}>
       <Label>Source documents</Label>
       {!docs.length && <p className="mt-4 text-muted">No documents.</p>}
       <div className="mt-4 flex flex-wrap gap-2">
