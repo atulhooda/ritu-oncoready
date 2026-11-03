@@ -68,32 +68,7 @@ def patient_details(db: Session, org_id: uuid.UUID, patient_user_id: uuid.UUID) 
     out["age"] = age_on(out["date_of_birth"], date.today())
     out["updated_at"] = p.updated_at or p.created_at if p else None
     out["abha"] = abha_link(p)
-    out["identity"] = identity(p)
     return out
-
-
-def identity(p) -> dict[str, Any] | None:
-    if p is None or p.identity_verified_at is None:
-        return None
-    return {"name": p.identity_name, "dob": p.identity_dob, "gender": p.identity_gender,
-            "verified_at": p.identity_verified_at, "verified_via": p.identity_verified_via}
-
-
-GENDER_TO_SEX = {"M": "male", "F": "female", "T": "other"}
-
-
-def apply_identity(db: Session, user: User, ident, verified_via: str) -> dict[str, Any] | None:
-    """Store a DigiLocker-verified identity, and fill date of birth and sex from it."""
-    profiles = PatientProfileRepository(db, user.org_id)
-    p = profiles.get_for(user.id) or profiles.add(patient_user_id=user.id)
-    p.identity_name, p.identity_dob, p.identity_gender = ident.name, ident.dob, ident.gender
-    p.identity_verified_via, p.identity_verified_at = verified_via, datetime.now(UTC)
-    if ident.dob:
-        p.date_of_birth = ident.dob
-    if ident.gender in GENDER_TO_SEX:
-        p.sex = GENDER_TO_SEX[ident.gender]
-    db.flush()
-    return identity(p)
 
 
 def abha_link(p) -> dict[str, Any] | None:

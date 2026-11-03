@@ -58,7 +58,7 @@ class SourceDocument(TenantMixin, Base):
     uploaded_by_user_id: Mapped[uuid.UUID]
     status: Mapped[str] = mapped_column(String(16), server_default="uploaded")
     error: Mapped[str | None] = mapped_column(Text)
-    # Where an imported record came from, e.g. "digilocker:in.gov.xyz-DISCH-123"; one import per case.
+    # Where an imported record came from (an outside system's id); each is imported once per case.
     external_ref: Mapped[str | None] = mapped_column(String(300))
 
 

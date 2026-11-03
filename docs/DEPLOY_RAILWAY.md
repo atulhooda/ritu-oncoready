@@ -40,9 +40,6 @@ uploaded files and Railway cannot share a volume between services.
    - `BOOTSTRAP_*`: creates your clinic and its first doctor on start (safe to repeat). Patients
      sign up at `https://<frontend domain>/join/CCC`; the doctor signs in at `/login` with
      organization `ccc` (the code in lower case), the email and the password.
-   - DigiLocker runs in demo mode (labelled) until you add `DIGILOCKER_CLIENT_ID`,
-     `DIGILOCKER_CLIENT_SECRET`, `DIGILOCKER_REDIRECT_URI=https://<frontend domain>/patient/digilocker`
-     **and** `REAL_PATIENT_DATA=true` (only once the service is cleared for real patients).
    - **Free phone verification by WhatsApp** (see "WhatsApp verification" below).
    - SMS: add `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` to send real one-time codes. Without them the
      code is shown on screen (demo), which is fine for test accounts only.

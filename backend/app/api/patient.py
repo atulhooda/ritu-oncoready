@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app import storage
 from app.auth.deps import CurrentUser, require_role
 from app.db import get_db
-from app.identity import abdm, digilocker
+from app.identity import abdm
 from app.intake import service, tasks as intake_tasks, uploads
 from app.models import Role
 from app.models.intake import SESSION_KINDS
@@ -158,81 +158,6 @@ def abha_verify(body: AbhaVerifyIn, current: CurrentUser = Depends(patient_only)
 def abha_unlink(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
     service.unlink_abha(db, _user(db, current))
     db.commit()
-
-
-class DigiLockerComplete(BaseModel):
-    code: str = Field(min_length=4, max_length=2000)
-    state: str = Field(min_length=8, max_length=200)
-
-
-class DigiLockerImport(BaseModel):
-    uri: str = Field(min_length=3, max_length=250)
-
-
-@router.post("/digilocker/start")
-def digilocker_start(current: CurrentUser = Depends(patient_only)) -> dict[str, Any]:
-    """Where to send the browser: DigiLocker's sign-in (live) or the demo consent screen."""
-    try:
-        return {"authorize_url": digilocker.start(current.org_id, current.id), "mode": digilocker.mode()}
-    except digilocker.DigiLockerError as e:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
-
-
-@router.post("/digilocker/complete")
-def digilocker_complete(body: DigiLockerComplete, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
-    """DigiLocker sent the patient back: store the verified identity."""
-    user = _user(db, current)
-    details = service.patient_details(db, current.org_id, current.id)
-    demo = digilocker.Identity(name=user.full_name, dob=details["date_of_birth"],
-                               gender={"male": "M", "female": "F"}.get(details["sex"] or ""))
-    try:
-        ident = digilocker.complete(current.org_id, current.id, body.code, body.state, demo)
-    except digilocker.DigiLockerError as e:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
-    via = "digilocker" if digilocker.mode() == "live" else "digilocker_demo"
-    out = service.apply_identity(db, user, ident, via)
-    db.commit()
-    return out
-
-
-@router.get("/digilocker/documents")
-def digilocker_documents(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> dict[str, Any]:
-    try:
-        docs = digilocker.documents(current.org_id, current.id)
-    except digilocker.DigiLockerError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
-    case = service.profile_case(db, _user(db, current))
-    db.commit()
-    imported = {d.external_ref for d in SourceDocumentRepository(db, current.org_id).for_case(case.id) if d.external_ref}
-    return {"mode": digilocker.mode(), "documents": [{**d, "imported": f"digilocker:{d['uri']}" in imported} for d in docs]}
-
-
-@router.post("/digilocker/import", status_code=status.HTTP_202_ACCEPTED)
-def digilocker_import(body: DigiLockerImport, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
-    """Copy one DigiLocker document into the patient's records; it goes through the same pipeline."""
-    from app.pipeline.tasks import enqueue_document
-
-    user = _user(db, current)
-    case = service.profile_case(db, user)
-    ref = f"digilocker:{body.uri}"
-    if any(d.external_ref == ref for d in SourceDocumentRepository(db, current.org_id).for_case(case.id)):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Already in your records")
-    try:
-        data, name = digilocker.fetch(current.org_id, current.id, body.uri)
-    except digilocker.DigiLockerError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
-    if uploads.is_pdf(data):
-        pdf = data
-    elif uploads.is_image(data):
-        pdf = uploads.images_to_pdf([data])
-    else:
-        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only PDF or image documents can be imported")
-    if len(pdf) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Document too large (20 MB max)")
-    doc = service.store_record(db, user, pdf, f"{name} (DigiLocker).pdf", external_ref=ref)
-    db.commit()
-    enqueue_document(current.org_id, doc.id, doc.case_id)
-    return {"id": doc.id, "filename": doc.filename, "status": doc.status}
 
 
 @router.get("/intake-script")
