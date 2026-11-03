@@ -9,6 +9,7 @@ import { Button, Eyebrow, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
 import type { Me } from "@/lib/types";
 import { homeFor } from "@/lib/types";
+import { Logo } from "@/components/Logo";
 
 const FIELDS = [
   { key: "org", label: "Clinic code", type: "text" },
@@ -46,7 +47,7 @@ export default function LoginPage() {
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1fr_1.1fr]">
       <section className="hidden flex-col justify-between bg-ink p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand font-extrabold">O</span>
+          <Logo />
           <span className="text-xl font-bold tracking-tight">OncoReady</span>
         </div>
         <div>

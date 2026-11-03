@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { setToken } from "@/lib/api";
 import type { Me } from "@/lib/types";
+import { Logo } from "@/components/Logo";
 
 export { Badge } from "@/components/ui";
 
@@ -57,7 +58,7 @@ function Clock() {
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-3">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand font-extrabold text-white">O</span>
+      <Logo />
       <span className="text-xl font-bold tracking-tight text-white">OncoReady</span>
     </Link>
   );

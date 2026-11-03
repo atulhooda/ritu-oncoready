@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { Button, Eyebrow, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
 import { LANGUAGES, SEX_LABELS } from "@/lib/types";
+import { Logo } from "@/components/Logo";
 
 type Clinic = { name: string; code: string; phone_check: boolean };
 type Tab = "signup" | "login";
@@ -146,7 +147,7 @@ export function PatientJoin({ code }: { code?: string }) {
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1fr_1.1fr]">
       <section className="hidden flex-col justify-between bg-ink p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand font-extrabold">O</span>
+          <Logo />
           <span className="text-xl font-bold tracking-tight">OncoReady</span>
         </div>
         <div>
