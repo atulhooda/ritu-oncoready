@@ -67,7 +67,10 @@ docker compose exec backend python /seed/seed.py --intake        # hospital, jun
   against the patient's turn), **proposing** brief-to-rubric matches (a match is accepted only
   with a quote verified verbatim in the brief, `app/scoring/matching.py`), and **selecting**
   evidence for the doctor's records assistant (`app/assistant/`): ids + quotes, each verified
-  against the offered record text. The assistant's answer text is built in code from verified
+  against the offered record text, and **extracting** the prescription items a doctor said in a
+  recorded consultation (`app/scribe/extraction.py`): medicines, tests, advice, follow-up, the
+  doctor's stated assessment, each with a quote verified against that transcript turn. Nothing is
+  suggested or completed; the doctor edits and approves the report before anyone else sees it. The assistant's answer text is built in code from verified
   records; the LLM never writes it, and measurement / pending-test questions do not use the LLM.
 - LLMs are **not** used for scoring, grading, or generating clinical content.
 
@@ -91,6 +94,9 @@ docker compose exec backend python /seed/seed.py --intake        # hospital, jun
 - Enums are stored as `VARCHAR` + `CHECK` (non-native) so up/down migrations stay clean.
 
 ### 7. Voice
+- Exception: the **consultation scribe** transcribes the senior doctor's recorded consultation with
+  Sarvam's batch speech-to-text from this repo (`backend/app/scribe/sarvam.py`, ported from
+  engageomedicalscribe; ffmpeg converts to WAV). Nothing else here does speech recognition.
 - Voice is handled by the existing **Ritu voice server** (contract: `docs/VOICE_INTEGRATION.md`). Ritu
   is its own repo and deployment (engageo-server-v2); OncoReady reaches it only over HTTP + HMAC.
   Do not build STT/TTS/telephony/voice logic in this repo. `frontend/lib/ritu-voice.ts` is only an
@@ -109,5 +115,8 @@ docker compose exec backend python /seed/seed.py --intake        # hospital, jun
   patients go to a junior automatically (`services/review.assign_waiting`). `doctor` (`seniority` junior / senior): only the sent cases whose
   `case_reviews` row names them as the junior, or as the senior once the junior has sent it.
   Everything else is 404.
+- Consultations (`consultations`): only the senior doctor the patient was sent to records (with the
+  patient's agreement, `CHECK (recording_consent)`), edits and approves. Drafts are theirs alone;
+  approved prescriptions are readable by everyone who can see the patient, and the patient.
 - Patients are demo personas (rule 2 still applies). Intake facts quote the patient's own
   words from a transcript turn (`intake_facts.source_turn_id` + `source_text_span`).

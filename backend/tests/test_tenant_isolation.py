@@ -327,3 +327,19 @@ def test_case_reviews_are_scoped(db, org_a, org_b):
         CaseReviewRepository(db, org_b.org.id).ensure(case.id)
         db.flush()
     db.rollback()
+
+
+def test_consultations_are_scoped(db, org_a, org_b):
+    from app.repositories.consultations import ConsultationRepository
+
+    case, _, _ = make_case(db, org_a)
+    c = ConsultationRepository(db, org_a.org.id).add(case_id=case.id, doctor_user_id=org_a.faculty.id, source="typed",
+                                                     recording_consent=True, transcript=[])
+    db.flush()
+    assert ConsultationRepository(db, org_b.org.id).get(c.id) is None
+    assert ConsultationRepository(db, org_b.org.id).for_case(case.id) == []
+    with pytest.raises(IntegrityError):  # composite FK: no consultation on another org's case
+        ConsultationRepository(db, org_b.org.id).add(case_id=case.id, doctor_user_id=org_b.faculty.id, source="typed",
+                                                     recording_consent=True, transcript=[])
+        db.flush()
+    db.rollback()

@@ -443,3 +443,63 @@ export interface AssistantAnswer {
   notice: string | null;
   searched: { documents: number; pages: number; conversations: number };
 }
+
+// --- consultation scribe -----------------------------------------------------------------
+
+/** Where an extracted prescription item was said in the consultation (verified on the server). */
+export interface RxEvidence {
+  turn_index: number;
+  quote: string;
+}
+
+export interface RxText {
+  text: string;
+  evidence?: RxEvidence | null;
+}
+
+export interface RxMedicine {
+  name: string;
+  dose: string | null;
+  route: string | null;
+  frequency: string | null;
+  duration: string | null;
+  instructions: string | null;
+  evidence?: RxEvidence | null;
+}
+
+export interface RxReport {
+  /** What the doctor said the problem is, in their words. */
+  assessment: RxText[];
+  medicines: RxMedicine[];
+  tests: RxText[];
+  advice: RxText[];
+  follow_up: RxText[];
+  notes: string;
+  /** Set when approved: the doctor's details at that moment. */
+  prescriber?: { name: string | null; qualification: string | null; registration_number: string | null; medical_council: string | null };
+}
+
+export interface Consultation {
+  id: string;
+  case_id: string;
+  status: "processing" | "draft" | "approved" | "failed";
+  source: "recording" | "typed";
+  error: string | null;
+  created_at: string;
+  updated_at: string | null;
+  approved_at: string | null;
+  doctor: { id: string; name: string | null };
+  has_recording: boolean;
+  report: RxReport | null;
+  transcript?: { turn_index: number; speaker: number | null; role: "doctor" | "patient" | null; text: string }[];
+  rejected?: number;
+}
+
+export interface Prescription {
+  id: string;
+  case_id: string;
+  approved_at: string;
+  clinic: string | null;
+  patient: { name: string; patient_number: string | null; age: number | null; sex: PatientDetails["sex"] };
+  report: RxReport;
+}

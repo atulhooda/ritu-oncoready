@@ -24,6 +24,7 @@ adds about half a second to every request.
    REDIS_URL=${{Redis.REDIS_URL}}
    JWT_SECRET=<a long random string: openssl rand -hex 32>
    GEMINI_API_KEY=<your key>
+   SARVAM_API_KEY=<your Sarvam key>   # consultation scribe: transcribes the recorded consultation
    PUBLIC_API_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}/api
    OCR_ENGINES=tesseract
    SEED_DEMO=0
@@ -44,6 +45,8 @@ automatically. The API's own pages are at `/api/docs`.
   password needs at least 10 characters; changing it later does not change an existing account.
   The older `BOOTSTRAP_DOCTOR_*` names still work, and a doctor login made with them becomes the
   hospital account.
+- `SARVAM_API_KEY` turns on recording consultations (the senior doctor's scribe). Without it the
+  doctor can still paste a transcript and get the prescription draft.
 - With more than one clinic, set `DEFAULT_CLINIC_CODE` for the main page; other clinics use
   `https://<your domain>/join/<CODE>`.
 - `OCR_ENGINES=tesseract`: PaddleOCR needs a lot of memory; add it back (`paddleocr,tesseract`) on a

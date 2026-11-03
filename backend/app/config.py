@@ -59,6 +59,11 @@ class Settings(BaseSettings):
 
     # LLM (extraction only, see app/llm/client.py)
     gemini_api_key: str | None = None
+    # Consultation scribe: Sarvam batch speech-to-text (with speaker diarization)
+    sarvam_api_key: str | None = None
+    sarvam_stt_model: str = "saaras:v3"
+    sarvam_stt_language: str = "unknown"  # auto-detect (Hindi, English, mixed ...)
+    sarvam_max_wait_seconds: int = 900
     gemini_model: str = "gemini-2.5-flash"
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"

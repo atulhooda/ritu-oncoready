@@ -329,6 +329,31 @@ Code: `backend/app/services/trends.py`, `frontend/components/Trends.tsx`, `front
   reference. Automated interaction checking needs a licensed, clinically reviewed drug database and
   would be clinical decision support (rule 2), so it is not built.
 
+### Consultation scribe and prescriptions
+
+Code: `backend/app/scribe/`, `backend/app/api/scribe.py`, `frontend/components/scribe/`. Ported
+from engageomedicalscribe (Sarvam batch transcription).
+
+- **Who.** The senior doctor the junior sent the patient to, on the patient's "Consultation &
+  prescriptions" tab. Anyone else gets 403 for recording, editing or approving.
+- **Recording.** Only after ticking that the patient agrees (stored; the table refuses a row
+  without it). The browser records (pause / resume) and uploads on Stop (up to 150 MB). Without
+  `SARVAM_API_KEY` a recording is refused (503); the doctor can paste a transcript instead
+  ("Doctor:" / "Patient:" lines).
+- **Processing (background).** ffmpeg converts to 16 kHz mono WAV; Sarvam batch STT (saaras:v3,
+  language auto-detected, two speakers) returns diarized turns, stored as returned. The LLM then
+  extracts only what the doctor said: medicines (name, dose, route, frequency, duration,
+  instructions incl. stop / hold / continue), tests, advice, follow-up and the doctor's stated
+  assessment, plus which speaker is the doctor. An item is kept only if its quote is found in its
+  turn; the rest are kept as `rejected` for audit. Failures show the reason and can be retried.
+- **Editing.** The draft is the report. The doctor edits every field, adds or removes items; items
+  from the conversation show the words they came from (click: highlighted in the transcript). The
+  client cannot attach evidence the extraction did not verify. Save keeps a draft.
+- **Approval.** Approve (confirmed; an empty prescription is refused) freezes it, with the doctor's
+  name, qualification and registration as they were. Then it is on the patient's record: the
+  doctors who can see the patient (tab), the patient ("Prescriptions"), and a printable page
+  (`/prescriptions/{id}`, print or save as PDF). Stopped / held medicines are struck through.
+
 ## Records assistant (doctor only)
 
 RITU AI Assistant: a floating chat / voice panel on the doctor's dashboard that answers questions

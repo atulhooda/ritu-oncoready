@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { DocViewer, TimelineView, type Viewer } from "@/components/CaseViews";
 import { HospitalReport } from "@/components/HospitalReport";
 import { ReviewPanel } from "@/components/ReviewPanel";
+import { ConsultationPanel } from "@/components/scribe/ConsultationPanel";
 import { RituAssistant } from "@/components/RituAssistant";
 import { SessionRecording } from "@/components/SessionRecording";
 import { SymptomCourse } from "@/components/SymptomCourse";
@@ -19,7 +20,7 @@ import { api } from "@/lib/api";
 import type { AssistantSource, DocumentInfo, DoctorPatientDetail, IntakeSummary, Practitioner, SourceRef } from "@/lib/types";
 import { detailsLine, LANGUAGES } from "@/lib/types";
 
-type Tab = "review" | "summary" | "check_ins" | "records";
+type Tab = "review" | "consultation" | "summary" | "check_ins" | "records";
 
 const when = (s: IntakeSummary) =>
   s.ended_at ? new Date(s.ended_at).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—";
@@ -138,6 +139,9 @@ export default function DoctorPatientPage() {
             <Pill active={tab === "review"} onClick={() => setTab("review")}>
               Summary
             </Pill>
+            <Pill active={tab === "consultation"} onClick={() => setTab("consultation")}>
+              Consultation &amp; prescriptions
+            </Pill>
             <Pill active={tab === "summary"} onClick={() => setTab("summary")}>
               Pre-visit report
             </Pill>
@@ -163,6 +167,8 @@ export default function DoctorPatientPage() {
               patient={{ name: p.name, details: p.details, records: p.records.length, medicines: p.medicines, labs: p.labs, course: p.symptom_course }}
               onChange={(review) => setP({ ...p, review })}
             />}
+
+          {tab === "consultation" && me && <ConsultationPanel caseId={p.case_id} me={me} review={p.review} />}
 
           {tab === "summary" &&
             (selected ? (
