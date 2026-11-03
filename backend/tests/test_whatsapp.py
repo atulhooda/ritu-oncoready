@@ -54,7 +54,7 @@ def test_new_patient_verifies_by_sending_the_message(client, db, clinic):
     r = webhook(client, "919812345678", f"Hi! {ch['message']}")  # extra words are fine
     assert r.json() == {"ok": True, "confirmed": 1}
     token = status(client, ch).json()["signup_token"]
-    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha P", "accept_test_terms": True})
+    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha P", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
     assert r.status_code == 201 and r.json()["patient_number"].startswith("OR-")
     assert status(client, ch).status_code == 404  # used once only
 
@@ -63,7 +63,7 @@ def test_returning_patient_is_signed_in(client, db, clinic):
     ch = start(client)
     webhook(client, "919812345678", ch["message"])
     token = status(client, ch).json()["signup_token"]
-    client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha P", "accept_test_terms": True})
+    client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha P", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
     ch = start(client, "+91 98123 45678")
     webhook(client, "919812345678", ch["message"].lower())  # case does not matter
     assert "access_token" in status(client, ch).json()

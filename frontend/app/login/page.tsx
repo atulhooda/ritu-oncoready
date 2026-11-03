@@ -3,29 +3,25 @@
 import { Eye, EyeOff, Smartphone } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Button, Eyebrow, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
-import { lastClinic } from "@/lib/clinic";
 import type { Me } from "@/lib/types";
 import { homeFor } from "@/lib/types";
 
 const FIELDS = [
-  { key: "org", label: "Organization", type: "text" },
+  { key: "org", label: "Clinic code", type: "text" },
   { key: "email", label: "Email", type: "email" },
   { key: "password", label: "Password", type: "password" },
 ] as const;
 
 export default function LoginPage() {
   const router = useRouter();
-  const [values, setValues] = useState({ org: "demo", email: "", password: "" });
+  const [values, setValues] = useState({ org: "", email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [clinicCode, setClinicCode] = useState("");
-  const [recent, setRecent] = useState<{ code: string; name: string } | null>(null);
-  useEffect(() => setRecent(lastClinic()), []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +30,7 @@ export default function LoginPage() {
     try {
       const { access_token } = await api<{ access_token: string }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ org_slug: values.org, email: values.email, password: values.password }),
+        body: JSON.stringify({ org_slug: values.org.trim().toLowerCase(), email: values.email.trim(), password: values.password }),
       });
       setToken(access_token);
       const me = await api<Me>("/auth/me");
@@ -70,7 +66,7 @@ export default function LoginPage() {
       </section>
       <section className="flex items-center justify-center px-4 py-12">
         <form onSubmit={submit} className="w-full max-w-md">
-          <Eyebrow>Sign in</Eyebrow>
+          <Eyebrow>Doctors &amp; hospitals</Eyebrow>
           <h1 className="mt-3 text-5xl font-extrabold tracking-tight">
             Welcome <span className="font-serif font-normal italic text-brand">back.</span>
           </h1>
@@ -108,39 +104,15 @@ export default function LoginPage() {
             {busy ? "Signing in…" : "Sign in"}
           </Button>
 
-          <div className="mt-10 border-t border-line pt-8">
-            <div className="flex items-center gap-2 font-semibold">
-              <Smartphone size={18} className="text-brand" /> Patient? Use your phone
-            </div>
-            <p className="mt-1 text-sm text-muted">Patients sign in with their mobile number at their clinic. No password.</p>
-            {recent && (
-              <Link
-                href={`/join/${recent.code}`}
-                className="mt-4 flex items-center justify-between rounded-xl border border-line bg-white px-4 py-3 text-[15px] font-medium hover:border-brand/50"
-              >
-                <span>Continue at {recent.name}</span>
-                <span className="text-brand">→</span>
-              </Link>
-            )}
-            <div className="mt-3 flex gap-2">
-              <input
-                id="clinic-code"
-                value={clinicCode}
-                onChange={(e) => setClinicCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-                placeholder="Clinic code, e.g. CCC"
-                aria-label="Clinic code"
-                className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 font-mono uppercase tracking-wider outline-none focus:border-brand"
-              />
-              <button
-                type="button"
-                disabled={clinicCode.length < 3}
-                onClick={() => router.push(`/join/${clinicCode}`)}
-                className="rounded-xl border border-line bg-white px-4 font-semibold hover:border-ink/30 disabled:opacity-40"
-              >
-                Go
-              </button>
-            </div>
-          </div>
+          <Link
+            href="/"
+            className="mt-10 flex items-center justify-between rounded-xl border border-line bg-white px-4 py-3.5 text-[15px] font-medium hover:border-brand/50"
+          >
+            <span className="flex items-center gap-2">
+              <Smartphone size={18} className="text-brand" /> Patient? Sign in with your phone
+            </span>
+            <span className="text-brand">→</span>
+          </Link>
         </form>
       </section>
     </main>

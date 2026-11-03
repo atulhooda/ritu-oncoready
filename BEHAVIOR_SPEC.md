@@ -117,7 +117,11 @@ not allowed.
 
 ### Patient sign-up (clinic link, phone + one-time code)
 
-- **Clinics.** Each clinic (org) has a join code, e.g. `CCC`, and patients join at `/join/<code>`.
+- **One link.** The main page (`/`) is patient sign-in and sign-up for the default clinic
+  (`DEFAULT_CLINIC_CODE`, else the only clinic with sign-up open), with a link underneath for
+  doctors and hospitals to the staff login (clinic code, email, password). Signed-in users go to
+  their own home; patients who sign out return to `/`.
+- **Clinics.** Each clinic (org) has a join code, e.g. `CCC`, and patients can also join at `/join/<code>`.
   Sign-up is closed until the clinic opens it. Create a clinic and its first doctor with
   `python -m app.cli create-clinic` (or the `BOOTSTRAP_*` variables on Railway). The synthetic demo
   org's code is `DEMO`.
@@ -128,7 +132,9 @@ not allowed.
   E.164 number with another country code, stored as E.164.
 - **Sign-in vs sign-up.** After a correct code, a number that already has a patient account at
   this clinic is signed in. A new number gets a 15-minute sign-up token (bound to the clinic; not a
-  login token) and gives a name and agrees that this is a pilot with test accounts only.
+  login token) and gives their full name, date of birth (past, after 1900), sex and preferred
+  language (all required), an email (optional; unique per clinic, stored in lower case), and
+  agrees that this is a pilot with test accounts only. These fill the patient's profile.
 - **Patient ID.** Each new patient gets an OncoReady ID like `OR-7K3F-9Q2D` (8 random characters
   without I, L, O, U), unique across all clinics, shown on their profile and to doctors.
 - **WhatsApp (free).** When `WHATSAPP_NUMBER` and `WHATSAPP_APP_SECRET` are set, the page offers

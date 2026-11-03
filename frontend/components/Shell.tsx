@@ -109,7 +109,7 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
           <button
             onClick={() => {
               setToken(null);
-              router.replace("/login");
+              router.replace(me.role === "patient" ? "/" : "/login");
             }}
             className="flex shrink-0 items-center gap-2 text-white/70 hover:text-white"
           >
@@ -150,6 +150,7 @@ function PatientTabs() {
 
 export function Shell({ me, actions, children }: { me: Me | null; actions?: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
   const patient = me?.role === "patient";
   return (
     <div className="min-h-screen bg-paper text-ink">
@@ -182,7 +183,20 @@ export function Shell({ me, actions, children }: { me: Me | null; actions?: Reac
                 <Clock />
               </span>
             </div>
-            <div className="flex items-center gap-3">{actions}</div>
+            <div className="flex items-center gap-3">
+              {actions}
+              {patient && (
+                <button
+                  onClick={() => {
+                    setToken(null);
+                    router.replace("/");
+                  }}
+                  className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink lg:hidden"
+                >
+                  <LogOut size={16} strokeWidth={1.75} /> Log out
+                </button>
+              )}
+            </div>
           </div>
         </header>
         <main className={`px-4 py-8 sm:px-8 sm:py-10 ${patient ? "pb-28 lg:pb-10" : ""}`}>

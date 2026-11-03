@@ -27,7 +27,7 @@ def code_for(client, phone="98123 45678", clinic_code="CCC"):
 def sign_up(client, phone="98123 45678", name="Asha Placeholder"):
     otp = code_for(client, phone)
     v = client.post("/join/CCC/verify", json={"phone": phone, "code": otp["demo_code"]}).json()
-    return client.post("/join/CCC/register", json={"signup_token": v["signup_token"], "full_name": name, "accept_test_terms": True})
+    return client.post("/join/CCC/register", json={"signup_token": v["signup_token"], "full_name": name, "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
 
 
 def test_new_patient_signs_up_and_gets_a_patient_id(client, db, clinic):
@@ -41,8 +41,8 @@ def test_new_patient_signs_up_and_gets_a_patient_id(client, db, clinic):
     assert "access_token" not in r.json()
     # the sign-up token is not a login
     assert client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
-    assert client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha", "accept_test_terms": False}).status_code == 422
-    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha Placeholder", "accept_test_terms": True})
+    assert client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": False}).status_code == 422
+    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha Placeholder", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
     assert r.status_code == 201
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     me = client.get("/auth/me", headers=h).json()
@@ -95,7 +95,7 @@ def test_a_code_from_one_clinic_does_not_work_at_another(client, db, clinic, org
     otp = code_for(client)
     assert client.post("/join/BBB/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).status_code == 400
     token = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).json()["signup_token"]
-    r = client.post("/join/BBB/register", json={"signup_token": token, "full_name": "X Y", "accept_test_terms": True})
+    r = client.post("/join/BBB/register", json={"signup_token": token, "full_name": "X Y", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
     assert r.status_code == 401  # a sign-up token is bound to its clinic
 
 
@@ -138,5 +138,36 @@ def test_same_number_cannot_register_twice(client, db, clinic):
     v = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).json()
     assert "access_token" in v  # it signs in instead
     token = signup.signup_token(clinic.org, "+919812345678")
-    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Again", "accept_test_terms": True})
+    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Again", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
     assert r.status_code == 409
+
+
+def test_sign_up_asks_for_the_patients_details(client, db, clinic):
+    otp = code_for(client)
+    token = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).json()["signup_token"]
+    body = {"signup_token": token, "full_name": "Asha Placeholder", "email": "Asha@Example.com", "date_of_birth": "1975-06-15",
+            "sex": "female", "preferred_language": "hi-IN", "accept_test_terms": True}
+    assert client.post("/join/CCC/register", json={**body, "date_of_birth": "2999-01-01"}).status_code == 422
+    assert client.post("/join/CCC/register", json={k: v for k, v in body.items() if k != "sex"}).status_code == 422
+    assert client.post("/join/CCC/register", json={**body, "email": "not-an-email"}).status_code == 422
+    r = client.post("/join/CCC/register", json=body)
+    assert r.status_code == 201
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    prof = client.get("/me/profile", headers=h).json()
+    assert prof["email"] == "asha@example.com"
+    d = prof["details"]
+    assert (d["date_of_birth"], d["sex"], d["preferred_language"], d["phone"]) == ("1975-06-15", "female", "hi-IN", "+919812345678")
+    # the same email cannot be used for a second account at the clinic
+    otp = code_for(client, "9812345679")
+    token = client.post("/join/CCC/verify", json={"phone": "9812345679", "code": otp["demo_code"]}).json()["signup_token"]
+    r = client.post("/join/CCC/register", json={**body, "signup_token": token, "email": "asha@example.com"})
+    assert r.status_code == 409 and "email" in r.json()["detail"]
+
+
+def test_main_page_uses_the_clinic_without_a_code(client, db, clinic, org_b, monkeypatch):
+    assert client.get("/join").json()["code"] == "CCC"  # the only clinic with sign-up open
+    org_b.org.join_code, org_b.org.patient_signup_open = "BBB", True
+    db.commit()
+    assert client.get("/join").status_code == 404  # two open clinics: needs a choice
+    monkeypatch.setattr(get_settings(), "default_clinic_code", "BBB")
+    assert client.get("/join").json()["code"] == "BBB"

@@ -20,6 +20,9 @@ class OrgRepository:
     def get_by_join_code(self, code: str) -> Org | None:
         return self.session.scalar(select(Org).where(Org.join_code == code.strip().upper()))
 
+    def open_for_signup(self) -> list[Org]:
+        return list(self.session.scalars(select(Org).where(Org.patient_signup_open.is_(True), Org.join_code.is_not(None))))
+
     def create(self, name: str, slug: str) -> Org:
         org = Org(name=name, slug=slug)
         self.session.add(org)

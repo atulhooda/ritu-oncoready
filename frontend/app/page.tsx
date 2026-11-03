@@ -1,18 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import { api } from "@/lib/api";
+import { PatientJoin } from "@/components/PatientJoin";
+import { api, getToken } from "@/lib/api";
 import type { Me } from "@/lib/types";
 import { homeFor } from "@/lib/types";
 
+/** The one public link: patients sign in or sign up here; doctors and hospitals follow the link to log in.
+ *  Someone already signed in goes straight to their own home. */
 export default function Home() {
   const router = useRouter();
+  const [signedOut, setSignedOut] = useState(false);
   useEffect(() => {
+    if (!getToken()) {
+      setSignedOut(true);
+      return;
+    }
     api<Me>("/auth/me")
       .then((me) => router.replace(homeFor(me.role)))
-      .catch(() => router.replace("/login"));
+      .catch(() => setSignedOut(true));
   }, [router]);
-  return null;
+  return signedOut ? <PatientJoin /> : null;
 }

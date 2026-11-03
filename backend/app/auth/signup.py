@@ -179,24 +179,29 @@ def read_signup_token(token: str, org: Org) -> str:
     return claims["phone"]
 
 
-def register(db: Session, org: Org, phone: str, full_name: str) -> User:
-    """A new patient account at this clinic, with its OncoReady patient ID and an empty profile."""
+def register(db: Session, org: Org, phone: str, full_name: str, email: str | None = None,
+             details: dict | None = None) -> User:
+    """A new patient account at this clinic, with its OncoReady patient ID and the details given at
+    sign-up (date of birth, sex, language) on the profile."""
     from app.intake import service as intake
 
     users = UserRepository(db, org.id)
     if users.get_by_phone(phone) is not None:
         raise SignupError("This number already has an account here. Sign in instead.", 409)
+    email = email.strip().lower() if email else None
+    if email and users.get_by_email(email) is not None:
+        raise SignupError("This email is already used by another account here.", 409)
     for _ in range(5):  # a clash of 8 random characters is unlikely; retry if it happens
         try:
             with db.begin_nested():
-                user = users.add(email=None, password_hash=None, full_name=full_name.strip(), role=Role.PATIENT.value,
+                user = users.add(email=email, password_hash=None, full_name=full_name.strip(), role=Role.PATIENT.value,
                                  phone=phone, patient_number=new_patient_number())
             break
         except IntegrityError:
             continue
     else:
         raise SignupError("Could not create the account. Try again.", 500)
-    intake.update_details(db, user, {"phone": phone})
+    intake.update_details(db, user, {**(details or {}), "phone": phone})
     intake.profile_case(db, user)
     db.flush()
     return user

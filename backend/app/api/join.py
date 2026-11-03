@@ -1,10 +1,11 @@
 """Public patient sign-up and sign-in at a clinic (/join/<code>). See app/auth/signup.py."""
 
 import uuid
+from datetime import date
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth import signup, sms, whatsapp
@@ -12,6 +13,7 @@ from app.auth.security import create_access_token
 from app.config import get_settings
 from app.db import get_db
 from app.models import Org, Role
+from app.models.patient import LANGUAGES, SEXES
 from app.repositories.orgs import OrgRepository
 from app.repositories.users import UserRepository
 
@@ -31,9 +33,27 @@ class StatusIn(PhoneIn):
 
 
 class RegisterIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     signup_token: str = Field(min_length=10, max_length=2000)
     full_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr | None = None
+    date_of_birth: date
+    sex: Literal[*SEXES]
+    preferred_language: Literal[*LANGUAGES] = "en-IN"
     accept_test_terms: Literal[True]  # "this is a test service; I will not enter real medical records"
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def blank_email(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def plausible_dob(cls, v: date) -> date:
+        if v > date.today() or v.year < 1900:
+            raise ValueError("Enter your real date of birth")
+        return v
 
 
 def _clinic(db: Session, code: str) -> Org:
@@ -47,11 +67,26 @@ def _fail(e: signup.SignupError):
     raise HTTPException(e.status, str(e))
 
 
-@router.get("/{code}")
-def clinic(code: str, db: Session = Depends(get_db)) -> dict[str, Any]:
-    org = _clinic(db, code)
+def _clinic_out(org: Org) -> dict[str, Any]:
     return {"name": org.name, "code": org.join_code, "sms": "sms" if sms.enabled() else "demo",
             "whatsapp": whatsapp.enabled()}
+
+
+@router.get("")
+def default_clinic(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """The clinic the main page signs patients up to: DEFAULT_CLINIC_CODE, else the only open one."""
+    code = get_settings().default_clinic_code
+    if code:
+        return _clinic_out(_clinic(db, code))
+    open_clinics = OrgRepository(db).open_for_signup()
+    if len(open_clinics) != 1:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Use your clinic's sign-up link")
+    return _clinic_out(open_clinics[0])
+
+
+@router.get("/{code}")
+def clinic(code: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _clinic_out(_clinic(db, code))
 
 
 def _signed_in_or_signup(db: Session, org: Org, phone: str) -> dict[str, Any]:
@@ -125,7 +160,9 @@ def register(code: str, body: RegisterIn, db: Session = Depends(get_db)) -> dict
     org = _clinic(db, code)
     try:
         phone = signup.read_signup_token(body.signup_token, org)
-        user = signup.register(db, org, phone, body.full_name)
+        user = signup.register(db, org, phone, body.full_name, email=body.email, details={
+            "date_of_birth": body.date_of_birth, "sex": body.sex, "preferred_language": body.preferred_language,
+        })
     except signup.SignupError as e:
         _fail(e)
     db.commit()

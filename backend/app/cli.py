@@ -33,16 +33,17 @@ def create_clinic(name: str, code: str, doctor_email: str | None, doctor_name: s
         else:
             print(f"clinic exists: {org.name} (code {code})")
         org.patient_signup_open = True
+        db.commit()  # the clinic stands even if the doctor below cannot be created
         if doctor_email:
             users = UserRepository(db, org.id)
-            if users.get_by_email(doctor_email) is None:
-                if not doctor_password or len(doctor_password) < 10:
-                    sys.exit("Give the doctor a password of at least 10 characters")
-                users.create(doctor_email, doctor_name or "Doctor", doctor_password, Role.DOCTOR)
-                print(f"doctor created: {doctor_email} (organization '{org.slug}')")
-            else:
+            if users.get_by_email(doctor_email) is not None:
                 print(f"doctor exists: {doctor_email}")
-        db.commit()
+            elif not doctor_password or len(doctor_password) < 10:
+                sys.exit(f"doctor NOT created: {doctor_email} needs a password of at least 10 characters")
+            else:
+                users.create(doctor_email, doctor_name or "Doctor", doctor_password, Role.DOCTOR)
+                db.commit()
+                print(f"doctor created: {doctor_email} (organization '{org.slug}')")
 
 
 def main() -> None:

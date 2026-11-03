@@ -7,7 +7,8 @@ import { api, ApiError, setToken } from "@/lib/api";
 import type { Me, Role } from "@/lib/types";
 import { homeFor } from "@/lib/types";
 
-/** Loads the current user; redirects to /login when signed out or to home on a wrong role. */
+/** Loads the current user; when signed out, sends patients to the main page (/) and staff to /login;
+ *  on a wrong role, to the user's own home. */
 export function useMe(allowed?: Role[]): Me | null {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
@@ -24,7 +25,7 @@ export function useMe(allowed?: Role[]): Me | null {
       })
       .catch((e) => {
         if (e instanceof ApiError && e.status === 401) setToken(null);
-        router.replace("/login");
+        router.replace(allowedKey === "patient" ? "/" : "/login");
       });
   }, [router, allowedKey]);
 

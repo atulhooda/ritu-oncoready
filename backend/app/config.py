@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     whatsapp_access_token: str = ""  # optional: send a free "verified" reply (24-hour service window)
     whatsapp_phone_number_id: str = ""
     whatsapp_graph_version: str = "v21.0"
+    # The clinic the main page (/) signs patients up to. Empty: the only clinic with sign-up open.
+    default_clinic_code: str = ""
     otp_ttl_seconds: int = 300
     otp_max_per_hour: int = 5
     otp_max_attempts: int = 5
