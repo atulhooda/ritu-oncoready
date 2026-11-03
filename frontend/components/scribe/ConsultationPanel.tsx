@@ -30,11 +30,18 @@ function Recorder({ caseId, onCreated }: { caseId: string; onCreated: (c: Consul
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
+  const [canRecord, setCanRecord] = useState<boolean | null>(null);
   const [typed, setTyped] = useState("");
   const rec = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  useEffect(() => {
+    api<{ recording: boolean }>("/doctor/scribe").then((s) => {
+      setCanRecord(s.recording);
+      if (!s.recording) setTyping(true);
+    }).catch(() => setCanRecord(null));
+  }, []);
   useEffect(() => () => {
     if (timer.current) clearInterval(timer.current);
     rec.current?.stream.getTracks().forEach((t) => t.stop());
@@ -118,9 +125,12 @@ function Recorder({ caseId, onCreated }: { caseId: string; onCreated: (c: Consul
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         {state === "idle" && (
-          <Button onClick={start} disabled={!consent}>
+          <Button onClick={start} disabled={!consent || canRecord === false}>
             <Mic size={17} /> Start recording
           </Button>
+        )}
+        {state === "idle" && canRecord === false && (
+          <span className="text-sm text-amber-800">Recording is off until transcription (Sarvam) is connected on the server. Paste a transcript below.</span>
         )}
         {live && (
           <>
@@ -146,7 +156,7 @@ function Recorder({ caseId, onCreated }: { caseId: string; onCreated: (c: Consul
             <Loader2 size={17} className="animate-spin" /> Uploading…
           </span>
         )}
-        {state === "idle" && (
+        {state === "idle" && canRecord !== false && (
           <button onClick={() => setTyping((t) => !t)} className="text-sm font-medium text-brand hover:underline">
             {typing ? "Hide" : "Or paste a transcript"}
           </button>

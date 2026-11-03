@@ -73,6 +73,13 @@ def consultation_out(db: Session, c: Consultation, full: bool = False) -> dict[s
     return out
 
 
+@router.get("/doctor/scribe")
+def scribe_status(current: CurrentUser = Depends(doctor_only)) -> dict[str, bool]:
+    """Whether recordings can be transcribed here (Sarvam connected), so the page can say so before
+    a consultation is recorded rather than after."""
+    return {"recording": sarvam.enabled()}
+
+
 @router.get("/doctor/patients/{case_id}/consultations")
 def list_consultations(case_id: uuid.UUID, current: CurrentUser = Depends(viewer), db: Session = Depends(get_db)):
     """The senior's own consultations (any status); everyone else who can see the patient: approved only."""

@@ -127,8 +127,10 @@ def test_recording_needs_sarvam_and_is_transcribed(client, db, org_a, senior_set
     base = f"/doctor/patients/{s['case_id']}/consultations"
     audio = {"file": ("consult.webm", b"\x1aE\xdf\xa3 fake webm", "audio/webm")}
     monkeypatch.setattr(sarvam, "enabled", lambda: False)
+    assert client.get("/doctor/scribe", headers=s["sh"]).json() == {"recording": False}
     assert client.post(base, headers=s["sh"], data={"consent": "true"}, files=audio).status_code == 503
     monkeypatch.setattr(sarvam, "enabled", lambda: True)
+    assert client.get("/doctor/scribe", headers=s["sh"]).json() == {"recording": True}
     bad = {"file": ("x.txt", b"hello", "text/plain")}
     assert client.post(base, headers=s["sh"], data={"consent": "true"}, files=bad).status_code == 415
     r = client.post(base, headers=s["sh"], data={"consent": "true"}, files=audio)
