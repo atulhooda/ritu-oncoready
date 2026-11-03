@@ -21,7 +21,8 @@ patches (by default `../ritu voice`, or set `RITU_DIR`) and `SARVAM_API_KEY` in 
 `docker compose --profile voice up -d --build` (details: `docs/VOICE_INTEGRATION.md` →
 "Turning on real voice"). Without it, "Talk to Ritu" runs a typed simulator of the same questions.
 
-Deploying on Railway: see `docs/DEPLOY_RAILWAY.md`.
+Deploying: the root `Dockerfile` builds the whole app as one service (website, API under `/api`,
+worker). On Railway see `docs/DEPLOY_RAILWAY.md`.
 
 After changing frontend dependencies, renew the container's `node_modules` volume:
 `docker compose up -d --build -V frontend`.

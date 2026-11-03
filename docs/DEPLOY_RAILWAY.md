@@ -1,96 +1,70 @@
 # Deploying on Railway
 
-Railway does not run `docker-compose.yml`, so each part is its own Railway service. All services
-build from this one repo. Leave **Root Directory** empty (the repo root) and choose each Dockerfile
-with the variable `RAILWAY_DOCKERFILE_PATH`.
+OncoReady is **one service** built from this repo, plus Railway's Postgres and Redis databases.
+The `Dockerfile` at the repo root builds one image that runs the website, the API (under `/api`)
+and the background worker (OCR, extraction) behind one address. Railway finds that Dockerfile on
+its own.
 
-| Service | How to add | Dockerfile |
-|---|---|---|
-| `Postgres` | Add → Database → PostgreSQL | |
-| `Redis` | Add → Database → Redis | |
-| `backend` | Add → GitHub repo → ritu-oncoready | `deploy/railway/backend.Dockerfile` |
-| `frontend` | Add → GitHub repo → ritu-oncoready | `deploy/railway/frontend.Dockerfile` |
+| Service | How to add |
+|---|---|
+| `Postgres` | Add → Database → PostgreSQL |
+| `Redis` | Add → Database → Redis |
+| `oncoready` | Add → GitHub repo → ritu-oncoready |
 
-Name the services exactly as above (Settings → Service name): the variables below refer to them by
-name. `${{...}}` are Railway reference variables; paste them as written.
+**Put all three in the same region** (Settings → Scale → Regions). A database in another region
+adds about half a second to every request.
 
-## 1. backend (API + worker + demo data)
+## 1. The app service
 
-The API and the background worker (OCR, extraction) run in this one service, because both use the
-uploaded files and Railway cannot share a volume between services.
-
-1. **Volume:** right-click the service → Attach volume → mount path `/data/storage`.
-2. **Networking:** Generate Domain.
-3. **Variables** (Raw Editor):
+1. **Volume:** right-click the service → Attach volume → mount path `/data/storage` (uploaded records).
+2. **Networking:** Generate Domain, or add your own (Settings → Networking → Custom Domain).
+3. **Variables** (Raw Editor), with your values:
    ```
-   RAILWAY_DOCKERFILE_PATH=deploy/railway/backend.Dockerfile
    DATABASE_URL=${{Postgres.DATABASE_URL}}
    REDIS_URL=${{Redis.REDIS_URL}}
-   JWT_SECRET=<a long random string, 32+ characters>
+   JWT_SECRET=<a long random string: openssl rand -hex 32>
    GEMINI_API_KEY=<your key>
-   CORS_ORIGINS=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}}
+   PUBLIC_API_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}/api
    OCR_ENGINES=tesseract
    SEED_DEMO=0
-   BOOTSTRAP_CLINIC_NAME=City Cancer Centre
-   BOOTSTRAP_CLINIC_CODE=CCC
+   BOOTSTRAP_CLINIC_NAME=Your Clinic Name
+   BOOTSTRAP_CLINIC_CODE=CLINIC
    BOOTSTRAP_DOCTOR_EMAIL=you@example.com
    BOOTSTRAP_DOCTOR_NAME=Dr. Your Name
    BOOTSTRAP_DOCTOR_PASSWORD=<at least 10 characters>
    ```
-   - `BOOTSTRAP_*`: creates your clinic and its first doctor on start (safe to repeat). The doctor
-     password needs at least 10 characters. Patients sign up at the main address
-     (`https://<frontend domain>/`); the doctor taps "Doctor or hospital? Log in here" and enters
-     the clinic code, email and password. With more than one clinic, set `DEFAULT_CLINIC_CODE` for
-     the main page; other clinics use `https://<frontend domain>/join/<CODE>`.
-   - **Free phone verification by WhatsApp** (see "WhatsApp verification" below).
-   - SMS: add `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` to send real one-time codes. Without them the
-     code is shown on screen (demo), which is fine for test accounts only.
-   - `OCR_ENGINES=tesseract`: PaddleOCR needs a lot of memory. Add it back later (`paddleocr,tesseract`)
-     on a larger plan.
-   - `SEED_DEMO=1` instead loads the synthetic demo org (code `DEMO`), cases, Maria and John.
+   With a custom domain, write it in `PUBLIC_API_URL` instead: `https://your.domain/api`.
 
-## 2. frontend
+Open the address. Patients sign up there; doctors tap "Doctor or hospital? Log in here" and enter
+the clinic code, email and password. The API's own pages are at `/api/docs`.
 
-1. **Networking:** Generate Domain.
-2. **Variables:**
-   ```
-   RAILWAY_DOCKERFILE_PATH=deploy/railway/frontend.Dockerfile
-   NEXT_PUBLIC_API_URL=https://${{backend.RAILWAY_PUBLIC_DOMAIN}}
-   ```
-   The API address is built into the site, so redeploy the frontend if the backend's domain changes.
+- `BOOTSTRAP_*` creates your clinic and its first doctor on start (safe to repeat). The doctor
+  password needs at least 10 characters. Changing it later does not change an existing doctor.
+- With more than one clinic, set `DEFAULT_CLINIC_CODE` for the main page; other clinics use
+  `https://<your domain>/join/<CODE>`.
+- `OCR_ENGINES=tesseract`: PaddleOCR needs a lot of memory; add it back (`paddleocr,tesseract`) on a
+  larger plan.
+- SMS: `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` send real one-time codes. Without them, or WhatsApp
+  (below), the code is shown on screen (demo), which is fine for test accounts only.
+- `SEED_DEMO=1` loads the synthetic demo org (code `DEMO`), cases, Maria and John.
 
-Open the frontend's domain and sign in: org `demo`, `doctor@demo.example.com` /
-`synthetic-demo-pass` (patients: `maria@…`, `john@…`).
+## 2. Voice: your existing Ritu (optional)
 
-## 3. Voice: your existing Ritu (optional)
+Ritu is its own repo and Railway service (engageo-server-v2), used over HTTPS with a shared
+secret. Without it, "Talk to Ritu" is a typed simulator, and the records assistant reads answers
+aloud in the browser's own voice.
 
-Ritu is its own repo and Railway service (engageo-server-v2). OncoReady uses it over the internet,
-signed with a shared secret. Without it, "Talk to Ritu" is a typed simulator, and the records
-assistant reads answers aloud in the browser's own voice.
-
-1. **Apply the OncoReady patches to the Ritu repo once** (they are inactive for your clinics until
-   the secret below is set):
-   ```
-   cd <your engageo-server-v2 checkout>
-   git am /path/to/ritu-oncoready-patches/*.patch
-   git push
-   ```
-2. **Ritu service variables** (add to the ones it already has):
-   ```
-   ONCOREADY_SHARED_SECRET=<a long random string>
-   ONCOREADY_PUBLIC_WS_BASE=wss://<Ritu's public domain>
-   ```
-   Ritu's LLM provider and `SARVAM_API_KEY` are already set there.
-3. **OncoReady backend variables:**
-   ```
-   RITU_BASE_URL=https://<Ritu's public domain>
-   RITU_SHARED_SECRET=<the same string as ONCOREADY_SHARED_SECRET>
-   PUBLIC_API_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
-   ```
-   OncoReady starts sessions on Ritu and asks it to speak; Ritu sends finished conversations back to
-   the backend's public address. Both directions are HMAC-signed with the shared secret. If both
-   services are in the same Railway project you can use Ritu's private address instead:
-   `RITU_BASE_URL=http://<ritu service>.railway.internal:<its PORT>`.
+- **Ritu service variables:**
+  ```
+  ONCOREADY_SHARED_SECRET=<a long random string>
+  ONCOREADY_PUBLIC_WS_BASE=wss://<Ritu's public domain>
+  ```
+- **OncoReady variables:**
+  ```
+  RITU_BASE_URL=https://<Ritu's public domain>
+  RITU_SHARED_SECRET=<the same string>
+  ```
+  Ritu sends finished conversations to `PUBLIC_API_URL` (signed with the secret).
 
 ## WhatsApp verification (free)
 
@@ -107,7 +81,7 @@ a customer sends you, and your replies within 24 hours, are free on the WhatsApp
    WHATSAPP_PHONE_NUMBER_ID=<from WhatsApp → API Setup>
    ```
 2. **Webhook.** In the Meta app: WhatsApp → Configuration → Webhook. Callback URL
-   `https://<backend domain>/integrations/whatsapp/webhook`, verify token as above; subscribe to
+   `https://<your domain>/api/integrations/whatsapp/webhook`, verify token as above; subscribe to
    `messages`.
 3. **If that number's webhook already points at another site** (a Meta app has one webhook URL),
    either use a separate app/number for OncoReady, or have the other site forward each webhook
@@ -116,9 +90,8 @@ a customer sends you, and your replies within 24 hours, are free on the WhatsApp
 
 ## Notes
 
-- **Synthetic data only.** A public URL lets anyone sign up and upload. Use the demo personas, and do
+- **Synthetic data only.** A public URL lets anyone sign up and upload. Use test accounts, and do
   not let real patient records go in (CLAUDE.md rule 2).
-- **Recording upload and audio** work the same as locally. Browsers allow the microphone only on
-  https, which Railway domains are.
-- **Logs:** each service's Deployments → View logs. The backend log shows migrations, the worker
-  starting, and the demo seed.
+- **Logs:** the service's Deployments → View logs. On start you see the migrations, the clinic
+  set-up ("clinic created", "doctor created"), the worker ("celery … ready") and the website
+  ("Ready in …").

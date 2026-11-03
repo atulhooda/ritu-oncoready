@@ -1,0 +1,20 @@
+# One public port for the whole app (Railway sets PORT).
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT:8080} {
+	encode gzip
+	request_body {
+		max_size 60MB
+	}
+	# The API, without its /api prefix (uvicorn runs with --root-path /api).
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	# Everything else is the website.
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
