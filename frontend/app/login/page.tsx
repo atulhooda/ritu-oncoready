@@ -1,6 +1,6 @@
 "use client";
 
-import { Smartphone } from "lucide-react";
+import { Eye, EyeOff, Smartphone } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [values, setValues] = useState({ org: "demo", email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [clinicCode, setClinicCode] = useState("");
   const [recent, setRecent] = useState<{ code: string; name: string } | null>(null);
   useEffect(() => setRecent(lastClinic()), []);
@@ -77,13 +78,28 @@ export default function LoginPage() {
             {FIELDS.map((f) => (
               <label key={f.key} className="block">
                 <Label className="mb-2">{f.label}</Label>
-                <input
-                  type={f.type}
-                  value={values[f.key]}
-                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
-                  className="w-full rounded-xl border border-line bg-white px-4 py-3.5 text-lg outline-none focus:border-brand focus:ring-4 focus:ring-brand/15"
-                  required
-                />
+                <span className="relative block">
+                  <input
+                    id={`login-${f.key}`}
+                    type={f.type === "password" && showPassword ? "text" : f.type}
+                    autoComplete={f.type === "password" ? "current-password" : f.type === "email" ? "username" : "organization"}
+                    value={values[f.key]}
+                    onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                    className={`w-full rounded-xl border border-line bg-white px-4 py-3.5 text-lg outline-none focus:border-brand focus:ring-4 focus:ring-brand/15 ${f.type === "password" ? "pr-14" : ""}`}
+                    required
+                  />
+                  {f.type === "password" && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Hide password" : "Show password"}
+                      className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-muted hover:text-ink"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  )}
+                </span>
               </label>
             ))}
           </div>
