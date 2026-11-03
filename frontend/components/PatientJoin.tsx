@@ -359,7 +359,7 @@ export function PatientJoin({ code }: { code?: string }) {
               className="flex items-center justify-between rounded-xl border border-line bg-white px-4 py-3.5 text-[15px] font-medium hover:border-brand/50"
             >
               <span className="flex items-center gap-2">
-                <Stethoscope size={18} className="text-brand" /> Doctor or hospital? Log in here
+                <Stethoscope size={18} className="text-brand" /> Hospital or doctor? Hospital login
               </span>
               <span className="text-brand">→</span>
             </Link>

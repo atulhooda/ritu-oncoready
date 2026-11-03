@@ -5,7 +5,7 @@ set -e
 cd /app/backend
 alembic upgrade head
 
-# Your clinic and its first doctor, from BOOTSTRAP_CLINIC_* / BOOTSTRAP_DOCTOR_* (safe to repeat).
+# Your clinic and its hospital account, from BOOTSTRAP_CLINIC_* / BOOTSTRAP_HOSPITAL_* (safe to repeat).
 python -m app.cli bootstrap || echo "clinic bootstrap: see the message above (the app still starts)"
 
 celery -A app.worker.celery_app worker --loglevel=info --concurrency="${WORKER_CONCURRENCY:-1}" &

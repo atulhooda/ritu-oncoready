@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import IntakeSession, PatientCase, User
 from app.models.intake import FACT_SECTIONS
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
+from app.repositories.reviews import CaseReviewRepository
 from app.repositories.intake import (
     IntakeFactRepository,
     IntakeSessionRepository,
@@ -287,6 +288,7 @@ def publish(db: Session, user: User) -> PatientCase:
     if IntakeSessionRepository(db, user.org_id).latest_summarized(case.id, kind="pre_visit") is None:
         raise IntakeError("finish a session with Ritu before sending to the doctor")
     case.published_at = datetime.now(UTC)
+    CaseReviewRepository(db, user.org_id).ensure(case.id)  # waits for the hospital to assign a junior
     db.flush()
     return case
 

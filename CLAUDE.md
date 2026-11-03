@@ -21,7 +21,7 @@ backend/.venv/bin/python seed/render.py         # re-render seed PDFs + REVIEW_F
 docker compose exec backend python /seed/seed.py [--reprocess]   # load cases, enqueue pipeline
 docker compose exec backend python /seed/recall.py               # extraction recall vs answer keys
 docker compose exec backend python /seed/seed.py --demo-briefs   # submit + score demo resident briefs
-docker compose exec backend python /seed/seed.py --intake        # doctor + patient personas
+docker compose exec backend python /seed/seed.py --intake        # hospital, junior + senior doctors, patient personas
 ```
 
 ## Document pipeline (`app/pipeline/`, Celery)
@@ -105,6 +105,9 @@ docker compose exec backend python /seed/seed.py --intake        # doctor + pati
 
 ### 8. Roles and who sees what (`app/auth/access.py`)
 - `resident`, `faculty`, `admin`: training cases only. `patient`: their own intake case only.
-  `doctor`: intake cases the patient has sent (`published_at` set). Everything else is 404.
+  `hospital`: every intake case the patient has sent (`published_at` set); adds doctors and assigns
+  each sent patient to a junior. `doctor` (`seniority` junior / senior): only the sent cases whose
+  `case_reviews` row names them as the junior, or as the senior once the junior has sent it.
+  Everything else is 404.
 - Patients are demo personas (rule 2 still applies). Intake facts quote the patient's own
   words from a transcript turn (`intake_facts.source_turn_id` + `source_text_span`).

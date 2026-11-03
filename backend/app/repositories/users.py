@@ -1,5 +1,6 @@
 from app.auth.security import hash_password
 import uuid
+from collections.abc import Sequence
 
 from datetime import datetime
 
@@ -18,10 +19,17 @@ class UserRepository(TenantRepository[User]):
     def get_by_phone(self, phone: str) -> User | None:
         return self.session.scalar(self.select().where(User.phone == phone))
 
-    def create(self, email: str, full_name: str, password: str, role: Role) -> User:
+    def create(self, email: str, full_name: str, password: str, role: Role, seniority: str | None = None) -> User:
+        if (role == Role.DOCTOR) != (seniority is not None):
+            raise ValueError("doctors need a seniority (junior or senior); other roles have none")
         return self.add(
-            email=email.lower(), full_name=full_name, password_hash=hash_password(password), role=role.value
+            email=email.lower(), full_name=full_name, password_hash=hash_password(password), role=role.value,
+            seniority=seniority,
         )
+
+    def doctors(self) -> Sequence[User]:
+        stmt = self.select().where(User.role == Role.DOCTOR.value).order_by(User.seniority.desc(), User.full_name)
+        return self.session.scalars(stmt).all()
 
 
 class PractitionerProfileRepository(TenantRepository[PractitionerProfile]):

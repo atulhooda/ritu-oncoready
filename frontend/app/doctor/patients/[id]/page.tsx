@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { DocViewer, TimelineView, type Viewer } from "@/components/CaseViews";
 import { HospitalReport } from "@/components/HospitalReport";
+import { ReviewPanel } from "@/components/ReviewPanel";
 import { RituAssistant } from "@/components/RituAssistant";
 import { SessionRecording } from "@/components/SessionRecording";
 import { SymptomCourse } from "@/components/SymptomCourse";
@@ -17,7 +18,7 @@ import { api } from "@/lib/api";
 import type { AssistantSource, DocumentInfo, DoctorPatientDetail, IntakeSummary, Practitioner, SourceRef } from "@/lib/types";
 import { detailsLine, LANGUAGES } from "@/lib/types";
 
-type Tab = "summary" | "check_ins" | "records";
+type Tab = "review" | "summary" | "check_ins" | "records";
 
 const when = (s: IntakeSummary) =>
   s.ended_at ? new Date(s.ended_at).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—";
@@ -25,10 +26,10 @@ const isCheckIn = (s: IntakeSummary) => s.kind === "check_in";
 
 export default function DoctorPatientPage() {
   const { id } = useParams<{ id: string }>();
-  const me = useMe(["doctor"]);
+  const me = useMe(["doctor", "hospital"]);
   const [p, setP] = useState<DoctorPatientDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("summary");
+  const [tab, setTab] = useState<Tab>("review");
   const [turn, setTurn] = useState<number | null>(null);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export default function DoctorPatientPage() {
 
   useEffect(() => {
     if (!me) return;
-    api<Practitioner>("/doctor/me").then(setDoctor).catch(() => {});
+    if (me.role === "doctor") api<Practitioner>("/doctor/me").then(setDoctor).catch(() => {});
     api<DoctorPatientDetail>(`/doctor/patients/${id}`)
       .then((d) => {
         setP(d);
@@ -122,7 +123,7 @@ export default function DoctorPatientPage() {
       {error && <p className="text-sm text-red-700">{error}</p>}
       {p && (
         <>
-          <Link href="/doctor" className="text-sm font-medium text-brand hover:underline">
+          <Link href={me?.role === "hospital" ? "/hospital" : "/doctor"} className="text-sm font-medium text-brand hover:underline">
             ← Patients
           </Link>
           <div className="mt-4">
@@ -133,6 +134,9 @@ export default function DoctorPatientPage() {
             />
           </div>
           <div className="mb-5 flex flex-wrap gap-2">
+            <Pill active={tab === "review"} onClick={() => setTab("review")}>
+              Summary
+            </Pill>
             <Pill active={tab === "summary"} onClick={() => setTab("summary")}>
               Pre-visit report
             </Pill>
@@ -149,6 +153,8 @@ export default function DoctorPatientPage() {
               )}
             </Pill>
           </div>
+
+          {tab === "review" && me && <ReviewPanel caseId={p.case_id} me={me} review={p.review} onChange={(review) => setP({ ...p, review })} />}
 
           {tab === "summary" &&
             (selected ? (

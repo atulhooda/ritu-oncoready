@@ -61,20 +61,26 @@ def load_case(db, org, faculty_id, case_dir: Path) -> list[tuple]:
 
 
 def load_intake_personas(sync: bool) -> None:
-    """Doctor user + demo patients. Personas with a transcript get a finished session (stored
-    through the same path as a Ritu callback), their records, and are sent to the doctor."""
+    """Hospital account, a junior and a senior doctor, and demo patients. Personas with a transcript
+    get a finished session (stored through the same path as a Ritu callback), their records, and are
+    sent in and assigned to the junior doctor."""
     import uuid as uuid_mod
 
     from app.intake import service
     from app.intake.extraction import run_intake_extraction
     from app.repositories.intake import IntakeSessionRepository
+    from app.services import review as review_service
 
     to_process = []
     with SessionLocal() as db:
         org = OrgRepository(db).get_by_slug("demo")
         users = UserRepository(db, org.id)
+        if users.get_by_email("hospital@demo.example.com") is None:
+            users.create("hospital@demo.example.com", "Demo Hospital", DEMO_PASSWORD, Role.HOSPITAL)
         if users.get_by_email("doctor@demo.example.com") is None:
-            users.create("doctor@demo.example.com", "Dr. Demo Oncologist", DEMO_PASSWORD, Role.DOCTOR)
+            users.create("doctor@demo.example.com", "Dr. Demo Oncologist", DEMO_PASSWORD, Role.DOCTOR, seniority="senior")
+        junior = users.get_by_email("junior@demo.example.com") or users.create(
+            "junior@demo.example.com", "Dr. Demo Junior", DEMO_PASSWORD, Role.DOCTOR, seniority="junior")
         for path in sorted((HERE / "personas").glob("*.json")):
             p = json.loads(path.read_text())
             user = users.get_by_email(p["email"]) or users.create(p["email"], p["name"], DEMO_PASSWORD, Role.PATIENT)
@@ -109,11 +115,12 @@ def load_intake_personas(sync: bool) -> None:
                 service.record_transcript(db, org.id, session, p["transcript"])
                 print(f"  {p['name']}: summary {run_intake_extraction(db, org.id, session.id)}")
                 if p["publish"]:
-                    service.publish(db, user)
+                    review_service.assign(db, org.id, service.publish(db, user), junior.id)
             print(f"  {p['name']}: {p['email']} / {DEMO_PASSWORD}, {len(p['records'])} record(s)")
         db.commit()
         org_id = org.id
-    print(f"doctor: doctor@demo.example.com / {DEMO_PASSWORD}")
+    print(f"hospital: hospital@demo.example.com, junior: junior@demo.example.com, "
+          f"senior: doctor@demo.example.com / {DEMO_PASSWORD}")
     for doc_id, case_id in to_process:
         if sync:
             from app.pipeline.derive import run_derive

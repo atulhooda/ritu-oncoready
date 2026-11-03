@@ -6,6 +6,7 @@ from app.models.patient import PatientProfile
 from app.models.org import Org, Role, User
 from app.models.otp import PhoneOtp
 from app.models.practitioner import PractitionerProfile
+from app.models.review import CaseReview
 from app.models.scoring import AnswerKey, BriefItemMatch, FacultyReview, ReadinessBrief, RubricItem, Score
 from app.models.timeline import Discrepancy, PendingTest, TimelineEvent
 
@@ -13,6 +14,7 @@ __all__ = [
     "AnswerKey",
     "Base",
     "BriefItemMatch",
+    "CaseReview",
     "Discrepancy",
     "DocumentPage",
     "FacultyReview",

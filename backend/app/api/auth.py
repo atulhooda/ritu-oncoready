@@ -34,6 +34,7 @@ class UserOut(BaseModel):
     patient_number: str | None = None
     full_name: str
     role: str
+    seniority: str | None = None
     org_name: str | None = None
 
 

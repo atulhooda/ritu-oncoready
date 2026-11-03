@@ -29,7 +29,11 @@ class Role(enum.StrEnum):
     FACULTY = "faculty"
     ADMIN = "admin"
     PATIENT = "patient"  # demo persona who talks to Ritu and uploads their records
-    DOCTOR = "doctor"  # receives published intake summaries and records
+    DOCTOR = "doctor"  # a hospital's doctor (junior or senior): works on the patients assigned to them
+    HOSPITAL = "hospital"  # the hospital's admin account: adds doctors, assigns patients to juniors
+
+
+SENIORITIES = ("junior", "senior")
 
 
 class User(TenantMixin, Base):
@@ -38,7 +42,9 @@ class User(TenantMixin, Base):
         UniqueConstraint("org_id", "email"),
         UniqueConstraint("org_id", "phone"),
         UniqueConstraint("patient_number"),
-        CheckConstraint("role IN ('resident', 'faculty', 'admin', 'patient', 'doctor')", name="role"),
+        CheckConstraint("role IN ('resident', 'faculty', 'admin', 'patient', 'doctor', 'hospital')", name="role"),
+        CheckConstraint("(role = 'doctor') = (seniority IS NOT NULL)", name="doctor_has_seniority"),
+        CheckConstraint(f"seniority IS NULL OR seniority IN {SENIORITIES}", name="seniority"),
         # staff sign in with email + password; patients who signed up sign in with phone + OTP
         CheckConstraint("email IS NOT NULL OR phone IS NOT NULL", name="has_login"),
         CheckConstraint("phone IS NULL OR phone ~ '^\\+[1-9][0-9]{7,14}$'", name="phone_e164"),
@@ -52,6 +58,8 @@ class User(TenantMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(16))  # E.164, e.g. +919812345678
     # The patient's OncoReady ID, unique across all clinics, e.g. OR-7K3F-9Q2D
     patient_number: Mapped[str | None] = mapped_column(String(16))
+    # Doctors only: junior doctors prepare a patient's summary, senior doctors receive it.
+    seniority: Mapped[str | None] = mapped_column(String(8))
     # When the phone was proven with a code sent to it (WhatsApp); NULL if never verified.
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     role: Mapped[str] = mapped_column(String(16))

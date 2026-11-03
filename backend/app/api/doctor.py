@@ -1,4 +1,6 @@
-"""Doctor profile: their professional details, and patients who sent their Ritu session summary and records."""
+"""Doctors' work: their professional details, and the patients assigned to them (junior) or sent to
+them (senior), with the Ritu session summary, records and the junior's summary for the senior.
+The hospital account uses the same read-only patient views (app/auth/access.py decides who sees what)."""
 
 import re
 import uuid
@@ -10,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.assistant.answer import answer_question
-from app.auth.access import visible_case_or_404
+from app.auth.access import visible_case_or_404, visible_cases
 from app.auth.deps import CurrentUser, require_role
 from app import storage
 from app.db import get_db
@@ -19,13 +21,16 @@ from app.models import Role
 from app.pipeline.derive import facts_for_case, lab_flags
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
+from app.repositories.reviews import CaseReviewRepository
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository
 from app.repositories.users import PractitionerProfileRepository, UserRepository
 from app.voice import client as ritu
+from app.services import review as reviews
 from app.services.timeline import build_timeline
 
 router = APIRouter(prefix="/doctor", tags=["doctor"])
 doctor_only = require_role(Role.DOCTOR)
+viewer = require_role(Role.DOCTOR, Role.HOSPITAL)
 
 
 class PractitionerIn(BaseModel):
@@ -80,41 +85,51 @@ def update_me(body: PractitionerIn, current: CurrentUser = Depends(doctor_only),
     return _practitioner_out(db, current)
 
 
+def patient_row(db: Session, org_id: uuid.UUID, case) -> dict[str, Any]:
+    history = service.session_history(db, org_id, case.id)
+    check_ins = [h for h in history if h["kind"] == "check_in"]
+    details = service.patient_details(db, org_id, case.patient_user_id)
+    review = CaseReviewRepository(db, org_id).for_case(case.id)
+    return {
+        "case_id": case.id,
+        "name": case.title,
+        "patient_number": UserRepository(db, org_id).get(case.patient_user_id).patient_number,
+        "age": details["age"],
+        "sex": details["sex"],
+        "cancer_type": details["cancer_type"],
+        "abha_verified_via": details["abha"]["verified_via"] if details["abha"] else None,
+        "published_at": case.published_at,
+        "symptoms": service.current_symptom_labels(history),
+        "conversations": len(history),
+        "check_ins": len(check_ins),
+        "last_check_in": {
+            "ended_at": check_ins[0]["ended_at"],
+            "urgent": [f["label"] for sec in check_ins[0]["sections"] for f in sec["facts"] if f["urgent"]],
+        } if check_ins else None,
+        "records": len(SourceDocumentRepository(db, org_id).for_case(case.id)),
+        "pending_tests": len(PendingTestRepository(db, org_id).for_case(case.id)),
+        "discrepancies": len(DiscrepancyRepository(db, org_id).for_case(case.id)),
+        "flags": len(lab_flags(facts_for_case(db, org_id, case.id))),
+        "review": {
+            "status": review.status if review else "unassigned",
+            "junior": reviews.doctor_name(db, org_id, review.junior_user_id) if review else None,
+            "senior": reviews.doctor_name(db, org_id, review.senior_user_id) if review else None,
+            "sent_at": review.sent_at if review else None,
+        },
+    }
+
+
 @router.get("/patients")
-def list_patients(current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    out = []
-    for case in CaseRepository(db, current.org_id).published_intake():
-        history = service.session_history(db, current.org_id, case.id)
-        check_ins = [h for h in history if h["kind"] == "check_in"]
-        details = service.patient_details(db, current.org_id, case.patient_user_id)
-        out.append({
-            "case_id": case.id,
-            "name": case.title,
-            "patient_number": UserRepository(db, current.org_id).get(case.patient_user_id).patient_number,
-            "age": details["age"],
-            "sex": details["sex"],
-            "cancer_type": details["cancer_type"],
-            "abha_verified_via": details["abha"]["verified_via"] if details["abha"] else None,
-            "published_at": case.published_at,
-            "symptoms": service.current_symptom_labels(history),
-            "conversations": len(history),
-            "check_ins": len(check_ins),
-            "last_check_in": {
-                "ended_at": check_ins[0]["ended_at"],
-                "urgent": [f["label"] for sec in check_ins[0]["sections"] for f in sec["facts"] if f["urgent"]],
-            } if check_ins else None,
-            "records": len(SourceDocumentRepository(db, current.org_id).for_case(case.id)),
-            "pending_tests": len(PendingTestRepository(db, current.org_id).for_case(case.id)),
-            "discrepancies": len(DiscrepancyRepository(db, current.org_id).for_case(case.id)),
-            "flags": len(lab_flags(facts_for_case(db, current.org_id, case.id))),
-        })
-    return out
+def list_patients(current: CurrentUser = Depends(viewer), db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    """A junior's assigned patients, or the summaries sent to a senior (the hospital: everyone)."""
+    return [patient_row(db, current.org_id, case) for case in visible_cases(db, current)]
 
 
 @router.get("/patients/{case_id}")
-def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
-    case = visible_case_or_404(db, current, case_id)  # published intake cases only
+def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(viewer), db: Session = Depends(get_db)):
+    case = visible_case_or_404(db, current, case_id)  # assigned / sent to this doctor only
     history = service.session_history(db, current.org_id, case.id)
+    review = CaseReviewRepository(db, current.org_id).for_case(case.id)
     return {
         "case_id": case.id,
         "name": case.title,
@@ -126,7 +141,44 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only),
         "symptom_course": service.symptom_course(history),
         "records": service.records(db, current.org_id, case.id),
         "timeline": build_timeline(db, current.org_id, case.id),
+        "review": reviews.review_out(db, current.org_id, case, review),
     }
+
+
+@router.get("/seniors")
+def list_seniors(current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    return [{"id": u.id, "name": u.full_name} for u in UserRepository(db, current.org_id).doctors()
+            if u.seniority == "senior" and u.is_active]
+
+
+class SummaryIn(BaseModel):
+    summary: str = Field(min_length=1, max_length=20000)
+
+
+class SendIn(SummaryIn):
+    senior_user_id: uuid.UUID
+
+
+def _review_change(db: Session, current: CurrentUser, case, change) -> dict[str, Any]:
+    try:
+        review = change()
+    except reviews.ReviewError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    db.commit()
+    return reviews.review_out(db, current.org_id, case, review)
+
+
+@router.put("/patients/{case_id}/summary")
+def save_summary(case_id: uuid.UUID, body: SummaryIn, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
+    case = visible_case_or_404(db, current, case_id)
+    return _review_change(db, current, case, lambda: reviews.save_summary(db, current.org_id, case, current.id, body.summary))
+
+
+@router.post("/patients/{case_id}/send")
+def send_to_senior(case_id: uuid.UUID, body: SendIn, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
+    case = visible_case_or_404(db, current, case_id)
+    return _review_change(db, current, case, lambda: reviews.send_to_senior(
+        db, current.org_id, case, current.id, body.senior_user_id, body.summary))
 
 
 class AssistantQuestion(BaseModel):
@@ -136,11 +188,11 @@ class AssistantQuestion(BaseModel):
 @router.post("/patients/{case_id}/assistant")
 def ask_records_assistant(
     case_id: uuid.UUID, body: AssistantQuestion,
-    current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db),
+    current: CurrentUser = Depends(viewer), db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """RITU records assistant: answers from THIS patient's records only (app/assistant). Stateless:
     no conversation is kept on the server, so nothing carries over between patients."""
-    case = visible_case_or_404(db, current, case_id)  # sent intake cases in the doctor's org only
+    case = visible_case_or_404(db, current, case_id)  # assigned / sent to this doctor only
     return answer_question(db, current.org_id, case.id, body.question.strip())
 
 
@@ -149,7 +201,7 @@ class SpeechIn(BaseModel):
 
 
 @router.post("/assistant/speech", responses={200: {"content": {"audio/wav": {}}}})
-def assistant_speech(body: SpeechIn, current: CurrentUser = Depends(doctor_only)) -> Response:
+def assistant_speech(body: SpeechIn, current: CurrentUser = Depends(viewer)) -> Response:
     """Read an assistant answer aloud in Ritu's Sarvam voice. 503 when Ritu is not connected
     (the browser then falls back to its own voice)."""
     if not ritu.enabled():
@@ -164,7 +216,7 @@ def assistant_speech(body: SpeechIn, current: CurrentUser = Depends(doctor_only)
 @router.get("/patients/{case_id}/sessions/{session_id}/recording", response_class=FileResponse)
 def session_recording(
     case_id: uuid.UUID, session_id: uuid.UUID,
-    current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db),
+    current: CurrentUser = Depends(viewer), db: Session = Depends(get_db),
 ):
     case = visible_case_or_404(db, current, case_id)  # sent intake cases only
     session = IntakeSessionRepository(db, current.org_id).get(session_id)

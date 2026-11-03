@@ -58,9 +58,9 @@ def no_background(monkeypatch):
     return queued
 
 
-def person(db, tenant, role, name):
+def person(db, tenant, role, name, seniority=None):
     slug = name.lower().replace(" ", "")
-    return UserRepository(db, tenant.org.id).create(f"{slug}@{tenant.org.slug}.example.com", name, PASSWORD, role)
+    return UserRepository(db, tenant.org.id).create(f"{slug}@{tenant.org.slug}.example.com", name, PASSWORD, role, seniority)
 
 
 def as_user(client, tenant, user):
@@ -79,7 +79,7 @@ def finished_session(client, db, tenant, patient, facts=FACTS):
 
 def test_patient_session_to_doctor(client, db, org_a, no_background):
     patient = person(db, org_a, Role.PATIENT, "Maria Placeholder")
-    doctor = person(db, org_a, Role.DOCTOR, "Doctor Rao")
+    doctor = person(db, org_a, Role.HOSPITAL, "Doctor Rao")
     h, sid = finished_session(client, db, org_a, patient)
     assert [str(x) for x in no_background["summaries"]] == [sid]
 
@@ -193,7 +193,7 @@ def test_ritu_callback_failure_status(client, db, org_a, monkeypatch):
 def test_case_visibility_by_role(client, db, org_a, org_b):
     training, _, _ = make_case(db, org_a)
     p1, p2 = person(db, org_a, Role.PATIENT, "Patient One"), person(db, org_a, Role.PATIENT, "Patient Two")
-    doctor, doctor_b = person(db, org_a, Role.DOCTOR, "Doctor A"), person(db, org_b, Role.DOCTOR, "Doctor B")
+    doctor, doctor_b = person(db, org_a, Role.HOSPITAL, "Doctor A"), person(db, org_b, Role.HOSPITAL, "Doctor B")
     h1, _ = finished_session(client, db, org_a, p1)
     h2 = as_user(client, org_a, p2)
     case1 = client.get("/me/profile", headers=h1).json()["case_id"]
@@ -281,7 +281,7 @@ def test_record_upload_types(client, db, org_a, no_background, monkeypatch, tmp_
 def test_patient_can_remove_own_record_only(client, db, org_a, no_background, monkeypatch, tmp_path):
     monkeypatch.setattr(get_settings(), "storage_dir", str(tmp_path))
     patient, other = person(db, org_a, Role.PATIENT, "Owner P"), person(db, org_a, Role.PATIENT, "Other P")
-    doctor = person(db, org_a, Role.DOCTOR, "Doctor Del")
+    doctor = person(db, org_a, Role.HOSPITAL, "Doctor Del")
     h = as_user(client, org_a, patient)
     rec = client.post("/me/records", headers=h, files={"file": ("scan.jpg", _jpeg(), "image/jpeg")}).json()
     doc = SourceDocumentRepository(db, org_a.org.id).get(rec["id"])
@@ -356,7 +356,7 @@ def test_session_uses_preferred_language(client, db, org_a, monkeypatch):
 def test_doctor_sees_details_only_after_send(client, db, org_a, org_b):
     patient = person(db, org_a, Role.PATIENT, "Shared Patient")
     other = person(db, org_a, Role.PATIENT, "Other Patient")
-    doctor, doctor_b = person(db, org_a, Role.DOCTOR, "Doctor Shah"), person(db, org_b, Role.DOCTOR, "Doctor Far")
+    doctor, doctor_b = person(db, org_a, Role.HOSPITAL, "Doctor Shah"), person(db, org_b, Role.HOSPITAL, "Doctor Far")
     h, _ = finished_session(client, db, org_a, patient)
     client.put("/me/details", headers=h, json=DETAILS)
     case_id = client.get("/me/profile", headers=h).json()["case_id"]
@@ -403,7 +403,7 @@ def test_browser_session_request_carries_the_calm_voice(monkeypatch):
 def test_doctor_sees_every_conversation(client, db, org_a):
     """A later 'nothing new' conversation must not hide what the patient said earlier."""
     patient = person(db, org_a, Role.PATIENT, "Repeat Patient")
-    doctor = person(db, org_a, Role.DOCTOR, "Doctor Iyer")
+    doctor = person(db, org_a, Role.HOSPITAL, "Doctor Iyer")
     h, first = finished_session(client, db, org_a, patient)
     quiet = [{"role": "ritu", "text": "Any problems today?"}, {"role": "patient", "text": "No, nothing new today."}]
     s2 = client.post("/me/sessions", headers=h).json()
@@ -523,7 +523,7 @@ def upload_audio(client, h, sid, mime="audio/webm", data=b"\x1aE\xdf\xa3fake-web
 def test_recording_needs_consent_and_reaches_only_the_doctor(client, db, org_a, org_b, monkeypatch, tmp_path):
     monkeypatch.setattr(get_settings(), "storage_dir", str(tmp_path))
     patient, other = person(db, org_a, Role.PATIENT, "Rec Patient"), person(db, org_a, Role.PATIENT, "Rec Other")
-    doctor, doctor_b = person(db, org_a, Role.DOCTOR, "Doctor Rec"), person(db, org_b, Role.DOCTOR, "Doctor Far Rec")
+    doctor, doctor_b = person(db, org_a, Role.HOSPITAL, "Doctor Rec"), person(db, org_b, Role.HOSPITAL, "Doctor Far Rec")
 
     h, no = voice_session(client, db, org_a, patient, monkeypatch, record=False)
     assert no["recording_consent"] is False
@@ -615,7 +615,7 @@ def test_check_in_script_follows_up_what_was_reported():
 
 def test_check_in_is_its_own_conversation(client, db, org_a, monkeypatch):
     patient = person(db, org_a, Role.PATIENT, "Diary Patient")
-    doctor = person(db, org_a, Role.DOCTOR, "Doctor Menon")
+    doctor = person(db, org_a, Role.HOSPITAL, "Doctor Menon")
     h = as_user(client, org_a, patient)
     # a check-in alone cannot be sent as the pre-visit history
     sid, _ = check_in(client, db, org_a, h, facts=[])
@@ -669,7 +669,7 @@ from app.repositories.intake import PatientProfileRepository  # noqa: E402
 
 def test_abha_demo_link_keeps_only_the_last_four_digits(client, db, org_a):
     patient = person(db, org_a, Role.PATIENT, "Abha Patient")
-    doctor = person(db, org_a, Role.DOCTOR, "Doctor Abha")
+    doctor = person(db, org_a, Role.HOSPITAL, "Doctor Abha")
     h = as_user(client, org_a, patient)
     assert client.post("/me/abha/otp", headers=h, json={"abha_number": "1234"}).status_code == 422
     otp = client.post("/me/abha/otp", headers=h, json={"abha_number": "91-1234-5678-9012"}).json()
@@ -730,7 +730,7 @@ def test_abdm_sandbox_flow_checks_the_returned_abha(monkeypatch):
 
 
 def test_doctor_professional_details(client, db, org_a):
-    doctor = person(db, org_a, Role.DOCTOR, "Doctor Hpr")
+    doctor = person(db, org_a, Role.DOCTOR, "Doctor Hpr", seniority="senior")
     hd = as_user(client, org_a, doctor)
     me = client.get("/doctor/me", headers=hd).json()
     assert me["hpr_id"] is None and me["verified"] is False

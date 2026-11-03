@@ -12,7 +12,7 @@ import { homeFor } from "@/lib/types";
 import { Logo } from "@/components/Logo";
 
 const FIELDS = [
-  { key: "org", label: "Clinic code", type: "text" },
+  { key: "org", label: "Hospital code", type: "text" },
   { key: "email", label: "Email", type: "email" },
   { key: "password", label: "Password", type: "password" },
 ] as const;
@@ -67,10 +67,11 @@ export default function LoginPage() {
       </section>
       <section className="flex items-center justify-center px-4 py-12">
         <form onSubmit={submit} className="w-full max-w-md">
-          <Eyebrow>Doctors &amp; hospitals</Eyebrow>
+          <Eyebrow>Hospital &amp; its doctors</Eyebrow>
           <h1 className="mt-3 text-5xl font-extrabold tracking-tight">
-            Welcome <span className="font-serif font-normal italic text-brand">back.</span>
+            Hospital <span className="font-serif font-normal italic text-brand">login.</span>
           </h1>
+          <p className="mt-3 text-muted">The hospital account and every doctor it has added sign in here with the hospital&apos;s code.</p>
           <div className="mt-8 space-y-5">
             {FIELDS.map((f) => (
               <label key={f.key} className="block">

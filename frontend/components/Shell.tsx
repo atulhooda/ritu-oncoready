@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, ClipboardList, FileUp, FolderOpen, HeartPulse, LogOut, Menu, Stethoscope, UserRound, Users, X } from "lucide-react";
+import { ClipboardCheck, ClipboardList, FileUp, FolderOpen, HeartPulse, Hospital, LogOut, Menu, Stethoscope, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -27,12 +27,17 @@ const NAV = {
     { href: "/doctor", label: "Patients", icon: Stethoscope },
     { href: "/doctor/profile", label: "My profile", icon: UserRound },
   ],
+  hospital: [
+    { href: "/hospital", label: "Patients", icon: Hospital },
+    { href: "/hospital/doctors", label: "Doctors", icon: Stethoscope },
+  ],
 };
 
 function isActive(pathname: string, href: string) {
   if (href === "/faculty") return pathname === "/faculty" || pathname.startsWith("/faculty/briefs");
   if (href === "/patient") return pathname === "/patient";
   if (href === "/doctor") return pathname === "/doctor" || pathname.startsWith("/doctor/patients");
+  if (href === "/hospital") return pathname === "/hospital" || pathname.startsWith("/doctor/patients");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -99,13 +104,15 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
         <div>
           <div className="font-semibold text-white">{me.org_name ?? "OncoReady"}</div>
           <div className="text-sm text-white/55">
-            {me.role === "patient" ? "Pre-visit check-in" : me.role === "doctor" ? "Pre-visit summaries" : "Synthetic teaching cases"}
+            {me.role === "patient" ? "Pre-visit check-in" : me.role === "doctor" || me.role === "hospital" ? "Pre-visit summaries" : "Synthetic teaching cases"}
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 text-sm">
           <div className="min-w-0 rounded-lg border border-white/15 px-3 py-2">
             <div className="truncate text-white/85">{me.full_name}</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">{me.role}</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
+              {me.role === "doctor" && me.seniority ? `${me.seniority} doctor` : me.role}
+            </div>
           </div>
           <button
             onClick={() => {

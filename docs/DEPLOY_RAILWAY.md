@@ -29,17 +29,20 @@ adds about half a second to every request.
    SEED_DEMO=0
    BOOTSTRAP_CLINIC_NAME=Your Clinic Name
    BOOTSTRAP_CLINIC_CODE=CLINIC
-   BOOTSTRAP_DOCTOR_EMAIL=you@example.com
-   BOOTSTRAP_DOCTOR_NAME=Dr. Your Name
-   BOOTSTRAP_DOCTOR_PASSWORD=<at least 10 characters>
+   BOOTSTRAP_HOSPITAL_EMAIL=admin@example.com
+   BOOTSTRAP_HOSPITAL_NAME=Your Hospital
+   BOOTSTRAP_HOSPITAL_PASSWORD=<at least 10 characters>
    ```
    With a custom domain, write it in `PUBLIC_API_URL` instead: `https://your.domain/api`.
 
-Open the address. Patients create an account or log in there; doctors tap "Doctor or hospital? Log in here" and enter
-the clinic code, email and password. The API's own pages are at `/api/docs`.
+Open the address. Patients create an account or log in there. The hospital taps "Hospital or
+doctor? Hospital login" and enters the clinic code, email and password, then adds its junior and
+senior doctors under **Doctors**; they log in the same way. The API's own pages are at `/api/docs`.
 
-- `BOOTSTRAP_*` creates your clinic and its first doctor on start (safe to repeat). The doctor
-  password needs at least 10 characters. Changing it later does not change an existing doctor.
+- `BOOTSTRAP_*` creates your clinic and its hospital account on start (safe to repeat). The
+  password needs at least 10 characters; changing it later does not change an existing account.
+  The older `BOOTSTRAP_DOCTOR_*` names still work, and a doctor login made with them becomes the
+  hospital account.
 - With more than one clinic, set `DEFAULT_CLINIC_CODE` for the main page; other clinics use
   `https://<your domain>/join/<CODE>`.
 - `OCR_ENGINES=tesseract`: PaddleOCR needs a lot of memory; add it back (`paddleocr,tesseract`) on a
@@ -87,5 +90,5 @@ Meta bills authentication messages per message (in India about ₹0.12 each). No
 - **Synthetic data only.** A public URL lets anyone sign up and upload. Use test accounts, and do
   not let real patient records go in (CLAUDE.md rule 2).
 - **Logs:** the service's Deployments → View logs. On start you see the migrations, the clinic
-  set-up ("clinic created", "doctor created"), the worker ("celery … ready") and the website
+  set-up ("clinic created", "hospital account created"), the worker ("celery … ready") and the website
   ("Ready in …").

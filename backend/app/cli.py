@@ -1,11 +1,12 @@
 """Admin commands.
 
     python -m app.cli create-clinic --name "City Cancer Centre" --code CCC \\
-        --doctor-email dr.rao@example.com --doctor-name "Dr. Rao" --doctor-password '...'
+        --hospital-email admin@example.com --hospital-name "City Cancer Centre" --hospital-password '...'
     python -m app.cli bootstrap      # the same, from BOOTSTRAP_* environment variables (Railway)
 
-Both are safe to repeat: an existing clinic (by code) or doctor (by email) is left as it is, apart
-from opening patient sign-up.
+The hospital account then adds its doctors (junior / senior) in the app. Both are safe to repeat:
+an existing clinic (by code) or account (by email) is left as it is, apart from opening patient
+sign-up and turning an older single "doctor" login with that email into the hospital account.
 """
 
 import argparse
@@ -19,7 +20,7 @@ from app.repositories.orgs import OrgRepository
 from app.repositories.users import UserRepository
 
 
-def create_clinic(name: str, code: str, doctor_email: str | None, doctor_name: str | None, doctor_password: str | None) -> None:
+def create_clinic(name: str, code: str, email: str | None, account_name: str | None, password: str | None) -> None:
     code = code.strip().upper()
     if not re.fullmatch(r"[A-Z0-9]{3,16}", code):
         sys.exit("The clinic code must be 3-16 letters or digits, e.g. CCC")
@@ -33,17 +34,23 @@ def create_clinic(name: str, code: str, doctor_email: str | None, doctor_name: s
         else:
             print(f"clinic exists: {org.name} (code {code})")
         org.patient_signup_open = True
-        db.commit()  # the clinic stands even if the doctor below cannot be created
-        if doctor_email:
+        db.commit()  # the clinic stands even if the account below cannot be created
+        if email:
             users = UserRepository(db, org.id)
-            if users.get_by_email(doctor_email) is not None:
-                print(f"doctor exists: {doctor_email}")
-            elif not doctor_password or len(doctor_password) < 10:
-                sys.exit(f"doctor NOT created: {doctor_email} needs a password of at least 10 characters")
+            existing = users.get_by_email(email)
+            if existing is not None:
+                if existing.role == Role.DOCTOR.value:  # the login from before hospitals had doctors
+                    existing.role, existing.seniority = Role.HOSPITAL.value, None
+                    db.commit()
+                    print(f"hospital account (was the doctor login): {email}")
+                else:
+                    print(f"account exists: {email}")
+            elif not password or len(password) < 10:
+                sys.exit(f"hospital account NOT created: {email} needs a password of at least 10 characters")
             else:
-                users.create(doctor_email, doctor_name or "Doctor", doctor_password, Role.DOCTOR)
+                users.create(email, account_name or name, password, Role.HOSPITAL)
                 db.commit()
-                print(f"doctor created: {doctor_email} (organization '{org.slug}')")
+                print(f"hospital account created: {email} (clinic code {code})")
 
 
 def main() -> None:
@@ -52,20 +59,19 @@ def main() -> None:
     c = sub.add_parser("create-clinic")
     c.add_argument("--name", required=True)
     c.add_argument("--code", required=True)
-    c.add_argument("--doctor-email")
-    c.add_argument("--doctor-name")
-    c.add_argument("--doctor-password")
+    c.add_argument("--hospital-email")
+    c.add_argument("--hospital-name")
+    c.add_argument("--hospital-password")
     sub.add_parser("bootstrap")
     args = ap.parse_args()
     if args.cmd == "create-clinic":
-        create_clinic(args.name, args.code, args.doctor_email, args.doctor_name, args.doctor_password)
+        create_clinic(args.name, args.code, args.hospital_email, args.hospital_name, args.hospital_password)
     elif os.environ.get("BOOTSTRAP_CLINIC_CODE"):
+        env = lambda key: os.environ.get(f"BOOTSTRAP_HOSPITAL_{key}") or os.environ.get(f"BOOTSTRAP_DOCTOR_{key}")  # noqa: E731
         create_clinic(
             os.environ.get("BOOTSTRAP_CLINIC_NAME") or os.environ["BOOTSTRAP_CLINIC_CODE"],
             os.environ["BOOTSTRAP_CLINIC_CODE"],
-            os.environ.get("BOOTSTRAP_DOCTOR_EMAIL"),
-            os.environ.get("BOOTSTRAP_DOCTOR_NAME"),
-            os.environ.get("BOOTSTRAP_DOCTOR_PASSWORD"),
+            env("EMAIL"), env("NAME"), env("PASSWORD"),
         )
 
 

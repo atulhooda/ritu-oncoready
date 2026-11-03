@@ -33,6 +33,7 @@ export default function DoctorInbox() {
     api<Practitioner>("/doctor/me").then(setDoctor).catch(() => {});
   }, [me, load]);
 
+  const senior = me?.seniority === "senior";
   const today = new Date().toDateString();
   const isToday = (r: DoctorPatientRow) => new Date(r.published_at).toDateString() === today;
   const shown = rows.filter((r) =>
@@ -45,7 +46,7 @@ export default function DoctorInbox() {
         eyebrow="Patients"
         live
         title="Patients"
-        subtitle={`Pre-visit summaries sent to you${updated ? ` · updated ${updated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`}
+        subtitle={`${senior ? "Summaries junior doctors sent to you" : "Patients the hospital assigned to you"}${updated ? ` · updated ${updated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`}
         actions={
           <button onClick={load} className="rounded-full p-2 text-muted hover:bg-white" aria-label="Refresh">
             <RefreshCw size={20} strokeWidth={1.75} />
@@ -70,7 +71,9 @@ export default function DoctorInbox() {
             ))}
           </div>
           {shown.length === 0 ? (
-            <EmptyState title="No patients here yet.">Patients appear when they send you their session with Ritu.</EmptyState>
+            <EmptyState title="No patients here yet.">
+              {senior ? "Patients appear when a junior doctor sends you their summary." : "Patients appear when the hospital assigns them to you."}
+            </EmptyState>
           ) : (
             <ul className="space-y-3">
               {shown.map((r) => (
@@ -80,7 +83,9 @@ export default function DoctorInbox() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <div className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-                            sent {new Date(r.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                            {senior && r.review.sent_at
+                              ? `summary from ${r.review.junior?.name ?? "junior"} · ${new Date(r.review.sent_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+                              : `sent ${new Date(r.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-2">
                             <span className="text-xl font-semibold">{r.name}</span>
@@ -110,6 +115,9 @@ export default function DoctorInbox() {
                           <Badge>No check-ins yet</Badge>
                         )}
                         <Badge>{r.records} record{r.records === 1 ? "" : "s"}</Badge>
+                        {!senior && (r.review.status === "with_senior"
+                          ? <Badge tone="green">Sent to {r.review.senior?.name}</Badge>
+                          : <Badge tone="amber">Summary to write</Badge>)}
                         {r.flags > 0 && <Badge tone="red">{r.flags} flag{r.flags === 1 ? "" : "s"}</Badge>}
                         {r.discrepancies > 0 && <Badge tone="blue">{r.discrepancies} discrepanc{r.discrepancies === 1 ? "y" : "ies"}</Badge>}
                         {r.pending_tests > 0 && <Badge tone="amber">{r.pending_tests} pending test{r.pending_tests === 1 ? "" : "s"}</Badge>}
@@ -143,6 +151,7 @@ export default function DoctorInbox() {
             <Label>About these summaries</Label>
             <p className="mt-4 text-[15px] text-ink/80">
               Ritu collects symptoms and record details in the patient&apos;s own words, before the visit and in short check-ins between visits. Every line links to what they said, and every record fact to its page. Nothing is diagnosed.
+              {senior ? " Open a patient to read the junior doctor's summary; the report, records and recording are one tab away." : " Open a patient, check the summary against the records, then send it to a senior doctor."}
             </p>
           </Card>
         </aside>

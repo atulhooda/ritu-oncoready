@@ -119,7 +119,7 @@ not allowed.
 
 - **One link.** The main page (`/`) has two tabs, "Create account" and "Log in", for the default
   clinic (`DEFAULT_CLINIC_CODE`, else the only clinic with sign-up open), and a link underneath for
-  doctors and hospitals to the staff login (clinic code, email, password). `/join/<code>` shows
+  the hospital and its doctors to the staff login (clinic code, email, password). `/join/<code>` shows
   the same for a given clinic. Signed-in users go to their own home; patients who log out return
   to `/`.
 - **Create account.** Full name, email (unique per clinic, stored in lower case), mobile number
@@ -271,6 +271,26 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
   sees and reviews their latest conversation. Records uploaded after sending are visible too.
 - **Who sees what.** Patients see only their own profile. Residents and faculty never see intake
   cases, and doctors never see training cases.
+
+### Hospital, junior and senior doctors
+
+Implemented in `backend/app/api/hospital.py`, `backend/app/services/review.py` (`case_reviews`),
+access in `backend/app/auth/access.py`.
+
+- **Accounts.** One `hospital` account per clinic (created by `python -m app.cli bootstrap`). It adds
+  its doctors (name, email, password ≥ 8 characters) as **junior** or **senior**, can change the
+  level, reset a password, and deactivate / reactivate a doctor (a deactivated doctor cannot log in
+  or be chosen). Everyone signs in on the Hospital login page with the hospital code.
+- **Flow.** Sending creates the case's review, `unassigned`. The hospital sees every sent patient and
+  assigns each to an active junior (`with_junior`; it can reassign until the summary is sent). The
+  junior sees the patient's report, records, transcripts and recording, and the **summary for the
+  senior**: until first saved, a draft built in code from the patient's details and their quoted
+  words (no interpretation added). The junior edits and saves it, then picks an active senior and
+  sends it (`with_senior`). After sending nobody can change it.
+- **Who sees which patient.** The hospital: every sent patient (read-only views). A junior: the
+  patients assigned to them (still after sending). A senior: patients whose summary was sent to
+  them; the summary tab opens first, and the report, records and recording are one tab away. Any
+  other doctor gets 404. Only the assigned junior can save or send (409 otherwise).
 
 ## Records assistant (doctor only)
 

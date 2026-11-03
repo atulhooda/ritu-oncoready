@@ -229,8 +229,8 @@ def test_answers_come_only_from_the_requested_patient(client, db, org_a, org_b, 
     _, case_a, _ = asha
     _, case_b, _ = patient_with_records(db, org_a, "Bina Placeholder", {"bina.pdf": "Date of service: 10/01/2026\nPulse rate 61 bpm."})
     _, hidden, _ = patient_with_records(db, org_a, "Unsent Placeholder", {"u.pdf": "Pulse rate 99 bpm."}, publish=False)
-    doctor = UserRepository(db, org_a.org.id).create("doc@org-a.example.com", "Doc", PASSWORD, Role.DOCTOR)
-    other_org_doctor = UserRepository(db, org_b.org.id).create("doc@org-b.example.com", "Doc B", PASSWORD, Role.DOCTOR)
+    doctor = UserRepository(db, org_a.org.id).create("doc@org-a.example.com", "Doc", PASSWORD, Role.HOSPITAL)
+    other_org_doctor = UserRepository(db, org_b.org.id).create("doc@org-b.example.com", "Doc B", PASSWORD, Role.HOSPITAL)
     patient = UserRepository(db, org_a.org.id).get_by_email("asha@org-a.example.com")
     db.commit()
     h = login(client, org_a, doctor)
@@ -272,7 +272,7 @@ def test_answers_are_read_aloud_in_ritus_voice(client, db, org_a, monkeypatch):
     from app.config import get_settings
     from app.voice import client as ritu
 
-    doctor = UserRepository(db, org_a.org.id).create("voice@org-a.example.com", "Doc V", PASSWORD, Role.DOCTOR)
+    doctor = UserRepository(db, org_a.org.id).create("voice@org-a.example.com", "Doc V", PASSWORD, Role.HOSPITAL)
     patient = UserRepository(db, org_a.org.id).create("pv@org-a.example.com", "Pv", PASSWORD, Role.PATIENT)
     db.commit()
     h = login(client, org_a, doctor)

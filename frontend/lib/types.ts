@@ -1,8 +1,10 @@
-export type Role = "resident" | "faculty" | "admin" | "patient" | "doctor";
+export type Role = "resident" | "faculty" | "admin" | "patient" | "doctor" | "hospital";
 
 export function homeFor(role: Role): string {
-  return { resident: "/cases", faculty: "/faculty", admin: "/faculty", patient: "/patient", doctor: "/doctor" }[role];
+  return { resident: "/cases", faculty: "/faculty", admin: "/faculty", patient: "/patient", doctor: "/doctor", hospital: "/hospital" }[role];
 }
+
+export type Seniority = "junior" | "senior";
 
 export interface Me {
   id: string;
@@ -14,6 +16,8 @@ export interface Me {
   patient_number?: string | null;
   full_name: string;
   role: Role;
+  /** Doctors only: a junior gets patients from the hospital; a senior gets the junior's summary. */
+  seniority?: Seniority | null;
   org_name: string | null;
 }
 
@@ -306,6 +310,34 @@ export interface DoctorPatientRow {
   pending_tests: number;
   discrepancies: number;
   flags: number;
+  review: { status: ReviewStatus; junior: DoctorRef | null; senior: DoctorRef | null; sent_at: string | null };
+}
+
+/** unassigned: waiting for the hospital; with_junior: a junior is preparing the summary; with_senior: sent. */
+export type ReviewStatus = "unassigned" | "with_junior" | "with_senior";
+export interface DoctorRef {
+  id: string;
+  name: string;
+}
+
+export interface CaseReview {
+  status: ReviewStatus;
+  /** The junior's summary for the senior; a draft built from the patient's report until first saved. */
+  summary: string | null;
+  summary_is_draft?: boolean;
+  junior: DoctorRef | null;
+  senior: DoctorRef | null;
+  assigned_at: string | null;
+  summary_updated_at: string | null;
+  sent_at: string | null;
+}
+
+export interface HospitalDoctor {
+  id: string;
+  name: string;
+  email: string;
+  seniority: Seniority;
+  active: boolean;
 }
 
 export interface DoctorPatientDetail {
@@ -319,6 +351,7 @@ export interface DoctorPatientDetail {
   symptom_course: SymptomCourse;
   records: RecordInfo[];
   timeline: Timeline;
+  review: CaseReview;
 }
 
 /** Each symptom across conversations, oldest to newest. A null cell: not mentioned that time. */

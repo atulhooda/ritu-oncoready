@@ -296,7 +296,7 @@ def test_practitioner_profiles_are_scoped(db, org_a, org_b):
     from app.models import Role
     from app.repositories.users import PractitionerProfileRepository
 
-    doctor = UserRepository(db, org_a.org.id).create("dr@org-a.example.com", "Dr", PASSWORD, Role.DOCTOR)
+    doctor = UserRepository(db, org_a.org.id).create("dr@org-a.example.com", "Dr", PASSWORD, Role.DOCTOR, seniority="junior")
     row = PractitionerProfileRepository(db, org_a.org.id).add(user_id=doctor.id, hpr_id="71123456789012")
     assert PractitionerProfileRepository(db, org_b.org.id).get(row.id) is None
     assert PractitionerProfileRepository(db, org_b.org.id).get_for(doctor.id) is None
@@ -313,3 +313,17 @@ def test_phone_otps_are_scoped(db, org_a, org_b):
     assert PhoneOtpRepository(db, org_b.org.id).get(row.id) is None
     assert PhoneOtpRepository(db, org_b.org.id).latest_open("+919812345678") is None
     assert PhoneOtpRepository(db, org_a.org.id).latest_open("+919812345678").id == row.id
+
+
+def test_case_reviews_are_scoped(db, org_a, org_b):
+    from app.repositories.reviews import CaseReviewRepository
+
+    case, _, _ = make_case(db, org_a)
+    review = CaseReviewRepository(db, org_a.org.id).ensure(case.id)
+    assert CaseReviewRepository(db, org_b.org.id).get(review.id) is None
+    assert CaseReviewRepository(db, org_b.org.id).for_case(case.id) is None
+    assert CaseReviewRepository(db, org_a.org.id).ensure(case.id).id == review.id
+    with pytest.raises(IntegrityError):  # composite FK: a review cannot point at another org's case
+        CaseReviewRepository(db, org_b.org.id).ensure(case.id)
+        db.flush()
+    db.rollback()
