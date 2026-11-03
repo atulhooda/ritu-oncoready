@@ -109,7 +109,7 @@ export default function LoginPage() {
             className="mt-10 flex items-center justify-between rounded-xl border border-line bg-white px-4 py-3.5 text-[15px] font-medium hover:border-brand/50"
           >
             <span className="flex items-center gap-2">
-              <Smartphone size={18} className="text-brand" /> Patient? Sign in with your phone
+              <Smartphone size={18} className="text-brand" /> Patient? Log in or create an account
             </span>
             <span className="text-brand">→</span>
           </Link>
