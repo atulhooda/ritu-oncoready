@@ -1,3 +1,4 @@
+import logging
 import re
 import secrets
 import uuid
@@ -29,6 +30,9 @@ SECTION_LABELS = {
     "previous_record": "Previous records mentioned",
     "concern": "What they want to ask the doctor",
 }
+
+
+log = logging.getLogger(__name__)
 
 
 class IntakeError(ValueError):
@@ -136,7 +140,8 @@ def start_session(
     language = language or details["preferred_language"]
     mode = "ritu" if ritu.enabled() else "simulator"
     script = script_for(db, user.org_id, user.id, case.id, kind)  # before the new session exists
-    session = IntakeSessionRepository(db, user.org_id).add(
+    sessions = IntakeSessionRepository(db, user.org_id)
+    session = sessions.add(
         case_id=case.id, patient_user_id=user.id, mode=mode, kind=kind, language=language, status="created",
         recording_consent=record_audio and mode == "ritu",  # only voice sessions have audio
     )
@@ -144,11 +149,15 @@ def start_session(
     if mode == "ritu":
         try:
             connection = ritu.create_browser_session(user.org_id, session.id, user.full_name, language, script)
+            session.ritu_session_id = connection.session_id
         except ritu.RituError as e:
+            # Ritu unreachable or misconfigured: keep the failure on record (for staff), and let the
+            # patient carry on with the typed conversation instead of a dead end.
             session.status, session.error = "failed", str(e)[:2000]
             db.flush()
-            raise IntakeError(str(e)) from e
-        session.ritu_session_id = connection.session_id
+            log.warning("Ritu unavailable, typed conversation instead: %s", e)
+            session = sessions.add(case_id=case.id, patient_user_id=user.id, mode="simulator", kind=kind,
+                                   language=language, status="created", recording_consent=False)
     session.status = "in_progress"
     session.started_at = datetime.now(UTC)
     db.flush()

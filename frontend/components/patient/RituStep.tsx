@@ -46,7 +46,17 @@ export function RituStep({
     reload();
   }, [reload]);
 
-  if (live) return <SessionPanel session={live} onFinished={finished} />;
+  if (live)
+    return (
+      <>
+        {voice && live.mode === "simulator" && (
+          <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-[15px] text-amber-900">
+            Voice is not available right now, so please type your answers. Your care team sees them the same way.
+          </p>
+        )}
+        <SessionPanel session={live} onFinished={finished} />
+      </>
+    );
 
   return (
     <div className="space-y-6">

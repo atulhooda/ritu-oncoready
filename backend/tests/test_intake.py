@@ -143,7 +143,10 @@ def test_ritu_mode_returns_browser_connection(client, db, org_a, monkeypatch):
         raise ritu.RituError("connection refused")
 
     monkeypatch.setattr(ritu, "create_browser_session", down)
-    assert client.post("/me/sessions", headers=h).status_code == 502
+    r = client.post("/me/sessions", headers=h)  # Ritu down: the patient types instead of hitting a dead end
+    assert r.status_code == 201 and r.json()["mode"] == "simulator" and r.json()["status"] == "in_progress"
+    failed = [x for x in client.get("/me/profile", headers=h).json()["sessions"] if x["status"] == "failed"]
+    assert failed and "connection refused" in failed[-1]["error"]  # still on record
 
 
 # --- Ritu callback ---------------------------------------------------------------------
