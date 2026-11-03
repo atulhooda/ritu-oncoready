@@ -27,6 +27,7 @@ function toForm(d: PatientDetails): Form {
     treating_hospital: d.treating_hospital ?? "",
     treating_doctor: d.treating_doctor ?? "",
     other_conditions: d.other_conditions ?? "",
+    location: d.location ?? "",
   };
 }
 
@@ -122,6 +123,9 @@ export function DetailsForm({
               <TextArea value={form.current_treatment} onChange={set("current_treatment")} />
             </Field>
           </div>
+          <Field label="Where you live" hint="Town or city, state">
+            <TextInput value={form.location} onChange={set("location")} />
+          </Field>
           <Field label="Treating hospital">
             <TextInput value={form.treating_hospital} onChange={set("treating_hospital")} />
           </Field>

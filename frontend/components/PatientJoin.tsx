@@ -57,6 +57,7 @@ export function PatientJoin({ code }: { code?: string }) {
   const [password, setPassword] = useState("");
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState("");
+  const [location, setLocation] = useState("");
   const [language, setLanguage] = useState("en-IN");
   const [agree, setAgree] = useState(false);
 
@@ -122,6 +123,7 @@ export function PatientJoin({ code }: { code?: string }) {
           date_of_birth: dob,
           sex,
           preferred_language: language,
+          location: location.trim() || null,
           accept_test_terms: agree,
         }),
       });
@@ -322,6 +324,10 @@ export function PatientJoin({ code }: { code?: string }) {
                       </select>
                     </label>
                   </div>
+                  <label className="block">
+                    <Label className="mb-2">Where you live</Label>
+                    <input id="location" autoComplete="address-level2" placeholder="Town or city, state (e.g. Pune, Maharashtra)" value={location} onChange={(e) => setLocation(e.target.value)} className={INPUT} />
+                  </label>
                   <label className="block">
                     <Label className="mb-2">Language you&apos;re most comfortable in</Label>
                     <select id="language" value={language} onChange={(e) => setLanguage(e.target.value)} className={INPUT}>

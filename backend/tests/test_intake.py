@@ -90,7 +90,7 @@ def test_patient_session_to_doctor(client, db, org_a, no_background):
     assert sections["medication"]["facts"][0]["quote"] == "I take trastuzumab every three weeks"
     assert sections["previous_record"]["facts"][0]["details"] == {"facility": "Heart Associates"}
     assert [s["section"] for s in prof["summary"]["sections"]] == [
-        "current_symptom", "treatment", "medication", "allergy", "recent_care", "past_history", "previous_record", "concern"]
+        "current_symptom", "treatment", "medication", "allergy", "recent_care", "past_history", "family_history", "exposure", "previous_record", "concern"]
 
     session = IntakeSessionRepository(db, org_a.org.id).get(sid)
     assert sorted(r["reason"] for r in session.rejected_facts) == ["invalid_candidate", "not_a_patient_turn", "quote_not_in_turn"]
@@ -439,7 +439,7 @@ def test_questions_adapt_to_the_profile(details, expect_present, expect_absent):
     script = build_intake_script(details)
     ids = [s["id"] for s in script["steps"]]
     assert ids[:2] == ["main_concerns", "symptom_check"]
-    assert ids[-3:] == ["since_last_visit", "previous_records", "questions_for_doctor"]
+    assert ids[-4:] == ["family_and_exposure", "since_last_visit", "previous_records", "questions_for_doctor"]
     for i in expect_present:
         assert i in ids
     for i in expect_absent:
@@ -453,6 +453,14 @@ def test_background_tells_ritu_what_is_already_known():
     assert script["background"].startswith("Patient-reported, not verified")
     assert "Lung cancer" in script["background"] and "High BP" in script["background"]
     assert build_intake_script({})["background"] is None
+    assert "lives in: Pune, Maharashtra" in build_intake_script({"location": "Pune, Maharashtra"})["background"]
+
+
+def test_family_history_exposures_and_hormone_medicines_are_asked():
+    steps = {s["id"]: s for s in build_intake_script({})["steps"]}
+    family = steps["family_and_exposure"]["goal"]
+    assert all(w in family for w in ("grandparents", "tobacco", "alcohol", "pesticides", "radiation", "wood or coal"))
+    assert all(w in steps["since_last_visit"]["goal"] for w in ("hormone", "birth-control", "steroids", "dose"))
 
 
 def test_new_summary_sections_are_stored(db, org_a):
@@ -466,16 +474,24 @@ def test_new_summary_sections_are_stored(db, org_a):
         {"role": "patient", "text": "My last chemo cycle was on Monday and I missed one tablet."},
         {"role": "ritu", "text": "What would you like to ask the doctor?"},
         {"role": "patient", "text": "I want to know if I can travel next month."},
+        {"role": "ritu", "text": "Has anyone in your family had cancer? Any tobacco?"},
+        {"role": "patient", "text": "My mother had breast cancer at 50. I chewed gutka for ten years but stopped."},
     ])
     run_intake_extraction(db, org_a.org.id, session.id, extract=fake_llm([
         {"section": "treatment", "label": "Chemo cycle Monday, one missed tablet", "turn_index": 1,
          "quote": "My last chemo cycle was on Monday", "details": {"last_dose": "Monday", "missed_doses": "one tablet"}},
         {"section": "concern", "label": "Can I travel next month?", "turn_index": 3, "quote": "if I can travel next month"},
+        {"section": "family_history", "label": "Mother: breast cancer", "turn_index": 5, "quote": "My mother had breast cancer at 50",
+         "details": {"relation": "mother", "cancer_type": "breast", "age_at_diagnosis": "50"}},
+        {"section": "exposure", "label": "Chewed gutka (stopped)", "turn_index": 5, "quote": "I chewed gutka for ten years but stopped",
+         "details": {"years": "10 years", "notes": "stopped"}},
     ]))
     summary = service.build_summary(db, org_a.org.id, session.case_id)
     by = {s["section"]: s for s in summary["sections"]}
     assert by["treatment"]["facts"][0]["details"]["missed_doses"] == "one tablet"
     assert by["concern"]["label"] == "What they want to ask the doctor"
+    assert by["family_history"]["facts"][0]["details"] == {"relation": "mother", "cancer_type": "breast", "age_at_diagnosis": "50"}
+    assert by["exposure"]["label"] == "Tobacco, alcohol and other exposures" and by["exposure"]["facts"][0]["details"]["years"] == "10 years"
     assert [s["section"] for s in summary["sections"]][:2] == ["current_symptom", "treatment"]
 
 

@@ -47,6 +47,7 @@ class SignupIn(BaseModel):
     date_of_birth: date
     sex: Literal[*SEXES]
     preferred_language: Literal[*LANGUAGES] = "en-IN"
+    location: str | None = Field(None, max_length=200)  # town or city, state
     accept_test_terms: Literal[True]  # "this is a pilot; I will not enter real medical records"
 
     @field_validator("date_of_birth")
@@ -133,7 +134,7 @@ def sign_up(code: str, body: SignupIn, db: Session = Depends(get_db)) -> dict[st
         user = signup.sign_up(db, org, full_name=body.full_name, email=str(body.email), password=body.password,
                               phone=phone, phone_verified=verified, details={
                                   "date_of_birth": body.date_of_birth, "sex": body.sex,
-                                  "preferred_language": body.preferred_language})
+                                  "preferred_language": body.preferred_language, "location": body.location or None})
     except signup.SignupError as e:
         _fail(e)
     db.commit()

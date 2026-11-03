@@ -194,7 +194,10 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
   browser session and gives the browser a short-lived `ws_url` and `token`. In `simulator` mode
   (no Ritu configured), the browser shows the same script and the patient types their answers.
 - **Script.** Built from the patient's profile (`backend/app/voice/script.py`; the full list for
-  clinical review is `docs/INTAKE_QUESTIONS.md`). Ritu must not diagnose or advise.
+  clinical review is `docs/INTAKE_QUESTIONS.md`). Ritu must not diagnose or advise. After clinical
+  review it also asks about family history of cancer, exposures (tobacco, alcohol, work and home
+  carcinogens, cooking smoke) and hormone medicines. Where the patient lives is a profile field
+  (sign-up and profile), passed to Ritu as background.
 - **Statuses.** A session goes `created → in_progress → completed` (transcript stored) `→ summarized`
   (facts extracted). It can also end as `failed` or `expired`; these carry `error`.
 - **Recording the transcript.** It is stored once. Repeat deliveries are ignored, and it must
@@ -204,13 +207,16 @@ Doctors see the details, labeled self-reported, only once the patient has sent t
 
 ### Summary
 
-- **Extraction.** The LLM proposes facts in five sections: current symptoms, current medicines,
-  allergies, past history, previous records mentioned. Each fact has a patient turn index and a
-  quote.
+- **Extraction.** The LLM proposes facts in ten sections: current symptoms, cancer treatment,
+  current medicines (including hormone medicines, steroids, immune-lowering medicines and
+  supplements), allergies, hospital visits since the last visit, past history, family history of
+  cancer (relation, cancer, age at diagnosis), tobacco / alcohol / other exposures (amount, years,
+  stopped), previous records mentioned, and the patient's questions. Each fact has a patient turn
+  index and a quote.
 - **Validation.** A fact is kept only if that turn is a patient turn and the quote matches it
   (rapidfuzz ≥ 0.85). The stored quote is the patient's own text. Rejected candidates are kept on
   the session as `rejected_facts`.
-- **Rendering.** The summary is built in code, with no LLM. It always lists the five sections in the
+- **Rendering.** The summary is built in code, with no LLM. It always lists the sections in the
   same order, with facts ordered by turn. Each fact has a short label, optional details, and the
   patient's quote with its turn number. It includes the full transcript. It never contains a
   diagnosis, a cause, or advice.

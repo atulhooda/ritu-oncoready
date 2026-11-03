@@ -46,6 +46,7 @@ class PatientProfile(TenantMixin, Base):
     treating_hospital: Mapped[str | None] = mapped_column(String(200))
     treating_doctor: Mapped[str | None] = mapped_column(String(200))
     other_conditions: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(String(200))  # where they live: town or city, state
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     # Linked ABHA (Ayushman Bharat Health Account). Only the last four digits of the number are kept.
     abha_number_masked: Mapped[str | None] = mapped_column(String(20))

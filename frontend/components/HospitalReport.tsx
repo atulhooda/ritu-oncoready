@@ -184,6 +184,7 @@ export function HospitalReport({
           </dl>
           <dl>
             {row("Treatment status", details.treatment_status ? TREATMENT_LABELS[details.treatment_status] : null)}
+            {row("Lives in", details.location)}
             {row("Treating hospital", details.treating_hospital)}
             {row("Other conditions", details.other_conditions)}
             {row("History taken in", [lang, summary.mode === "ritu" ? "voice" : "typed"].filter(Boolean).join(", "))}
@@ -214,6 +215,8 @@ export function HospitalReport({
         {block("Allergies", facts("allergy"), checkIn ? null : "None reported.")}
         {block("Hospital visits and investigations since last visit", facts("recent_care"), null)}
         {block("Past history", facts("past_history"), null)}
+        {block("Family history of cancer", facts("family_history"), null)}
+        {block("Tobacco, alcohol and other exposures", facts("exposure"), null)}
         {block("Records the patient has", facts("previous_record"), null)}
         {block("Patient's questions for the doctor", facts("concern"), null)}
       </div>

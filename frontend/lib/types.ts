@@ -217,6 +217,8 @@ export interface PatientDetails {
   treating_hospital: string | null;
   treating_doctor: string | null;
   other_conditions: string | null;
+  /** Where they live: town or city, state. */
+  location: string | null;
   age: number | null;
   updated_at: string | null;
   /** Linked ABHA (number masked to the last 4 digits), or null. */

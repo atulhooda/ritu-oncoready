@@ -54,13 +54,14 @@ def test_sign_up_without_phone_check_then_log_in(client, db, clinic):
     info = client.get("/join/ccc").json()
     assert info == {"name": clinic.org.name, "code": "CCC", "phone_check": False}
     assert client.post("/join/CCC/phone/send", json={"phone": "9812345678"}).status_code == 409  # not set up
-    r = client.post("/join/CCC/signup", json=form())
+    r = client.post("/join/CCC/signup", json=form(location="Pune, Maharashtra"))
     assert r.status_code == 201, r.text
     assert r.json()["patient_number"].startswith("OR-")
     prof = client.get("/me/profile", headers=auth(r.json()["access_token"])).json()
     assert (prof["name"], prof["email"], prof["phone"], prof["phone_verified"]) == ("Asha Placeholder", "asha@example.com", "+919812345678", False)
     d = prof["details"]
     assert (d["date_of_birth"], d["sex"], d["preferred_language"], d["phone"]) == ("1975-06-15", "female", "hi-IN", "+919812345678")
+    assert d["location"] == "Pune, Maharashtra"
 
     ok = client.post("/join/CCC/login", json={"email": "ASHA@example.com", "password": "asha-secret-1"})
     assert ok.status_code == 200 and client.get("/auth/me", headers=auth(ok.json()["access_token"])).json()["role"] == "patient"

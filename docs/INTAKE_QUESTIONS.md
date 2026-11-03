@@ -17,7 +17,11 @@ PRO-CTCAE side-effect items. The conversation gathers information only; Ritu nev
 ## Order of the conversation
 
 1. Main concerns → 2. Symptom check → 3. Treatment (by treatment status) → 4. Cancer-type questions (if the type matches) →
-5. Since the last visit → 6. Earlier records → 7. Questions for the doctor → closing
+5. Family history and exposures → 6. Since the last visit (incl. medicines and hormone medicines) → 7. Earlier records →
+8. Questions for the doctor → closing
+
+Where the patient lives (town or city, state) is asked on the sign-up form and profile, and given
+to Ritu as background, so Ritu does not ask it.
 
 ## 1. Main concerns
 
@@ -141,15 +145,29 @@ Example questions:
 - [ ] Any trouble eating or swallowing, or vomiting?
 - [ ] Any tummy pain, or yellowing of your eyes or skin?
 
-## 5. Since the last visit
+## 5. Family history and exposures
 
-**Goal for Ritu:** Ask whether since their last visit they had any hospital admission or emergency visit, started any new medicines (including over-the-counter or herbal), and whether they have any allergies.
+Added after clinical review (family history of cancer; exposure to carcinogens).
+
+**Goal for Ritu:** Ask whether anyone in their family (parents, grandparents, brothers or sisters, children) has had cancer: who, which cancer, and roughly at what age. Then ask about exposures, one or two at a time: tobacco in any form (cigarettes, bidi, gutka, khaini, paan) and alcohol (how much, for how many years, and whether they have stopped); work or home exposure to chemicals, dust, pesticides, dyes, asbestos or radiation; and cooking on a wood or coal fire. Record it in their words; do not comment on causes.
+
+Example questions:
+- [ ] Has anyone in your family, like your parents, grandparents, brothers or sisters, had cancer? Who, and which cancer?
+- [ ] Do you use or have you used tobacco in any form, like cigarettes, bidi, gutka or khaini? Or alcohol? How much, and for how long?
+- [ ] In your work or at home, have you been around chemicals, dust, pesticides, dyes or radiation, or cooked on a wood or coal fire?
+
+## 6. Since the last visit, medicines (including hormone medicines)
+
+Hormone medicines and long-term steroids / immune-lowering medicines added after clinical review.
+
+**Goal for Ritu:** Ask whether since their last visit they had any hospital admission or emergency visit. Then ask about every medicine they take now, with the dose if they know it, including over-the-counter, herbal or ayurvedic ones; and specifically whether they take or have taken for a long time any hormone medicines (hormone replacement, birth-control pills, testosterone, fertility treatment), steroids, or medicines that lower immunity. Then ask about allergies.
 
 Example questions:
 - [ ] Since your last visit, have you been to a hospital or emergency department?
-- [ ] Have you started any new medicines, including herbal or over-the-counter ones? Any allergies?
+- [ ] Which medicines do you take now, and how much? Include herbal, ayurvedic or over-the-counter ones.
+- [ ] Do you take, or have you taken for a long time, any hormone tablets or injections, like hormone replacement, birth-control pills, testosterone or fertility treatment? Or steroids? Any allergies?
 
-## 6. Earlier records
+## 7. Earlier records
 
 **Goal for Ritu:** Find out which earlier records they have (reports, scans, prescriptions, discharge summaries): what, when, and from where. If they have none, that is fine: say so kindly and move on.
 
@@ -157,7 +175,7 @@ Example questions:
 - [ ] Do you have any earlier medical records, like test reports, scans, prescriptions or discharge summaries?
 - [ ] Which ones, and roughly when and where were they done?
 
-## 7. Questions for the doctor
+## 8. Questions for the doctor
 
 **Goal for Ritu:** Ask what they would most like to talk about or ask their doctor at this visit. Record it in their words.
 

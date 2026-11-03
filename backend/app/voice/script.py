@@ -8,7 +8,8 @@ profile (cancer type, treatment status):
     depression, anxiety, wellbeing) plus a daily-activity question (the basis of ECOG status)
   - treatment side effects: common PRO-CTCAE items (fever, mouth sores, diarrhoea/constipation,
     numbness/tingling, rash, bleeding/bruising, missed doses)
-  - cancer-type questions, then interval history and the patient's own priorities
+  - cancer-type questions; family history of cancer and exposures (tobacco, alcohol, work and home
+    carcinogens); medicines including hormone ones; then interval history and the patient's own priorities
 Every question here is information gathering. None of it may turn into advice or interpretation.
 The full list for clinical review is in docs/INTAKE_QUESTIONS.md; keep the two in step.
 """
@@ -166,13 +167,32 @@ CANCER_SPECIFIC: list[tuple[tuple[str, ...], dict[str, Any]]] = [
     }),
 ]
 
+FAMILY_AND_EXPOSURE = {
+    "id": "family_and_exposure",
+    "goal": "Ask whether anyone in their family (parents, grandparents, brothers or sisters, children) has had cancer: "
+    "who, which cancer, and roughly at what age. Then ask about exposures, one or two at a time: tobacco in any form "
+    "(cigarettes, bidi, gutka, khaini, paan) and alcohol (how much, for how many years, and whether they have "
+    "stopped); work or home exposure to chemicals, dust, pesticides, dyes, asbestos or radiation; and cooking on a "
+    "wood or coal fire. Record it in their words; do not comment on causes.",
+    "prompts": [
+        "Has anyone in your family, like your parents, grandparents, brothers or sisters, had cancer? Who, and which cancer?",
+        "Do you use or have you used tobacco in any form, like cigarettes, bidi, gutka or khaini? Or alcohol? How much, and for how long?",
+        "In your work or at home, have you been around chemicals, dust, pesticides, dyes or radiation, or cooked on a wood or coal fire?",
+    ],
+}
+
 SINCE_LAST_VISIT = {
     "id": "since_last_visit",
-    "goal": "Ask whether since their last visit they had any hospital admission or emergency visit, started any new "
-    "medicines (including over-the-counter or herbal), and whether they have any allergies.",
+    "goal": "Ask whether since their last visit they had any hospital admission or emergency visit. Then ask about "
+    "every medicine they take now, with the dose if they know it, including over-the-counter, herbal or ayurvedic ones; "
+    "and specifically whether they take or have taken for a long time any hormone medicines (hormone replacement, "
+    "birth-control pills, testosterone, fertility treatment), steroids, or medicines that lower immunity. Then ask "
+    "about allergies.",
     "prompts": [
         "Since your last visit, have you been to a hospital or emergency department?",
-        "Have you started any new medicines, including herbal or over-the-counter ones? Any allergies?",
+        "Which medicines do you take now, and how much? Include herbal, ayurvedic or over-the-counter ones.",
+        "Do you take, or have you taken for a long time, any hormone tablets or injections, like hormone replacement, "
+        "birth-control pills, testosterone or fertility treatment? Or steroids? Any allergies?",
     ],
 }
 
@@ -225,6 +245,8 @@ def background(details: dict[str, Any] | None) -> str | None:
         parts.append(f"current treatment in their words: {details['current_treatment']}")
     if details.get("other_conditions"):
         parts.append(f"other conditions: {details['other_conditions']}")
+    if details.get("location"):
+        parts.append(f"lives in: {details['location']}")
     if not parts:
         return None
     return "Patient-reported, not verified (do not re-ask; do not interpret): " + "; ".join(parts) + "."
@@ -238,7 +260,7 @@ def build_intake_script(details: dict[str, Any] | None = None) -> dict[str, Any]
     specific = cancer_specific_step(details.get("cancer_type"))
     if specific:
         steps.append(specific)
-    steps += [SINCE_LAST_VISIT, PREVIOUS_RECORDS, PRIORITIES]
+    steps += [FAMILY_AND_EXPOSURE, SINCE_LAST_VISIT, PREVIOUS_RECORDS, PRIORITIES]
     return {
         "purpose": "pre_visit_intake_oncology",
         "rules": RULES,

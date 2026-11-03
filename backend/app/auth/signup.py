@@ -1,6 +1,6 @@
 """Patient accounts at a clinic. Rules: BEHAVIOR_SPEC.md "Patient sign-up".
 
-  sign up:  name, email, phone, password, date of birth, sex, language
+  sign up:  name, email, phone, password, date of birth, sex, language, where they live
             phone proven by a 6-digit code sent to the patient's WhatsApp (when WhatsApp is set up;
             otherwise the phone is saved unverified)
   log in:   email + password

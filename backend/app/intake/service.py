@@ -28,6 +28,8 @@ SECTION_LABELS = {
     "allergy": "Allergies",
     "recent_care": "Hospital or emergency visits",
     "past_history": "Past history",
+    "family_history": "Family history of cancer",
+    "exposure": "Tobacco, alcohol and other exposures",
     "previous_record": "Previous records mentioned",
     "concern": "What they want to ask the doctor",
 }
@@ -55,7 +57,7 @@ def profile_case(db: Session, user: User) -> PatientCase:
 
 DETAIL_FIELDS = (
     "date_of_birth", "sex", "phone", "preferred_language", "cancer_type", "diagnosed_on", "stage_reported",
-    "treatment_status", "current_treatment", "treating_hospital", "treating_doctor", "other_conditions",
+    "treatment_status", "current_treatment", "treating_hospital", "treating_doctor", "other_conditions", "location",
 )
 
 

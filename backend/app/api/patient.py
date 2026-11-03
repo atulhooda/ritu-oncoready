@@ -63,6 +63,7 @@ class DetailsIn(BaseModel):
     treating_hospital: str | None = Field(None, max_length=200)
     treating_doctor: str | None = Field(None, max_length=200)
     other_conditions: str | None = Field(None, max_length=2000)
+    location: str | None = Field(None, max_length=200)
 
     @field_validator("*", mode="before")
     @classmethod

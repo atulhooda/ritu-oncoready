@@ -16,7 +16,8 @@ SESSION_KINDS = ("pre_visit", "check_in")
 TURN_ROLES = ("patient", "ritu", "system")
 # Display order. treatment / recent_care / concern added with the oncology question set (0012).
 FACT_SECTIONS = (
-    "current_symptom", "treatment", "medication", "allergy", "recent_care", "past_history", "previous_record", "concern",
+    "current_symptom", "treatment", "medication", "allergy", "recent_care", "past_history", "family_history", "exposure",
+    "previous_record", "concern",
 )
 
 

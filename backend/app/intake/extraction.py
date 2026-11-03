@@ -15,7 +15,8 @@ from app.pipeline.extraction import align_span
 from app.repositories.intake import IntakeFactRepository, IntakeSessionRepository, SessionTurnRepository
 
 DETAIL_KEYS = ("score", "severity", "trend", "onset", "duration", "location", "frequency", "triggers", "dose",
-               "last_dose", "missed_doses", "record_type", "record_date", "facility", "notes")
+               "last_dose", "missed_doses", "record_type", "record_date", "facility", "relation", "cancer_type",
+               "age_at_diagnosis", "amount", "years", "notes")
 
 
 class EvidenceQuote(BaseModel):
@@ -47,8 +48,14 @@ into that one fact, even when it was said across several turns. Each fact:
 - section: one of {list(FACT_SECTIONS)}
   current_symptom = a problem they have now, including treatment side effects; treatment = their
   cancer treatment (what, last dose or cycle, missed or delayed doses); medication = another medicine
-  they currently take; allergy; recent_care = a hospital admission, emergency visit, test or scan
-  since their last visit; past_history = earlier illnesses, operations, treatments; previous_record =
+  they currently take or took for a long time, including hormone medicines (hormone replacement,
+  birth-control pills, testosterone, fertility drugs), steroids, medicines that lower immunity, and
+  supplements or herbal / ayurvedic remedies; allergy; recent_care = a hospital admission, emergency visit, test or scan
+  since their last visit; past_history = earlier illnesses, operations, treatments; family_history = cancer in a
+  blood relative (details.relation e.g. "mother", details.cancer_type, details.age_at_diagnosis);
+  exposure = tobacco (smoking, bidi, gutka, khaini, paan), alcohol, work or home exposure to
+  chemicals, dust, pesticides, dyes, asbestos, radiation, or cooking smoke (details.amount e.g.
+  "10 bidis a day", details.years e.g. "20 years"; note if they have stopped); previous_record =
   a report, scan, prescription or discharge summary they say they have; concern = something they
   want to ask or discuss with their doctor.
 - label: a short, neutral English restatement (e.g. "Breathlessness on climbing stairs").
