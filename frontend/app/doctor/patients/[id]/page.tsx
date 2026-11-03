@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft, Stethoscope } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -56,6 +57,8 @@ export default function DoctorPatientPage() {
       .catch((e) => setError(e.message));
   }, [me, id]);
 
+  // Recording and approving: only the senior doctor the patient was sent to.
+  const canConsult = me?.role === "doctor" && p?.review.status === "with_senior" && p.review.senior?.id === me.id;
   const docs: DocumentInfo[] = (p?.records ?? []).map((r) => ({ id: r.id, filename: r.filename, page_count: r.page_count, status: r.status }));
   const factCount = (s: IntakeSummary) => s.sections.reduce((n, sec) => n + sec.facts.length, 0);
   const visits = (p?.sessions ?? []).filter((s) => !isCheckIn(s));
@@ -133,14 +136,31 @@ export default function DoctorPatientPage() {
               eyebrow={`Pre-visit · sent ${new Date(p.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`}
               title={p.name}
               subtitle={[detailsLine(p.details), "Demo persona · synthetic data"].filter(Boolean).join("  ·  ")}
+              actions={
+                <button
+                  onClick={() => setTab(tab === "consultation" ? "review" : "consultation")}
+                  className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold transition ${
+                    tab === "consultation"
+                      ? "border border-line bg-white text-ink hover:border-ink/30"
+                      : "bg-brand text-white shadow-[0_6px_16px_-6px_rgba(58,79,224,0.7)] hover:bg-brand-hover"
+                  }`}
+                >
+                  {tab === "consultation" ? (
+                    <>
+                      <ArrowLeft size={17} /> Back to the patient
+                    </>
+                  ) : (
+                    <>
+                      <Stethoscope size={17} /> {canConsult ? "Consultation & prescription" : "Prescriptions"}
+                    </>
+                  )}
+                </button>
+              }
             />
           </div>
-          <div className="mb-5 flex flex-wrap gap-2">
+          <div className={`mb-5 flex flex-wrap gap-2 ${tab === "consultation" ? "hidden" : ""}`}>
             <Pill active={tab === "review"} onClick={() => setTab("review")}>
               Summary
-            </Pill>
-            <Pill active={tab === "consultation"} onClick={() => setTab("consultation")}>
-              Consultation &amp; prescriptions
             </Pill>
             <Pill active={tab === "summary"} onClick={() => setTab("summary")}>
               Pre-visit report
@@ -168,7 +188,12 @@ export default function DoctorPatientPage() {
               onChange={(review) => setP({ ...p, review })}
             />}
 
-          {tab === "consultation" && me && <ConsultationPanel caseId={p.case_id} me={me} review={p.review} />}
+          {tab === "consultation" && me && (
+            <>
+              <h2 className="mb-4 text-2xl font-bold tracking-tight">{canConsult ? "Consultation & prescription" : "Prescriptions"}</h2>
+              <ConsultationPanel caseId={p.case_id} me={me} review={p.review} />
+            </>
+          )}
 
           {tab === "summary" &&
             (selected ? (
