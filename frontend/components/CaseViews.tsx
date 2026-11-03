@@ -68,11 +68,19 @@ export function DocViewer({
   );
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-01-03" -> "3 Jan 2026" ("Jan 2026" / "2026" when only the month or year is known). */
+function dayMonthYear(iso: string, precision: string = "exact") {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (precision === "year") return String(y);
+  if (precision === "month") return `${MONTHS[m - 1]} ${y}`;
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+}
+
 function formatDate(e: TimelineEvent) {
   if (!e.event_date) return "—";
-  if (e.date_precision === "month") return e.event_date.slice(0, 7);
-  if (e.date_precision === "year") return e.event_date.slice(0, 4);
-  return e.event_date + (e.date_precision === "inferred" ? " ~" : "");
+  return dayMonthYear(e.event_date, e.date_precision) + (e.date_precision === "inferred" ? " ~" : "");
 }
 
 function EventRow({ e, onSource }: { e: TimelineEvent; onSource: (s: SourceRef) => void }) {
@@ -124,7 +132,7 @@ export function TimelineView({ t, onSource }: { t: Timeline; onSource: (s: Sourc
             <li key={p.id} className="flex flex-wrap items-center gap-2">
               <Badge tone="amber">pending</Badge>
               <span className="font-medium">{p.test_name.replaceAll("_", " ")}</span>
-              {p.ordered_date && <span className="text-muted">ordered {p.ordered_date}</span>}
+              {p.ordered_date && <span className="text-muted">ordered {dayMonthYear(p.ordered_date)}</span>}
               <button onClick={() => onSource(p.source)} className="text-sm text-brand hover:underline">
                 p.{p.source.page_number}
               </button>
