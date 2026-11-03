@@ -2,6 +2,8 @@
 to a junior automatically (fewest open patients first); the junior edits the summary and sends it to
 a senior. Doctors see only the patients assigned or sent to them."""
 
+import uuid
+
 from app.models import Role
 from tests.test_intake import FACTS, as_user, finished_session, no_background, person  # noqa: F401
 
@@ -59,33 +61,41 @@ def test_hospital_assigns_junior_writes_and_sends_to_senior(client, db, org_a, o
     for h in (kh, sh):
         assert client.get(f"/doctor/patients/{case_id}", headers=h).status_code == 404
     detail = client.get(f"/doctor/patients/{case_id}", headers=jh).json()
-    draft = detail["review"]["summary"]
-    assert detail["review"]["summary_is_draft"] and "Maria Placeholder" in draft
-    assert '"I get out of breath climbing the stairs"' in draft  # the patient's own words, built in code
+    facts = {f["label"]: f["id"] for sec in detail["summary"]["sections"] for f in sec["facts"]}
+    draft = detail["review"]["content"]
+    assert detail["review"]["summary_is_draft"] and draft["findings"] == ""  # nothing written for the junior
+    assert sorted(draft["facts"]) == sorted([facts["Breathlessness on stairs"], facts["Evening ankle swelling"]])  # symptoms ticked
     assert client.post(f"/doctor/patients/{case_id}/assistant", headers=jh, json={"question": "pulse"}).status_code == 200
 
-    text = draft + "Echo due; ask about ankle swelling."
-    assert client.put(f"/doctor/patients/{case_id}/summary", headers=kh, json={"summary": "x"}).status_code == 404
-    saved = client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json={"summary": text}).json()
-    assert saved["summary"] == text and not saved["summary_is_draft"]
+    body = {"facts": [facts["Evening ankle swelling"], facts["Trastuzumab every 3 weeks"]],
+            "findings": "Three echo reports uploaded.", "concerns": "Ankle swelling on trastuzumab.", "questions": ""}
+    assert client.put(f"/doctor/patients/{case_id}/summary", headers=kh, json=body).status_code == 404
+    for bad_body in ({**body, "facts": [str(uuid.uuid4())]}, {"facts": [], "findings": " "}):  # unknown point; empty
+        assert client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json=bad_body).status_code == 409
+    saved = client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json=body).json()
+    assert not saved["summary_is_draft"] and saved["content"]["concerns"] == "Ankle swelling on trastuzumab."
+    assert saved["content"]["facts"] == [facts["Evening ankle swelling"], facts["Trastuzumab every 3 weeks"]]
+    text = saved["summary"]  # plain-text copy, built in code
+    assert "Maria Placeholder" in text and "- Evening ankle swelling" in text and "Breathlessness" not in text
+    assert "Concerns:\nAnkle swelling on trastuzumab." in text
     assert client.get("/doctor/seniors", headers=jh).json() == [{"id": other_senior["id"], "name": "Dr Oberoi"},
                                                                 {"id": senior["id"], "name": "Dr Sen"}]
 
-    bad = client.post(f"/doctor/patients/{case_id}/send", headers=jh, json={"senior_user_id": other_junior["id"], "summary": text})
+    bad = client.post(f"/doctor/patients/{case_id}/send", headers=jh, json={**body, "senior_user_id": other_junior["id"]})
     assert bad.status_code == 409
-    sent = client.post(f"/doctor/patients/{case_id}/send", headers=jh, json={"senior_user_id": senior["id"], "summary": text})
+    sent = client.post(f"/doctor/patients/{case_id}/send", headers=jh, json={**body, "senior_user_id": senior["id"]})
     assert sent.status_code == 200 and sent.json()["status"] == "with_senior" and sent.json()["senior"]["name"] == "Dr Sen"
 
     # the senior gets it (summary first, everything else available); the other senior does not
     inbox = client.get("/doctor/patients", headers=sh).json()
     assert [p["case_id"] for p in inbox] == [case_id] and inbox[0]["review"]["junior"]["name"] == "Dr Jain"
     seen = client.get(f"/doctor/patients/{case_id}", headers=sh).json()
-    assert seen["review"]["summary"] == text and len(seen["summary"]["transcript"]) > 0
+    assert seen["review"]["content"] == saved["content"] and seen["review"]["summary"] == text and len(seen["summary"]["transcript"]) > 0
     assert client.get(f"/doctor/patients/{case_id}", headers=oh).status_code == 404
     # sent: the junior still sees it but can no longer change it; the senior cannot edit it either
     assert client.get(f"/doctor/patients/{case_id}", headers=jh).status_code == 200
-    assert client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json={"summary": "late"}).status_code == 409
-    assert client.put(f"/doctor/patients/{case_id}/summary", headers=sh, json={"summary": "mine"}).status_code == 409
+    assert client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json=body).status_code == 409
+    assert client.put(f"/doctor/patients/{case_id}/summary", headers=sh, json=body).status_code == 409
     assert client.post(f"/hospital/patients/{case_id}/assign", headers=hh, json={"junior_user_id": other_junior["id"]}).status_code == 409
 
     # another hospital sees none of it

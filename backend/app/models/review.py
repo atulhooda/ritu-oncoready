@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import CheckConstraint, DateTime, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, tenant_args, tenant_fk
@@ -31,7 +33,10 @@ class CaseReview(TenantMixin, Base):
     junior_user_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     senior_user_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # The junior's summary for the senior. Starts as a draft built in code from the patient's report.
+    # The junior's summary for the senior: which reported points to show ("facts": intake fact ids)
+    # and their notes ("findings", "concerns", "questions"). Null until first saved (a draft is shown).
+    content: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # The same summary as plain text, built in code from `content` (for reading outside the app).
     summary: Mapped[str | None] = mapped_column(Text)
     summary_updated_by: Mapped[uuid.UUID | None]
     summary_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

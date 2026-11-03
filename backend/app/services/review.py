@@ -1,9 +1,10 @@
 """A sent patient's path through the hospital: it goes to a junior doctor automatically, the junior
-edits a summary and sends it to a senior doctor (`CaseReview`).
+prepares a summary and sends it to a senior doctor (`CaseReview`).
 
-The first draft of the summary is built in code from what the patient reported (their details and
-their own words from the latest pre-visit conversation). No interpretation is added; the junior
-doctor writes anything more.
+The summary is structured (`CaseReview.content`): which points the patient reported the senior
+should see (intake fact ids, shown with the patient's own words) and the junior's notes. The first
+draft ticks the current symptoms, the patient's questions and anything on the urgent-signs list;
+nothing is written for the junior. The plain-text copy (`CaseReview.summary`) is built in code.
 """
 
 import uuid
@@ -18,46 +19,60 @@ from app.repositories.cases import CaseRepository
 from app.repositories.reviews import CaseReviewRepository
 from app.repositories.users import UserRepository
 
-TREATMENT_STATUS = {
-    "not_started": "not started yet", "on_treatment": "on treatment now", "completed": "finished treatment",
-    "follow_up": "in follow-up", "not_sure": "not sure",
+NOTES = {
+    "findings": "From the records and conversation",
+    "concerns": "Concerns",
+    "questions": "For the senior doctor",
 }
+DRAFT_SECTIONS = ("current_symptom", "concern")
+MAX_NOTE = 5000
 
 
 class ReviewError(ValueError):
     pass
 
 
-def draft_summary(db: Session, org_id: uuid.UUID, case: PatientCase) -> str:
-    d = service.patient_details(db, org_id, case.patient_user_id)
-    who = [case.title]
-    if d["age"] is not None:
-        who.append(f"{d['age']} y")
-    if d["sex"]:
-        who.append(d["sex"].replace("_", " "))
-    lines = [", ".join(who)]
-    reported = [
-        ("Cancer (as told by the patient)", d["cancer_type"]),
-        ("Stage (as told by the patient)", d["stage_reported"]),
-        ("Diagnosed", d["diagnosed_on"] and str(d["diagnosed_on"])),
-        ("Treatment", TREATMENT_STATUS.get(d["treatment_status"] or "")),
-        ("Current treatment", d["current_treatment"]),
-        ("Other conditions", d["other_conditions"]),
-    ]
-    lines += [f"{label}: {value}" for label, value in reported if value]
+def reported_facts(db: Session, org_id: uuid.UUID, case: PatientCase) -> list[dict[str, Any]]:
+    """Every point from the latest pre-visit conversation, in report order, with its section."""
     summary = service.build_summary(db, org_id, case.id)
-    for section in summary["sections"] if summary else []:
-        if not section["facts"]:
-            continue
-        lines += ["", f"{section['label']}:"]
-        for f in section["facts"]:
-            extra = ", ".join(f"{k}: {v}" for k, v in f["details"].items() if v)
-            lines.append(f"- {f['label']}{f' ({extra})' if extra else ''}{' [urgent sign]' if f['urgent'] else ''}"
-                         f' - "{f["quote"]}"')
-    records = service.records(db, org_id, case.id)
-    if records:
-        lines += ["", f"Records uploaded: {len(records)}"]
-    lines += ["", "Junior doctor's notes:", ""]
+    return [{**f, "section": sec["section"], "section_label": sec["label"]}
+            for sec in (summary["sections"] if summary else []) for f in sec["facts"]]
+
+
+def draft_content(facts: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"facts": [str(f["id"]) for f in facts if f["section"] in DRAFT_SECTIONS or f["urgent"]],
+            **{k: "" for k in NOTES}}
+
+
+def clean_content(facts: list[dict[str, Any]], content: dict[str, Any]) -> dict[str, Any]:
+    known = {str(f["id"]) for f in facts}
+    chosen = [str(i) for i in content.get("facts", [])]
+    if any(i not in known for i in chosen):
+        raise ReviewError("a ticked point is not in this patient's report")
+    out = {"facts": [str(f["id"]) for f in facts if str(f["id"]) in chosen],  # report order
+           **{k: (content.get(k) or "").strip()[:MAX_NOTE] for k in NOTES}}
+    if not out["facts"] and not any(out[k] for k in NOTES):
+        raise ReviewError("the summary is empty: tick a point or write a note")
+    return out
+
+
+def summary_text(case: PatientCase, details: dict[str, Any], facts: list[dict[str, Any]], content: dict[str, Any]) -> str:
+    """Plain-text copy of the structured summary."""
+    who = [case.title, f"{details['age']} y" if details["age"] is not None else None,
+           (details["sex"] or "").replace("_", " ") or None, details["cancer_type"]]
+    lines = [" · ".join(w for w in who if w)]
+    by_id = {str(f["id"]): f for f in facts}
+    chosen = [by_id[i] for i in content["facts"] if i in by_id]
+    section = None
+    for f in chosen:
+        if f["section_label"] != section:
+            section = f["section_label"]
+            lines += ["", f"{section}:"]
+        extra = ", ".join(f"{k}: {v}" for k, v in f["details"].items() if v)
+        lines.append(f"- {f['label']}{f' ({extra})' if extra else ''}{' [urgent sign]' if f['urgent'] else ''}")
+    for key, label in NOTES.items():
+        if content.get(key):
+            lines += ["", f"{label}:", content[key]]
     return "\n".join(lines)
 
 
@@ -67,19 +82,24 @@ def doctor_name(db: Session, org_id: uuid.UUID, user_id: uuid.UUID | None) -> di
 
 
 def review_out(db: Session, org_id: uuid.UUID, case: PatientCase, review: CaseReview | None) -> dict[str, Any]:
-    if review is None:
-        return {"status": "unassigned", "summary": None, "junior": None, "senior": None,
-                "assigned_at": None, "summary_updated_at": None, "sent_at": None}
+    if review is None or review.status == "unassigned":
+        content = None
+    elif review.content is not None:
+        content = review.content
+    else:
+        content = draft_content(reported_facts(db, org_id, case))
+        if review.summary:  # written before summaries were structured
+            content["findings"] = review.summary
     return {
-        "status": review.status,
-        "summary": review.summary if review.summary is not None else (
-            draft_summary(db, org_id, case) if review.status != "unassigned" else None),
-        "summary_is_draft": review.summary is None,
-        "junior": doctor_name(db, org_id, review.junior_user_id),
-        "senior": doctor_name(db, org_id, review.senior_user_id),
-        "assigned_at": review.assigned_at,
-        "summary_updated_at": review.summary_updated_at,
-        "sent_at": review.sent_at,
+        "status": review.status if review else "unassigned",
+        "content": content,
+        "summary_is_draft": review is None or review.content is None,
+        "summary": review.summary if review else None,
+        "junior": doctor_name(db, org_id, review.junior_user_id) if review else None,
+        "senior": doctor_name(db, org_id, review.senior_user_id) if review else None,
+        "assigned_at": review.assigned_at if review else None,
+        "summary_updated_at": review.summary_updated_at if review else None,
+        "sent_at": review.sent_at if review else None,
     }
 
 
@@ -143,20 +163,27 @@ def _editable_by(review: CaseReview | None, user_id: uuid.UUID) -> CaseReview:
     return review
 
 
-def save_summary(db: Session, org_id: uuid.UUID, case: PatientCase, user_id: uuid.UUID, text: str) -> CaseReview:
+def _write(db: Session, org_id: uuid.UUID, case: PatientCase, review: CaseReview, user_id: uuid.UUID, content: dict[str, Any]) -> None:
+    facts = reported_facts(db, org_id, case)
+    review.content = clean_content(facts, content)
+    review.summary = summary_text(case, service.patient_details(db, org_id, case.patient_user_id), facts, review.content)
+    review.summary_updated_by, review.summary_updated_at = user_id, datetime.now(UTC)
+
+
+def save_summary(db: Session, org_id: uuid.UUID, case: PatientCase, user_id: uuid.UUID, content: dict[str, Any]) -> CaseReview:
     review = _editable_by(CaseReviewRepository(db, org_id).for_case(case.id), user_id)
-    review.summary, review.summary_updated_by, review.summary_updated_at = text, user_id, datetime.now(UTC)
+    _write(db, org_id, case, review, user_id, content)
     db.flush()
     return review
 
 
 def send_to_senior(
-    db: Session, org_id: uuid.UUID, case: PatientCase, user_id: uuid.UUID, senior_user_id: uuid.UUID, text: str
+    db: Session, org_id: uuid.UUID, case: PatientCase, user_id: uuid.UUID, senior_user_id: uuid.UUID,
+    content: dict[str, Any],
 ) -> CaseReview:
     review = _editable_by(CaseReviewRepository(db, org_id).for_case(case.id), user_id)
     _active_doctor(db, org_id, senior_user_id, "senior")
-    now = datetime.now(UTC)
-    review.summary, review.summary_updated_by, review.summary_updated_at = text, user_id, now
-    review.senior_user_id, review.status, review.sent_at = senior_user_id, "with_senior", now
+    _write(db, org_id, case, review, user_id, content)
+    review.senior_user_id, review.status, review.sent_at = senior_user_id, "with_senior", review.summary_updated_at
     db.flush()
     return review

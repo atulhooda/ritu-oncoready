@@ -154,7 +154,14 @@ export default function DoctorPatientPage() {
             </Pill>
           </div>
 
-          {tab === "review" && me && <ReviewPanel caseId={p.case_id} me={me} review={p.review} onChange={(review) => setP({ ...p, review })} />}
+          {tab === "review" && me && <ReviewPanel
+              caseId={p.case_id}
+              me={me}
+              review={p.review}
+              report={p.summary}
+              patient={{ name: p.name, details: p.details, records: p.records.length }}
+              onChange={(review) => setP({ ...p, review })}
+            />}
 
           {tab === "summary" &&
             (selected ? (

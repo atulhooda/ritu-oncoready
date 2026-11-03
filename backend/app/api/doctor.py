@@ -152,7 +152,14 @@ def list_seniors(current: CurrentUser = Depends(doctor_only), db: Session = Depe
 
 
 class SummaryIn(BaseModel):
-    summary: str = Field(min_length=1, max_length=20000)
+    """The structured summary: ticked points from the patient's report and the junior's notes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    facts: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    findings: str = Field("", max_length=reviews.MAX_NOTE)
+    concerns: str = Field("", max_length=reviews.MAX_NOTE)
+    questions: str = Field("", max_length=reviews.MAX_NOTE)
 
 
 class SendIn(SummaryIn):
@@ -171,14 +178,15 @@ def _review_change(db: Session, current: CurrentUser, case, change) -> dict[str,
 @router.put("/patients/{case_id}/summary")
 def save_summary(case_id: uuid.UUID, body: SummaryIn, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
     case = visible_case_or_404(db, current, case_id)
-    return _review_change(db, current, case, lambda: reviews.save_summary(db, current.org_id, case, current.id, body.summary))
+    return _review_change(db, current, case, lambda: reviews.save_summary(
+        db, current.org_id, case, current.id, body.model_dump(include={"facts", *reviews.NOTES})))
 
 
 @router.post("/patients/{case_id}/send")
 def send_to_senior(case_id: uuid.UUID, body: SendIn, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
     case = visible_case_or_404(db, current, case_id)
     return _review_change(db, current, case, lambda: reviews.send_to_senior(
-        db, current.org_id, case, current.id, body.senior_user_id, body.summary))
+        db, current.org_id, case, current.id, body.senior_user_id, body.model_dump(include={"facts", *reviews.NOTES})))
 
 
 class AssistantQuestion(BaseModel):

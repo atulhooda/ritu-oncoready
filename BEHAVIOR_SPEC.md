@@ -286,11 +286,14 @@ access in `backend/app/auth/access.py`.
   and is picked up when the hospital adds or reactivates one. When a junior is deactivated or made
   senior, their unsent patients move to the other juniors the same way. The hospital's only page is
   Doctors (with each doctor's open count); `POST /hospital/patients/{id}/assign` can still move a
-  patient by hand until the summary is sent. The
-  junior sees the patient's report, records, transcripts and recording, and the **summary for the
-  senior**: until first saved, a draft built in code from the patient's details and their quoted
-  words (no interpretation added). The junior edits and saves it, then picks an active senior and
-  sends it (`with_senior`). After sending nobody can change it.
+  patient by hand until the summary is sent.
+- **The summary.** Structured (`case_reviews.content`): points ticked from the patient's latest
+  pre-visit report (intake fact ids, each shown with its details and the patient's words) and three
+  optional notes from the junior: from the records and conversation, concerns, for the senior. The
+  draft ticks current symptoms, the patient's questions and urgent signs; nothing is written for
+  the junior. Unknown fact ids or an empty summary are refused (409). A live preview shows exactly
+  what the senior will read; a plain-text copy is built in code (`case_reviews.summary`). Save keeps
+  a draft; Send saves and sends to the chosen senior. After sending nobody can change it.
 - **Who sees which patient.** The hospital: every sent patient through the API (read-only). A junior: the
   patients assigned to them (still after sending). A senior: patients whose summary was sent to
   them; the summary tab opens first, and the report, records and recording are one tab away. Any

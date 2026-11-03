@@ -320,9 +320,19 @@ export interface DoctorRef {
   name: string;
 }
 
+/** The junior's summary: points ticked from the patient's report (intake fact ids) and their notes. */
+export interface ReviewContent {
+  facts: string[];
+  findings: string;
+  concerns: string;
+  questions: string;
+}
+
 export interface CaseReview {
   status: ReviewStatus;
-  /** The junior's summary for the senior; a draft built from the patient's report until first saved. */
+  /** Null until assigned. Until first saved, a draft: symptoms, questions and urgent signs ticked. */
+  content: ReviewContent | null;
+  /** Plain-text copy of the saved summary, built on the server. */
   summary: string | null;
   summary_is_draft?: boolean;
   junior: DoctorRef | null;
