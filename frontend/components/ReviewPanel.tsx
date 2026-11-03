@@ -46,7 +46,7 @@ export function ReviewPanel({ caseId, me, review, onChange }: { caseId: string; 
     return (
       <Card className="p-6 sm:p-7">
         <Label>Summary for the senior doctor</Label>
-        <p className="mt-3 text-muted">Not assigned to a junior doctor yet. The hospital assigns it from its Patients page.</p>
+        <p className="mt-3 text-muted">Waiting for a junior doctor. It goes to one automatically as soon as the hospital has an active junior.</p>
       </Card>
     );
   }

@@ -1,157 +1,144 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
-import { Badge, Card, EmptyState, Label, PageHeader, Pill } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Label, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { CaseReview, DoctorPatientRow, HospitalDoctor, ReviewStatus } from "@/lib/types";
-import { detailsLine } from "@/lib/types";
+import type { HospitalDoctor, Seniority } from "@/lib/types";
 
-type Filter = "all" | ReviewStatus;
+const INPUT = "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] outline-none focus:border-brand focus:ring-4 focus:ring-brand/15";
+const EMPTY = { full_name: "", email: "", password: "", seniority: "junior" as Seniority };
 
-const STATUS: Record<ReviewStatus, { label: string; tone: "amber" | "blue" | "green" }> = {
-  unassigned: { label: "Needs a junior doctor", tone: "amber" },
-  with_junior: { label: "With junior doctor", tone: "blue" },
-  with_senior: { label: "Sent to senior", tone: "green" },
-};
-
-export default function HospitalPatients() {
+export default function HospitalDoctors() {
   const me = useMe(["hospital"]);
-  const [rows, setRows] = useState<DoctorPatientRow[]>([]);
   const [doctors, setDoctors] = useState<HospitalDoctor[]>([]);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [form, setForm] = useState(EMPTY);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    api<DoctorPatientRow[]>("/hospital/patients").then(setRows).catch((e) => setError(e.message));
-    api<HospitalDoctor[]>("/hospital/doctors").then(setDoctors).catch(() => {});
-  }, []);
   useEffect(() => {
-    if (me) load();
-  }, [me, load]);
+    if (me) api<HospitalDoctor[]>("/hospital/doctors").then(setDoctors).catch((e) => setError(e.message));
+  }, [me]);
 
-  const juniors = doctors.filter((d) => d.seniority === "junior" && d.active);
-
-  async function assign(caseId: string, juniorId: string) {
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
     setError(null);
+    setNote(null);
     try {
-      const review = await api<CaseReview>(`/hospital/patients/${caseId}/assign`, { method: "POST", body: JSON.stringify({ junior_user_id: juniorId }) });
-      setRows((rs) => rs.map((r) => (r.case_id === caseId ? { ...r, review: { ...r.review, status: review.status, junior: review.junior } } : r)));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not assign");
+      const d = await api<HospitalDoctor>("/hospital/doctors", { method: "POST", body: JSON.stringify(form) });
+      setDoctors((ds) => [...ds, d]);
+      setNote(`${d.name} can now log in on the Hospital login page with the hospital code, ${d.email} and the password you set.`);
+      setForm(EMPTY);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add the doctor");
+    } finally {
+      setBusy(false);
     }
   }
 
-  const shown = rows.filter((r) => filter === "all" || r.review.status === filter);
-  const count = (s: ReviewStatus) => rows.filter((r) => r.review.status === s).length;
+  async function change(d: HospitalDoctor, body: Partial<{ seniority: Seniority; is_active: boolean; password: string }>) {
+    setError(null);
+    setNote(null);
+    try {
+      const updated = await api<HospitalDoctor>(`/hospital/doctors/${d.id}`, { method: "PATCH", body: JSON.stringify(body) });
+      setDoctors((ds) => ds.map((x) => (x.id === d.id ? updated : x)));
+      if (body.password) setNote(`New password set for ${d.name}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    }
+  }
+
+  function resetPassword(d: HospitalDoctor) {
+    const password = window.prompt(`New password for ${d.name} (at least 8 characters):`);
+    if (password) change(d, { password });
+  }
+
+  const group = (s: Seniority) => doctors.filter((d) => d.seniority === s);
 
   return (
     <Shell me={me}>
       <PageHeader
         eyebrow="Hospital"
-        live
-        title="Patients"
-        subtitle="Everyone who sent their check-in. Assign each one to a junior doctor."
-        actions={
-          <button onClick={load} className="rounded-full p-2 text-muted hover:bg-white" aria-label="Refresh">
-            <RefreshCw size={20} strokeWidth={1.75} />
-          </button>
-        }
+        title="Doctors"
+        subtitle="Each patient who sends their check-in goes to a junior doctor automatically (whoever has the fewest). The junior sends their summary to a senior."
       />
-      {doctors.length > 0 && juniors.length === 0 && (
-        <p className="mb-6 rounded-xl border border-line bg-white px-5 py-3.5 text-[15px]">
-          Add a junior doctor before assigning patients.{" "}
-          <Link href="/hospital/doctors" className="font-medium text-brand hover:underline">Add doctors →</Link>
-        </p>
-      )}
-      {doctors.length === 0 && (
-        <p className="mb-6 rounded-xl border border-line bg-white px-5 py-3.5 text-[15px]">
-          Start by adding your junior and senior doctors.{" "}
-          <Link href="/hospital/doctors" className="font-medium text-brand hover:underline">Add doctors →</Link>
-        </p>
-      )}
-      <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
-        <div>
-          <div className="mb-5 flex flex-wrap gap-2">
-            {([["all", "All"], ["unassigned", "Needs a junior"], ["with_junior", "With junior"], ["with_senior", "Sent to senior"]] as const).map(([k, label]) => (
-              <Pill key={k} active={filter === k} onClick={() => setFilter(k)}>
-                {label}
-              </Pill>
-            ))}
-          </div>
-          {error && <p className="mb-4 text-sm text-red-700">{error}</p>}
-          {shown.length === 0 ? (
-            <EmptyState title="No patients here.">Patients appear when they send their check-in with Ritu.</EmptyState>
-          ) : (
-            <ul className="space-y-3">
-              {shown.map((r) => (
-                <li key={r.case_id}>
-                  <Card className="p-6">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+        <div className="space-y-6">
+          {error && <p className="text-sm text-red-700">{error}</p>}
+          {note && <p className="text-sm text-green-700">{note}</p>}
+          {doctors.length === 0 && <EmptyState title="No doctors yet.">Add your first junior and senior doctor on the right.</EmptyState>}
+          {(["senior", "junior"] as const).map((s) =>
+            group(s).length ? (
+              <Card key={s} className="p-6">
+                <Label>{s === "senior" ? "Senior doctors" : "Junior doctors"}</Label>
+                <ul className="mt-4 divide-y divide-line/70">
+                  {group(s).map((d) => (
+                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-3.5">
                       <div className="min-w-0">
-                        <div className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-                          sent {new Date(r.published_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                        <div className="flex items-center gap-2 font-semibold">
+                          {d.name} {!d.active && <Badge>Deactivated</Badge>}
                         </div>
-                        <Link href={`/doctor/patients/${r.case_id}`} className="mt-1 flex flex-wrap items-center gap-2 hover:text-brand">
-                          <span className="text-xl font-semibold">{r.name}</span>
-                          {r.patient_number && <span className="font-mono text-sm text-muted">{r.patient_number}</span>}
-                        </Link>
-                        {detailsLine(r) && <div className="text-muted">{detailsLine(r)}</div>}
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {r.symptoms.slice(0, 5).map((s) => <Badge key={s}>{s}</Badge>)}
+                        <div className="text-sm text-muted">
+                          {d.email} · {d.patients} {s === "junior" ? "patient" : "summar"}
+                          {s === "junior" ? (d.patients === 1 ? "" : "s") : d.patients === 1 ? "y" : "ies"} {s === "junior" ? "to send on" : "received"}
                         </div>
                       </div>
-                      <Badge tone={STATUS[r.review.status].tone}>{STATUS[r.review.status].label}</Badge>
-                    </div>
-                    <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line/70 pt-4 text-[15px]">
-                      {r.review.status === "with_senior" ? (
-                        <span className="text-muted">
-                          {r.review.junior?.name} → <span className="text-ink">{r.review.senior?.name}</span>
-                        </span>
-                      ) : (
-                        <>
-                          <label htmlFor={`assign-${r.case_id}`} className="text-muted">Junior doctor</label>
-                          <select
-                            id={`assign-${r.case_id}`}
-                            value={r.review.junior?.id ?? ""}
-                            onChange={(e) => e.target.value && assign(r.case_id, e.target.value)}
-                            className="rounded-xl border border-line bg-white px-3 py-2 outline-none focus:border-brand"
-                          >
-                            <option value="">Choose…</option>
-                            {r.review.junior && !juniors.some((j) => j.id === r.review.junior!.id) && (
-                              <option value={r.review.junior.id}>{r.review.junior.name}</option>
-                            )}
-                            {juniors.map((j) => (
-                              <option key={j.id} value={j.id}>{j.name}</option>
-                            ))}
-                          </select>
-                        </>
-                      )}
-                    </div>
-                  </Card>
-                </li>
-              ))}
-            </ul>
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <select
+                          aria-label={`Level for ${d.name}`}
+                          value={d.seniority}
+                          onChange={(e) => change(d, { seniority: e.target.value as Seniority })}
+                          className="rounded-lg border border-line bg-white px-2.5 py-1.5"
+                        >
+                          <option value="junior">Junior</option>
+                          <option value="senior">Senior</option>
+                        </select>
+                        <button onClick={() => resetPassword(d)} className="rounded-lg border border-line px-2.5 py-1.5 hover:border-ink/30">
+                          Reset password
+                        </button>
+                        <button
+                          onClick={() => change(d, { is_active: !d.active })}
+                          className={`rounded-lg border px-2.5 py-1.5 ${d.active ? "border-line text-red-700 hover:border-red-300" : "border-line text-green-700 hover:border-green-300"}`}
+                        >
+                          {d.active ? "Deactivate" : "Reactivate"}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null,
           )}
         </div>
-        <aside>
-          <Card className="p-6">
-            <Label>Overview</Label>
-            <dl className="mt-5 space-y-3 text-[17px]">
-              {([["needs a junior", count("unassigned")], ["with junior doctors", count("with_junior")], ["sent to seniors", count("with_senior")],
-                ["junior doctors", juniors.length], ["senior doctors", doctors.filter((d) => d.seniority === "senior" && d.active).length]] as const).map(([k, v]) => (
-                <div key={k} className="flex justify-between">
-                  <dt className="text-muted">{k}</dt>
-                  <dd className="font-semibold">{v}</dd>
-                </div>
+        <Card className="h-fit p-6">
+          <Label>Add a doctor</Label>
+          <form onSubmit={add} className="mt-5 space-y-4">
+            <input id="doctor-name" className={INPUT} placeholder="Full name, e.g. Dr. Asha Rao" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required minLength={2} />
+            <input id="doctor-email" type="email" className={INPUT} placeholder="Email (their login)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+            <input id="doctor-password" type="text" className={INPUT} placeholder="Password (at least 8 characters)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} autoComplete="new-password" />
+            <div className="grid grid-cols-2 gap-2">
+              {(["junior", "senior"] as const).map((s) => (
+                <button
+                  type="button"
+                  key={s}
+                  onClick={() => setForm({ ...form, seniority: s })}
+                  className={`rounded-xl border px-4 py-3 text-[15px] font-medium ${form.seniority === s ? "border-brand bg-brand/5 text-brand" : "border-line bg-white"}`}
+                >
+                  {s === "junior" ? "Junior doctor" : "Senior doctor"}
+                </button>
               ))}
-            </dl>
-          </Card>
-        </aside>
+            </div>
+            <Button disabled={busy} className="w-full">
+              <UserPlus size={17} /> {busy ? "Adding…" : "Add doctor"}
+            </Button>
+            <p className="text-sm text-muted">They log in on the Hospital login page with the hospital code, their email and this password.</p>
+          </form>
+        </Card>
       </div>
     </Shell>
   );

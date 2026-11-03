@@ -281,13 +281,17 @@ access in `backend/app/auth/access.py`.
   its doctors (name, email, password ≥ 8 characters) as **junior** or **senior**, can change the
   level, reset a password, and deactivate / reactivate a doctor (a deactivated doctor cannot log in
   or be chosen). Everyone signs in on the Hospital login page with the hospital code.
-- **Flow.** Sending creates the case's review, `unassigned`. The hospital sees every sent patient and
-  assigns each to an active junior (`with_junior`; it can reassign until the summary is sent). The
+- **Flow.** Sending gives the patient to an active junior automatically (`with_junior`): whoever has
+  the fewest patients still to send on, then by name. With no active junior it waits (`unassigned`)
+  and is picked up when the hospital adds or reactivates one. When a junior is deactivated or made
+  senior, their unsent patients move to the other juniors the same way. The hospital's only page is
+  Doctors (with each doctor's open count); `POST /hospital/patients/{id}/assign` can still move a
+  patient by hand until the summary is sent. The
   junior sees the patient's report, records, transcripts and recording, and the **summary for the
   senior**: until first saved, a draft built in code from the patient's details and their quoted
   words (no interpretation added). The junior edits and saves it, then picks an active senior and
   sends it (`with_senior`). After sending nobody can change it.
-- **Who sees which patient.** The hospital: every sent patient (read-only views). A junior: the
+- **Who sees which patient.** The hospital: every sent patient through the API (read-only). A junior: the
   patients assigned to them (still after sending). A senior: patients whose summary was sent to
   them; the summary tab opens first, and the report, records and recording are one tab away. Any
   other doctor gets 404. Only the assigned junior can save or send (409 otherwise).

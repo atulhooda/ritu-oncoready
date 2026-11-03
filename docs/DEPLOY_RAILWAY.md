@@ -37,7 +37,8 @@ adds about half a second to every request.
 
 Open the address. Patients create an account or log in there. The hospital taps "Hospital or
 doctor? Hospital login" and enters the clinic code, email and password, then adds its junior and
-senior doctors under **Doctors**; they log in the same way. The API's own pages are at `/api/docs`.
+senior doctors under **Doctors**; they log in the same way. Patients go to the junior doctors
+automatically. The API's own pages are at `/api/docs`.
 
 - `BOOTSTRAP_*` creates your clinic and its hospital account on start (safe to repeat). The
   password needs at least 10 characters; changing it later does not change an existing account.

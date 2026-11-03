@@ -20,6 +20,7 @@ from app.models.patient import LANGUAGES, SEXES, TREATMENT_STATUSES
 from app.repositories.cases import SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.users import UserRepository
+from app.services import review as reviews
 
 router = APIRouter(prefix="/me", tags=["patient"])
 patient_only = require_role(Role.PATIENT)
@@ -362,5 +363,6 @@ def publish(current: CurrentUser = Depends(patient_only), db: Session = Depends(
         case = service.publish(db, _user(db, current))
     except service.IntakeError as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    reviews.assign_waiting(db, current.org_id)  # straight to a junior doctor
     db.commit()
     return {"published_at": case.published_at}

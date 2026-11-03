@@ -338,6 +338,8 @@ export interface HospitalDoctor {
   email: string;
   seniority: Seniority;
   active: boolean;
+  /** A junior's patients still to send on; a senior's received summaries. */
+  patients: number;
 }
 
 export interface DoctorPatientDetail {

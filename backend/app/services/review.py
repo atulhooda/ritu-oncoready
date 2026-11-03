@@ -1,5 +1,5 @@
-"""A sent patient's path through the hospital: the hospital assigns a junior doctor, the junior edits
-a summary and sends it to a senior doctor (`CaseReview`).
+"""A sent patient's path through the hospital: it goes to a junior doctor automatically, the junior
+edits a summary and sends it to a senior doctor (`CaseReview`).
 
 The first draft of the summary is built in code from what the patient reported (their details and
 their own words from the latest pre-visit conversation). No interpretation is added; the junior
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.intake import service
 from app.models import CaseReview, PatientCase, Role, User
+from app.repositories.cases import CaseRepository
 from app.repositories.reviews import CaseReviewRepository
 from app.repositories.users import UserRepository
 
@@ -97,6 +98,43 @@ def assign(db: Session, org_id: uuid.UUID, case: PatientCase, junior_user_id: uu
     review.junior_user_id, review.status, review.assigned_at = junior_user_id, "with_junior", datetime.now(UTC)
     db.flush()
     return review
+
+
+def assign_waiting(db: Session, org_id: uuid.UUID) -> int:
+    """Give every sent patient without a junior to an active junior doctor: each one to whoever has
+    the fewest patients still with them (then by name). Runs when a patient sends their check-in and
+    whenever the hospital changes its doctors. Returns how many were assigned."""
+    repo = CaseReviewRepository(db, org_id)
+    for case in CaseRepository(db, org_id).published_intake():  # sent before reviews existed
+        repo.ensure(case.id)
+    db.flush()
+    juniors = [d for d in UserRepository(db, org_id).doctors() if d.seniority == "junior" and d.is_active]
+    if not juniors:
+        return 0
+    load = {j.id: sum(r.status == "with_junior" for r in repo.for_junior(j.id)) for j in juniors}
+    waiting = repo.waiting()
+    for review in waiting:
+        junior = min(juniors, key=lambda j: (load[j.id], j.full_name))
+        review.junior_user_id, review.status, review.assigned_at = junior.id, "with_junior", datetime.now(UTC)
+        load[junior.id] += 1
+    db.flush()
+    return len(waiting)
+
+
+def release(db: Session, org_id: uuid.UUID, doctor_id: uuid.UUID) -> None:
+    """A junior who left (deactivated, or now senior): their unsent patients go back to waiting."""
+    for review in CaseReviewRepository(db, org_id).for_junior(doctor_id):
+        if review.status == "with_junior":
+            review.junior_user_id, review.status, review.assigned_at = None, "unassigned", None
+    db.flush()
+
+
+def open_patients(db: Session, org_id: uuid.UUID, doctor: User) -> int:
+    """Patients waiting on this doctor: a junior's unsent ones, a senior's received ones."""
+    repo = CaseReviewRepository(db, org_id)
+    if doctor.seniority == "junior":
+        return sum(r.status == "with_junior" for r in repo.for_junior(doctor.id))
+    return len(repo.for_senior(doctor.id))
 
 
 def _editable_by(review: CaseReview | None, user_id: uuid.UUID) -> CaseReview:

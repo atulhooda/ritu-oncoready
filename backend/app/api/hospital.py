@@ -1,5 +1,5 @@
-"""The hospital account: adds its doctors (junior or senior), sees every patient who sent their
-check-in, and assigns each one to a junior doctor."""
+"""The hospital account: adds its doctors (junior or senior). Sent patients go to junior doctors
+automatically (`services.review.assign_waiting`); the hospital can still move one by hand."""
 
 import uuid
 from typing import Any, Literal
@@ -41,13 +41,14 @@ class DoctorChange(BaseModel):
     password: str | None = Field(None, min_length=8, max_length=128)
 
 
-def _doctor_out(u) -> dict[str, Any]:
-    return {"id": u.id, "name": u.full_name, "email": u.email, "seniority": u.seniority, "active": u.is_active}
+def _doctor_out(db: Session, u) -> dict[str, Any]:
+    return {"id": u.id, "name": u.full_name, "email": u.email, "seniority": u.seniority, "active": u.is_active,
+            "patients": reviews.open_patients(db, u.org_id, u)}
 
 
 @router.get("/doctors")
 def list_doctors(current: CurrentUser = Depends(hospital_only), db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    return [_doctor_out(u) for u in UserRepository(db, current.org_id).doctors()]
+    return [_doctor_out(db, u) for u in UserRepository(db, current.org_id).doctors()]
 
 
 @router.post("/doctors", status_code=status.HTTP_201_CREATED)
@@ -56,8 +57,10 @@ def add_doctor(body: DoctorIn, current: CurrentUser = Depends(hospital_only), db
     if users.get_by_email(body.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "Someone at this hospital already uses that email")
     user = users.create(body.email, body.full_name, body.password, Role.DOCTOR, seniority=body.seniority)
+    db.flush()
+    reviews.assign_waiting(db, current.org_id)  # a new junior picks up patients who were waiting
     db.commit()
-    return _doctor_out(user)
+    return _doctor_out(db, user)
 
 
 @router.patch("/doctors/{user_id}")
@@ -75,8 +78,12 @@ def change_doctor(
         user.is_active = body.is_active
     if body.password is not None:
         user.password_hash = hash_password(body.password)
+    db.flush()
+    if user.seniority != "junior" or not user.is_active:
+        reviews.release(db, current.org_id, user.id)
+    reviews.assign_waiting(db, current.org_id)
     db.commit()
-    return _doctor_out(user)
+    return _doctor_out(db, user)
 
 
 @router.get("/patients")

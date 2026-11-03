@@ -1,6 +1,6 @@
-"""Hospital -> junior doctor -> senior doctor. The hospital adds its doctors and assigns each sent
-patient to a junior; the junior edits the summary and sends it to a senior. Doctors see only the
-patients assigned or sent to them."""
+"""Hospital -> junior doctor -> senior doctor. The hospital adds its doctors; each sent patient goes
+to a junior automatically (fewest open patients first); the junior edits the summary and sends it to
+a senior. Doctors see only the patients assigned or sent to them."""
 
 from app.models import Role
 from tests.test_intake import FACTS, as_user, finished_session, no_background, person  # noqa: F401
@@ -39,20 +39,23 @@ def test_hospital_assigns_junior_writes_and_sends_to_senior(client, db, org_a, o
     sh, oh = doctor_headers(client, org_a, senior["email"]), doctor_headers(client, org_a, other_senior["email"])
     assert client.get("/auth/me", headers=jh).json()["seniority"] == "junior"
 
+    # sent -> straight to a junior: Dr Jain (alphabetical), then Dr Kapoor (fewer open patients)
     case_id = sent_patient(client, db, org_a, "Maria Placeholder")
-    row = client.get("/hospital/patients", headers=hh).json()[0]
-    assert row["case_id"] == case_id and row["review"]["status"] == "unassigned"
-    for h in (jh, kh, sh, oh):  # nobody has it yet
+    second = sent_patient(client, db, org_a, "Bina Placeholder")
+    rows = {r["case_id"]: r["review"] for r in client.get("/hospital/patients", headers=hh).json()}
+    assert rows[case_id]["status"] == "with_junior" and rows[case_id]["junior"]["name"] == "Dr Jain"
+    assert rows[second]["junior"]["name"] == "Dr Kapoor"
+    for h in (sh, oh):  # seniors have nothing yet
         assert client.get("/doctor/patients", headers=h).json() == []
         assert client.get(f"/doctor/patients/{case_id}", headers=h).status_code == 404
+    assert [d["patients"] for d in client.get("/hospital/doctors", headers=hh).json()] == [0, 0, 1, 1]
 
-    # only an active junior of this hospital can be assigned
+    # the hospital can still move one by hand, only to an active junior of its own
     assert client.post(f"/hospital/patients/{case_id}/assign", headers=hh, json={"junior_user_id": senior["id"]}).status_code == 409
     assert client.post(f"/hospital/patients/{case_id}/assign", headers=jh, json={"junior_user_id": junior["id"]}).status_code == 403
-    r = client.post(f"/hospital/patients/{case_id}/assign", headers=hh, json={"junior_user_id": junior["id"]})
-    assert r.status_code == 200 and r.json()["status"] == "with_junior" and r.json()["junior"]["name"] == "Dr Jain"
 
     assert [p["case_id"] for p in client.get("/doctor/patients", headers=jh).json()] == [case_id]
+    assert [p["case_id"] for p in client.get("/doctor/patients", headers=kh).json()] == [second]
     for h in (kh, sh):
         assert client.get(f"/doctor/patients/{case_id}", headers=h).status_code == 404
     detail = client.get(f"/doctor/patients/{case_id}", headers=jh).json()
@@ -93,13 +96,19 @@ def test_hospital_assigns_junior_writes_and_sends_to_senior(client, db, org_a, o
     assert client.patch(f"/hospital/doctors/{junior['id']}", headers=hb, json={"is_active": False}).status_code == 404
 
 
-def test_hospital_manages_its_doctors(client, db, org_a):
+def test_patients_wait_for_a_junior_and_move_when_one_leaves(client, db, org_a):
     hh = as_user(client, org_a, person(db, org_a, Role.HOSPITAL, "City Hospital"))
-    junior = add_doctor(client, hh, "Dr Jain", "junior")
+    status = lambda: {r["case_id"]: (r["review"]["status"], (r["review"]["junior"] or {}).get("name"))  # noqa: E731
+                      for r in client.get("/hospital/patients", headers=hh).json()}
     case_id = sent_patient(client, db, org_a, "Maria Placeholder")
+    assert status()[case_id] == ("unassigned", None)  # no junior yet: it waits
+    junior = add_doctor(client, hh, "Dr Jain", "junior")
+    assert status()[case_id] == ("with_junior", "Dr Jain")  # picked up when the first junior is added
+    add_doctor(client, hh, "Dr Kapoor", "junior")
 
     r = client.patch(f"/hospital/doctors/{junior['id']}", headers=hh, json={"is_active": False})
     assert r.json()["active"] is False
+    assert status()[case_id] == ("with_junior", "Dr Kapoor")  # moved to a junior still here
     assert client.post("/auth/login", json={"org_slug": org_a.org.slug, "email": junior["email"], "password": "doctor-pass-1"}).status_code == 401
     assert client.post(f"/hospital/patients/{case_id}/assign", headers=hh, json={"junior_user_id": junior["id"]}).status_code == 409
 

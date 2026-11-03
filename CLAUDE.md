@@ -105,8 +105,8 @@ docker compose exec backend python /seed/seed.py --intake        # hospital, jun
 
 ### 8. Roles and who sees what (`app/auth/access.py`)
 - `resident`, `faculty`, `admin`: training cases only. `patient`: their own intake case only.
-  `hospital`: every intake case the patient has sent (`published_at` set); adds doctors and assigns
-  each sent patient to a junior. `doctor` (`seniority` junior / senior): only the sent cases whose
+  `hospital`: every intake case the patient has sent (`published_at` set); adds doctors. Sent
+  patients go to a junior automatically (`services/review.assign_waiting`). `doctor` (`seniority` junior / senior): only the sent cases whose
   `case_reviews` row names them as the junior, or as the senior once the junior has sent it.
   Everything else is 404.
 - Patients are demo personas (rule 2 still applies). Intake facts quote the patient's own

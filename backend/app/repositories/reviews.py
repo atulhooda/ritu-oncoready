@@ -15,6 +15,10 @@ class CaseReviewRepository(TenantRepository[CaseReview]):
         """The case's review, created (unassigned) the first time it is needed."""
         return self.for_case(case_id) or self.add(case_id=case_id, status="unassigned")
 
+    def waiting(self) -> Sequence[CaseReview]:
+        """Sent patients no junior has yet, oldest first."""
+        return self.list(CaseReview.status == "unassigned", limit=1000)
+
     def for_junior(self, user_id: uuid.UUID) -> Sequence[CaseReview]:
         return self.list(CaseReview.junior_user_id == user_id, limit=1000)
 
