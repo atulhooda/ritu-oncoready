@@ -371,7 +371,25 @@ export interface DoctorPatientDetail {
   symptom_course: SymptomCourse;
   records: RecordInfo[];
   timeline: Timeline;
+  /** Drugs named in the records, each with its doses over time. */
+  medicines: Medicine[];
+  /** Measured values in the records (LVEF, hemoglobin, ...), dated, oldest first. */
+  labs: LabSeries[];
   review: CaseReview;
+}
+
+export interface Medicine {
+  drug: string;
+  /** date_basis "document": the line has no date of its own; this is the record page's date. */
+  entries: { date: string | null; date_basis: "stated" | "document" | null; dose: number | null; unit: string | null; frequency: string | null; description: string | null; source: SourceRef }[];
+  latest: Medicine["entries"][number] | null;
+}
+
+export interface LabSeries {
+  key: string;
+  label: string;
+  unit: string | null;
+  points: { date: string; date_basis: "stated" | "document" | null; value: number; source: SourceRef }[];
 }
 
 /** Each symptom across conversations, oldest to newest. A null cell: not mentioned that time. */

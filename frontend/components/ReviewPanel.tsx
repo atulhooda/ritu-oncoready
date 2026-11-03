@@ -6,7 +6,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Label } from "@/components/ui";
 import { api } from "@/lib/api";
 import { setSummaryTarget } from "@/lib/summaryPoints";
-import type { CaseReview, DoctorRef, IntakeFact, IntakeSummary, Me, PatientDetails, ReviewContent, SummaryPoint } from "@/lib/types";
+import { buildSeries, TrendsGrid } from "@/components/Trends";
+import { narrative } from "@/lib/narrative";
+import type { CaseReview, DoctorRef, IntakeFact, IntakeSummary, LabSeries, Me, Medicine, PatientDetails, ReviewContent, SummaryPoint, SymptomCourse } from "@/lib/types";
 import { detailsLine } from "@/lib/types";
 
 const at = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "");
@@ -20,7 +22,14 @@ const KINDS: { key: SummaryPoint["kind"]; label: string; short: string; tone: st
 const kindOf = (k: SummaryPoint["kind"]) => KINDS.find((x) => x.key === k)!;
 
 type Fact = IntakeFact & { section: string; sectionLabel: string };
-type Patient = { name: string; details: PatientDetails; records: number };
+type Patient = {
+  name: string;
+  details: PatientDetails;
+  records: number;
+  medicines: Medicine[];
+  labs: LabSeries[];
+  course: SymptomCourse | null;
+};
 
 /** "score: 5/10, location: Head" -> "5/10 · Head" */
 const detailText = (f: IntakeFact) => Object.values(f.details).filter(Boolean).join(" · ");
@@ -36,6 +45,8 @@ function SummaryCard({ patient, facts, content, review, preview }: { patient: Pa
     return gs;
   }, []);
   const notes = KINDS.map((k) => ({ ...k, points: content.points.filter((p) => p.kind === k.key) })).filter((k) => k.points.length);
+  const story = narrative({ name: patient.name, details: patient.details, facts: chosen, labs: patient.labs, medicines: patient.medicines });
+  const series = buildSeries(patient.labs, patient.medicines, patient.course);
   return (
     <div className="space-y-5">
       <div>
@@ -48,6 +59,11 @@ function SummaryCard({ patient, facts, content, review, preview }: { patient: Pa
             {review.sent_at ? ` · ${at(review.sent_at)}` : ""}
           </div>
         )}
+      </div>
+      <div>
+        <Label>Overview</Label>
+        <p className="mt-1.5 text-[15px] leading-relaxed">{story.join(" ")}</p>
+        <p className="mt-1 text-xs text-muted">Built from the patient&apos;s report and the records; read the sources before relying on it.</p>
       </div>
       {urgent.length > 0 && (
         <div className="flex gap-2.5 rounded-xl border border-red-600/60 bg-red-50 px-4 py-3 text-[15px] text-red-900">
@@ -84,7 +100,34 @@ function SummaryCard({ patient, facts, content, review, preview }: { patient: Pa
           </ul>
         </div>
       ))}
-      {!notes.length && !groups.length && <p className="text-muted">Nothing ticked or written yet.</p>}
+      {series.length > 0 && (
+        <div>
+          <Label>Over time · records and the patient&apos;s scores, on one timeline</Label>
+          <div className="mt-2">
+            <TrendsGrid series={series} cols={preview ? 1 : 2} />
+          </div>
+        </div>
+      )}
+      {patient.medicines.length > 0 && (
+        <div>
+          <Label>Medicines in the records</Label>
+          <ul className="mt-2 space-y-1 text-[15px]">
+            {patient.medicines.map((m) => (
+              <li key={m.drug} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium">{m.drug}</span>
+                {m.latest && (
+                  <span className="text-sm text-muted">
+                    {[`${m.latest.dose} ${m.latest.unit ?? ""}`.trim(), m.latest.frequency, m.latest.date ? `latest ${new Date(m.latest.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : null].filter(Boolean).join(" · ")}
+                  </span>
+                )}
+                <span className="text-xs text-muted">· {m.entries.length} record entr{m.entries.length === 1 ? "y" : "ies"}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-muted">Drug interactions are not checked automatically; review the list against a drug reference.</p>
+        </div>
+      )}
+      {!notes.length && !groups.length && <p className="text-muted">Nothing ticked or added yet.</p>}
     </div>
   );
 }

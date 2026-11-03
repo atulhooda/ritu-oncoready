@@ -6,7 +6,8 @@ The LLM proposes events with a page number and a verbatim span. Code then:
   3. fuzzy-aligns the span to that page's OCR text with rapidfuzz; score must be
      >= span_match_threshold (else: span_not_found). The stored span is the aligned OCR
      substring, so it is verbatim page text even when the LLM normalized whitespace or case.
-  4. checks any numeric value / field value appears in the aligned span (else: value_not_in_span)
+  4. checks any numeric value / field value / drug name and dose appears in the aligned span
+     (else: value_not_in_span)
   5. parses the date in code (dates.py); a date the page does not contain is discarded.
 """
 
@@ -49,6 +50,10 @@ class CandidateEvent(BaseModel):
     unit: str | None = None
     attribute: str | None = None
     attribute_value: str | None = None
+    drug: str | None = Field(None, max_length=120)
+    dose: float | None = None
+    dose_unit: str | None = Field(None, max_length=30)
+    frequency: str | None = Field(None, max_length=80)
 
 
 class LlmExtraction(BaseModel):
@@ -78,6 +83,12 @@ Each event is an object with:
   or PR status, the field name (e.g. "stage", "histology", "HER2") and its value copied exactly
   (e.g. "cT1c N0 M0 (stage IA3)", "adenocarcinoma", "3+ (positive)"); else null.
   Use one event per field when a span states several (e.g. ER and PR).
+- drug / dose / dose_unit / frequency: when the span names a medicine or cancer drug the patient
+  was given, prescribed or is taking: the drug name copied exactly as written; the dose number
+  exactly as written (number only, else null); its unit (e.g. "mg", "mg/m2", "mg/kg", "AUC", "units");
+  how often, as written (e.g. "every 3 weeks", "once daily"), else null. One event per drug, even
+  when a line lists several. Use category "treatment" for cancer treatment and "other" for other
+  medicines.
 Ignore letterheads, patient identifiers, page footers, and "synthetic document" notices.
 Create one event per test when a sentence orders several tests."""
 
@@ -125,6 +136,10 @@ def validate_candidate(raw: dict[str, Any], pages: dict[int, DocumentPage], thre
         return "reject", "value_not_in_span", f"value {c.value} not in span {matched!r}", score
     if c.attribute_value and align_span(c.attribute_value, matched)[0] < threshold:
         return "reject", "value_not_in_span", f"{c.attribute} value {c.attribute_value!r} not in span", score
+    if c.drug and align_span(c.drug, matched)[0] < threshold:
+        return "reject", "value_not_in_span", f"drug {c.drug!r} not in span", score
+    if c.dose is not None and (not c.drug or not any(abs(n - c.dose) < 1e-9 for n in _numbers(matched))):
+        return "reject", "value_not_in_span", f"dose {c.dose} not in span (or no drug)", score
 
     # A stated date must actually be on the page; otherwise treat the fact as undated.
     date_text = c.date_text
@@ -152,6 +167,10 @@ def validate_candidate(raw: dict[str, Any], pages: dict[int, DocumentPage], thre
             "attribute": canonical_attribute(c.attribute),
             "attribute_text": c.attribute,
             "attribute_value": c.attribute_value,
+            "drug": c.drug.strip() if c.drug else None,
+            "dose": c.dose,
+            "dose_unit": c.dose_unit,
+            "frequency": c.frequency,
             "llm_span": c.source_text_span,
             "match_score": round(score, 4),
         },

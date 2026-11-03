@@ -10,6 +10,7 @@ import { ReviewPanel } from "@/components/ReviewPanel";
 import { RituAssistant } from "@/components/RituAssistant";
 import { SessionRecording } from "@/components/SessionRecording";
 import { SymptomCourse } from "@/components/SymptomCourse";
+import { buildSeries, TrendsGrid } from "@/components/Trends";
 import { TranscriptView } from "@/components/IntakeSummaryView";
 import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
@@ -159,7 +160,7 @@ export default function DoctorPatientPage() {
               me={me}
               review={p.review}
               report={p.summary}
-              patient={{ name: p.name, details: p.details, records: p.records.length }}
+              patient={{ name: p.name, details: p.details, records: p.records.length, medicines: p.medicines, labs: p.labs, course: p.symptom_course }}
               onChange={(review) => setP({ ...p, review })}
             />}
 
@@ -221,11 +222,22 @@ export default function DoctorPatientPage() {
             (p.records.length === 0 ? (
               <EmptyState title="No records uploaded.">The patient has not added earlier records yet.</EmptyState>
             ) : (
+              <div className="space-y-6">
+              {buildSeries(p.labs, p.medicines, null).length > 0 && (
+                <Card className="p-6">
+                  <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                    <Label>Lab values and doses over time</Label>
+                    <span className="text-sm text-muted">From the records, on one timeline. Click a point to open its page.</span>
+                  </div>
+                  <TrendsGrid series={buildSeries(p.labs, p.medicines, null)} onSource={openSource} cols={3} />
+                </Card>
+              )}
               <div className="grid gap-6 xl:grid-cols-2">
                 <TimelineView t={p.timeline} onSource={openSource} />
                 <div id="records-viewer">
                   {docs.length ? <DocViewer docs={docs} viewer={viewer} setViewer={setViewer} sticky /> : <Card className="p-6"><Label>Records</Label></Card>}
                 </div>
+              </div>
               </div>
             ))}
         </>

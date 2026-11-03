@@ -182,3 +182,68 @@ def test_tesseract_reads_rendered_page():
     ImageDraw.Draw(img).text((40, 100), "Left ventricular ejection fraction: 48%.", font=ImageFont.load_default(size=40), fill=0)
     result = ocr_tesseract(img)
     assert "ejection fraction" in result.text and result.confidence > 0.5
+
+
+DRUG_PAGES = (
+    "CHEMO RECORD\nCycle 1 on 01/06/2025: trastuzumab 8 mg/kg loading dose.\nPantoprazole 40 mg once daily.",
+    "CHEMO RECORD\nCycle 2 on 01/27/2025: trastuzumab 6 mg/kg every 3 weeks.\nHemoglobin 11.2 g/dL on 01/27/2025.",
+)
+
+
+def test_drugs_and_doses_are_read_from_records_and_graphed(db, org_a):
+    from app.services.timeline import build_timeline
+    from app.services.trends import record_trends
+
+    case, doc = make_doc(db, org_a, DRUG_PAGES)
+    drug = lambda page, span, name, dose, unit, freq, date_text: {  # noqa: E731
+        "page_number": page, "source_text_span": span, "category": "treatment", "kind": "treatment",
+        "description": f"{name} {dose} {unit}", "date_text": date_text, "drug": name, "dose": dose, "dose_unit": unit,
+        "frequency": freq}
+    events = [
+        drug(1, "trastuzumab 8 mg/kg loading dose", "trastuzumab", 8, "mg/kg", None, "01/06/2025"),
+        drug(2, "trastuzumab 6 mg/kg every 3 weeks", "Trastuzumab", 6, "mg/kg", "every 3 weeks", "01/27/2025"),
+        {**drug(1, "Pantoprazole 40 mg once daily", "Pantoprazole", 40, "mg", "once daily", None), "category": "other"},
+        {"page_number": 2, "source_text_span": "Hemoglobin 11.2 g/dL on 01/27/2025", "category": "lab",
+         "kind": "test_result", "description": "Hb 11.2", "date_text": "01/27/2025", "analyte": "hemoglobin",
+         "value": 11.2, "unit": "g/dL"},
+        # rejected: the dose is not on the page; the drug is not on the page
+        drug(1, "trastuzumab 8 mg/kg loading dose", "trastuzumab", 80, "mg/kg", None, "01/06/2025"),
+        drug(1, "Pantoprazole 40 mg once daily", "omeprazole", 40, "mg", None, None),
+    ]
+    summary = run_extraction(db, org_a.org.id, doc.id, extract=fake_llm(events))
+    assert (summary.accepted, summary.rejected) == (4, 2)
+
+    out = record_trends(db, org_a.org.id, case.id, build_timeline(db, org_a.org.id, case.id))
+    meds = {m["drug"].lower(): m for m in out["medicines"]}
+    assert set(meds) == {"pantoprazole", "trastuzumab"}  # "Trastuzumab" and "trastuzumab" are one drug
+    t = meds["trastuzumab"]
+    assert [(str(e["date"]), e["dose"], e["unit"]) for e in t["entries"]] == [("2025-01-06", 8, "mg/kg"), ("2025-01-27", 6, "mg/kg")]
+    assert t["latest"]["frequency"] == "every 3 weeks" and t["entries"][0]["source"]["page_number"] == 1
+    assert meds["pantoprazole"]["entries"][0]["date"] is None  # undated page: still listed, no date
+    hb = next(s for s in out["labs"] if s["key"] == "hemoglobin")
+    assert (hb["label"], hb["unit"], [p["value"] for p in hb["points"]]) == ("hemoglobin", "g/dL", [11.2])
+
+
+def test_undated_medicine_lines_take_their_page_date(db, org_a):
+    from app.services.trends import record_trends
+
+    case, doc = make_doc(db, org_a, ("CLINIC NOTE\nDate of service: 2025-07-20\nMedications: furosemide 20 mg daily.",))
+    run_extraction(db, org_a.org.id, doc.id, extract=fake_llm([
+        {"page_number": 1, "source_text_span": "furosemide 20 mg daily", "category": "other", "kind": "treatment",
+         "description": "furosemide 20 mg daily", "drug": "furosemide", "dose": 20, "dose_unit": "mg", "frequency": "daily"}]))
+    entry = record_trends(db, org_a.org.id, case.id)["medicines"][0]["entries"][0]
+    assert (str(entry["date"]), entry["date_basis"]) == ("2025-07-20", "document")
+
+
+def test_blood_pressure_is_not_graphed_and_one_value_per_date():
+    from app.services.trends import lab_series
+
+    src = {"document_id": "d", "filename": "n.pdf", "page_number": 1}
+    ev = lambda analyte, value, d: {"event_date": d, "source": src, "description": "", "payload": {  # noqa: E731
+        "analyte": analyte, "analyte_text": analyte, "value": value, "unit": "x"}}
+    timeline = {"events": [ev("blood pressure", 124, "2026-07-20"), ev("blood pressure", 78, "2026-07-20"),
+                           ev("pulse", 80, "2026-07-20"), ev("pulse", 82, "2026-07-20"), ev("pulse", 90, "2026-08-01")],
+                "date_unclear": {"events": []}}
+    series = lab_series(timeline)
+    assert [s["key"] for s in series] == ["pulse_rate"]
+    assert [p["value"] for p in series[0]["points"]] == [80, 90]

@@ -308,6 +308,27 @@ access in `backend/app/auth/access.py`.
   them; the summary tab opens first, and the report, records and recording are one tab away. Any
   other doctor gets 404. Only the assigned junior can save or send (409 otherwise).
 
+### Medicines, lab trends and the senior's overview
+
+Code: `backend/app/services/trends.py`, `frontend/components/Trends.tsx`, `frontend/lib/narrative.ts`.
+
+- **Drugs and doses.** Record extraction also returns, for a medicine line, the drug name, dose,
+  unit and frequency as written. A drug name or dose that is not in the verbatim span is rejected
+  (`value_not_in_span`). Names are grouped case-insensitively; an entry without a date of its own
+  takes its record page's date, labelled "date of the record".
+- **Lab series.** Every dated numeric result, grouped by quantity, one unit per series, one value per
+  date. Blood pressure (two numbers) is not graphed.
+- **Graphs.** Small multiples, one measure per graph (never two axes), all on the same date range so
+  a change in a lab value, a dose and a symptom score (0-10, from the patient's conversations) line
+  up. Hovering shows the value, date and source page; on the Records tab a click opens the page.
+  This is how related changes across visits are shown; no statistical correlation is computed.
+- **Overview.** The senior's summary opens with a paragraph built in code from templates: the
+  patient's details, the ticked points, the first and latest value of up to four lab series and the
+  latest dose of each drug in the records. No interpretation, causes or advice.
+- **Not done: drug interactions.** The medicines are listed for the doctor to check against a drug
+  reference. Automated interaction checking needs a licensed, clinically reviewed drug database and
+  would be clinical decision support (rule 2), so it is not built.
+
 ## Records assistant (doctor only)
 
 RITU AI Assistant: a floating chat / voice panel on the doctor's dashboard that answers questions

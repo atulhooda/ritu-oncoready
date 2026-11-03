@@ -4,7 +4,8 @@ prepares a summary and sends it to a senior doctor (`CaseReview`).
 The summary is structured (`CaseReview.content`): which points the patient reported the senior
 should see (intake fact ids, shown with the patient's own words) and the junior's own points
 (a concern, a finding, or a question for the senior; optionally with where it came from). The first
-draft ticks the current symptoms, the patient's questions and anything on the urgent-signs list;
+draft ticks the current symptoms, family history, exposures, the patient's questions and anything
+on the urgent-signs list;
 nothing is written for the junior. The plain-text copy (`CaseReview.summary`) is built in code.
 """
 
@@ -27,7 +28,7 @@ POINT_KINDS = {
     "question": "For the senior doctor",
 }
 OLD_NOTES = {"findings": "finding", "concerns": "concern", "questions": "question"}  # before points
-DRAFT_SECTIONS = ("current_symptom", "concern")
+DRAFT_SECTIONS = ("current_symptom", "family_history", "exposure", "concern")
 MAX_POINT = 2000
 MAX_POINTS = 100
 

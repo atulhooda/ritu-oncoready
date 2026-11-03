@@ -25,7 +25,7 @@ from app.repositories.reviews import CaseReviewRepository
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository
 from app.repositories.users import PractitionerProfileRepository, UserRepository
 from app.voice import client as ritu
-from app.services import review as reviews
+from app.services import review as reviews, trends
 from app.services.timeline import build_timeline
 
 router = APIRouter(prefix="/doctor", tags=["doctor"])
@@ -130,6 +130,7 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(viewer), db: 
     case = visible_case_or_404(db, current, case_id)  # assigned / sent to this doctor only
     history = service.session_history(db, current.org_id, case.id)
     review = CaseReviewRepository(db, current.org_id).for_case(case.id)
+    timeline = build_timeline(db, current.org_id, case.id)
     return {
         "case_id": case.id,
         "name": case.title,
@@ -140,7 +141,8 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(viewer), db: 
         "sessions": history,
         "symptom_course": service.symptom_course(history),
         "records": service.records(db, current.org_id, case.id),
-        "timeline": build_timeline(db, current.org_id, case.id),
+        "timeline": timeline,
+        **trends.record_trends(db, current.org_id, case.id, timeline),
         "review": reviews.review_out(db, current.org_id, case, review),
     }
 
