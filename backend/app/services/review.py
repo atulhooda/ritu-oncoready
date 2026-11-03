@@ -2,7 +2,8 @@
 prepares a summary and sends it to a senior doctor (`CaseReview`).
 
 The summary is structured (`CaseReview.content`): which points the patient reported the senior
-should see (intake fact ids, shown with the patient's own words) and the junior's notes. The first
+should see (intake fact ids, shown with the patient's own words) and the junior's own points
+(a concern, a finding, or a question for the senior; optionally with where it came from). The first
 draft ticks the current symptoms, the patient's questions and anything on the urgent-signs list;
 nothing is written for the junior. The plain-text copy (`CaseReview.summary`) is built in code.
 """
@@ -19,13 +20,16 @@ from app.repositories.cases import CaseRepository
 from app.repositories.reviews import CaseReviewRepository
 from app.repositories.users import UserRepository
 
-NOTES = {
-    "findings": "From the records and conversation",
-    "concerns": "Concerns",
-    "questions": "For the senior doctor",
+# The junior's own points, each of one kind, shown to the senior grouped in this order.
+POINT_KINDS = {
+    "concern": "Concerns",
+    "finding": "From the records and conversation",
+    "question": "For the senior doctor",
 }
+OLD_NOTES = {"findings": "finding", "concerns": "concern", "questions": "question"}  # before points
 DRAFT_SECTIONS = ("current_symptom", "concern")
-MAX_NOTE = 5000
+MAX_POINT = 2000
+MAX_POINTS = 100
 
 
 class ReviewError(ValueError):
@@ -40,8 +44,15 @@ def reported_facts(db: Session, org_id: uuid.UUID, case: PatientCase) -> list[di
 
 
 def draft_content(facts: list[dict[str, Any]]) -> dict[str, Any]:
-    return {"facts": [str(f["id"]) for f in facts if f["section"] in DRAFT_SECTIONS or f["urgent"]],
-            **{k: "" for k in NOTES}}
+    return {"facts": [str(f["id"]) for f in facts if f["section"] in DRAFT_SECTIONS or f["urgent"]], "points": []}
+
+
+def with_points(content: dict[str, Any]) -> dict[str, Any]:
+    """Content saved before points existed (three note boxes) as points."""
+    if "points" in content:
+        return content
+    points = [{"kind": kind, "text": content[old], "source": None} for old, kind in OLD_NOTES.items() if content.get(old)]
+    return {"facts": content.get("facts", []), "points": points}
 
 
 def clean_content(facts: list[dict[str, Any]], content: dict[str, Any]) -> dict[str, Any]:
@@ -49,10 +60,14 @@ def clean_content(facts: list[dict[str, Any]], content: dict[str, Any]) -> dict[
     chosen = [str(i) for i in content.get("facts", [])]
     if any(i not in known for i in chosen):
         raise ReviewError("a ticked point is not in this patient's report")
-    out = {"facts": [str(f["id"]) for f in facts if str(f["id"]) in chosen],  # report order
-           **{k: (content.get(k) or "").strip()[:MAX_NOTE] for k in NOTES}}
-    if not out["facts"] and not any(out[k] for k in NOTES):
-        raise ReviewError("the summary is empty: tick a point or write a note")
+    points = []
+    for p in content.get("points", [])[:MAX_POINTS]:
+        text = (p.get("text") or "").strip()[:MAX_POINT]
+        if text and p.get("kind") in POINT_KINDS:
+            points.append({"kind": p["kind"], "text": text, "source": (p.get("source") or "").strip()[:300] or None})
+    out = {"facts": [str(f["id"]) for f in facts if str(f["id"]) in chosen], "points": points}  # facts in report order
+    if not out["facts"] and not points:
+        raise ReviewError("the summary is empty: tick a point or add one")
     return out
 
 
@@ -70,9 +85,10 @@ def summary_text(case: PatientCase, details: dict[str, Any], facts: list[dict[st
             lines += ["", f"{section}:"]
         extra = ", ".join(f"{k}: {v}" for k, v in f["details"].items() if v)
         lines.append(f"- {f['label']}{f' ({extra})' if extra else ''}{' [urgent sign]' if f['urgent'] else ''}")
-    for key, label in NOTES.items():
-        if content.get(key):
-            lines += ["", f"{label}:", content[key]]
+    for kind, label in POINT_KINDS.items():
+        mine = [p for p in content["points"] if p["kind"] == kind]
+        if mine:
+            lines += ["", f"{label}:"] + [f"- {p['text']}{f' ({p['source']})' if p['source'] else ''}" for p in mine]
     return "\n".join(lines)
 
 
@@ -85,11 +101,11 @@ def review_out(db: Session, org_id: uuid.UUID, case: PatientCase, review: CaseRe
     if review is None or review.status == "unassigned":
         content = None
     elif review.content is not None:
-        content = review.content
+        content = with_points(review.content)
     else:
         content = draft_content(reported_facts(db, org_id, case))
         if review.summary:  # written before summaries were structured
-            content["findings"] = review.summary
+            content["points"] = [{"kind": "finding", "text": review.summary, "source": None}]
     return {
         "status": review.status if review else "unassigned",
         "content": content,

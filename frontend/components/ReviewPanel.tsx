@@ -1,20 +1,23 @@
 "use client";
 
-import { AlertTriangle, Check, Send } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Plus, Send, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge, Button, Card, Label } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { CaseReview, DoctorRef, IntakeFact, IntakeSummary, Me, PatientDetails, ReviewContent } from "@/lib/types";
+import { setSummaryTarget } from "@/lib/summaryPoints";
+import type { CaseReview, DoctorRef, IntakeFact, IntakeSummary, Me, PatientDetails, ReviewContent, SummaryPoint } from "@/lib/types";
 import { detailsLine } from "@/lib/types";
 
 const at = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "");
 
-const NOTES = [
-  { key: "findings", label: "From the records and conversation", placeholder: "What you found in the records, transcript or recording. E.g. Echo 12 Mar: LVEF 48%, was 60% in Jan." },
-  { key: "concerns", label: "Concerns", placeholder: "What the senior should look at first." },
-  { key: "questions", label: "For the senior doctor", placeholder: "Questions or decisions you need from them." },
-] as const;
+/** The kinds of point a junior adds, in the order the senior reads them. */
+const KINDS: { key: SummaryPoint["kind"]; label: string; short: string; tone: string }[] = [
+  { key: "concern", label: "Concerns", short: "Concern", tone: "border-red-300 bg-red-50 text-red-800" },
+  { key: "finding", label: "From the records and conversation", short: "Finding", tone: "border-blue-300 bg-blue-50 text-blue-800" },
+  { key: "question", label: "For the senior doctor", short: "For senior", tone: "border-amber-300 bg-amber-50 text-amber-900" },
+];
+const kindOf = (k: SummaryPoint["kind"]) => KINDS.find((x) => x.key === k)!;
 
 type Fact = IntakeFact & { section: string; sectionLabel: string };
 type Patient = { name: string; details: PatientDetails; records: number };
@@ -32,7 +35,7 @@ function SummaryCard({ patient, facts, content, review, preview }: { patient: Pa
     else gs.push({ label: f.sectionLabel, facts: [f] });
     return gs;
   }, []);
-  const notes = NOTES.filter((n) => content[n.key].trim());
+  const notes = KINDS.map((k) => ({ ...k, points: content.points.filter((p) => p.kind === k.key) })).filter((k) => k.points.length);
   return (
     <div className="space-y-5">
       <div>
@@ -58,7 +61,14 @@ function SummaryCard({ patient, facts, content, review, preview }: { patient: Pa
       {notes.map((n) => (
         <div key={n.key}>
           <Label>{n.label}</Label>
-          <p className="mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed">{content[n.key]}</p>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed">
+            {n.points.map((p, i) => (
+              <li key={i}>
+                <span className="whitespace-pre-wrap">{p.text}</span>
+                {p.source && <span className="ml-1.5 text-sm text-muted">· {p.source}</span>}
+              </li>
+            ))}
+          </ul>
         </div>
       ))}
       {groups.map((g) => (
@@ -108,6 +118,20 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
   useEffect(() => {
     if (editable) api<DoctorRef[]>("/doctor/seniors").then(setSeniors).catch(() => {});
   }, [editable]);
+  // While editing, Ritu's answers can be added as points ("Add to summary" under each answer).
+  const [fromRitu, setFromRitu] = useState(0);
+  useEffect(() => {
+    if (!editable) return;
+    setSummaryTarget(({ text, source }) => {
+      setContent((c) => (c ? { ...c, points: [...c.points, { kind: "finding", text, source }] } : c));
+      setDirty(true);
+      setFromRitu((n) => n + 1);
+    });
+    return () => setSummaryTarget(null);
+  }, [editable]);
+  const [draft, setDraft] = useState("");
+  const [draftKind, setDraftKind] = useState<SummaryPoint["kind"]>("finding");
+  const newPoint = useRef<HTMLTextAreaElement>(null);
 
   if (review.status === "unassigned" || !content) {
     return (
@@ -142,7 +166,20 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
     else gs.push({ label: f.sectionLabel, facts: [f] });
     return gs;
   }, []);
-  const empty = !content.facts.length && !NOTES.some((n) => content[n.key].trim());
+  const empty = !content.facts.length && !content.points.some((p) => p.text.trim());
+  const setPoints = (points: SummaryPoint[]) => edit({ ...content, points });
+  const addPoint = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setPoints([...content.points, { kind: draftKind, text, source: null }]);
+    setDraft("");
+    newPoint.current?.focus();
+  };
+  const move = (i: number, by: number) => {
+    const ps = [...content.points];
+    [ps[i], ps[i + by]] = [ps[i + by], ps[i]];
+    setPoints(ps);
+  };
 
   async function run(kind: "save" | "send") {
     setBusy(kind);
@@ -203,23 +240,99 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
         </Card>
 
         <Card className="p-6 sm:p-7">
-          <Label>2 · Your notes</Label>
-          <p className="mt-1 text-sm text-muted">Check the records and conversation (tabs above, or ask Ritu at the bottom right). Leave a box empty to skip it.</p>
-          <div className="mt-5 space-y-5">
-            {NOTES.map((n) => (
-              <label key={n.key} className="block">
-                <span className="mb-1.5 block font-medium">{n.label}</span>
-                <textarea
-                  id={`review-${n.key}`}
-                  value={content[n.key]}
-                  onChange={(e) => edit({ ...content, [n.key]: e.target.value })}
-                  placeholder={n.placeholder}
-                  rows={n.key === "findings" ? 4 : 2}
-                  className="w-full resize-y rounded-xl border border-line bg-white px-4 py-3 text-[15px] leading-relaxed outline-none placeholder:text-muted/70 focus:border-brand focus:ring-4 focus:ring-brand/15"
-                />
-              </label>
-            ))}
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <Label>2 · Your points</Label>
+            <span className="text-sm text-muted">{content.points.length} added</span>
           </div>
+          <p className="mt-1 text-sm text-muted">
+            One point at a time: what you found in the records, a concern, or a question for the senior. Or ask Ritu (bottom right) and tap
+            <span className="font-medium text-brand"> Add to summary</span> under the answer.
+          </p>
+
+          {content.points.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {content.points.map((p, i) => (
+                <li key={i} className="group flex items-start gap-2 rounded-xl border border-line/80 bg-white px-3 py-2.5">
+                  <select
+                    aria-label="Kind of point"
+                    value={p.kind}
+                    onChange={(e) => setPoints(content.points.map((x, j) => (j === i ? { ...x, kind: e.target.value as SummaryPoint["kind"] } : x)))}
+                    className={`mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold outline-none ${kindOf(p.kind).tone}`}
+                  >
+                    {KINDS.map((k) => (
+                      <option key={k.key} value={k.key}>
+                        {k.short}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="min-w-0 flex-1">
+                    <textarea
+                      value={p.text}
+                      onChange={(e) => setPoints(content.points.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                      rows={Math.min(6, Math.max(1, Math.ceil(p.text.length / 70)))}
+                      className="w-full resize-none bg-transparent text-[15px] leading-relaxed outline-none"
+                    />
+                    {p.source && <div className="text-xs text-muted">Source: {p.source}</div>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5 text-muted opacity-60 transition group-hover:opacity-100">
+                    <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up" className="rounded p-1 hover:bg-paper disabled:opacity-30">
+                      <ArrowUp size={15} />
+                    </button>
+                    <button onClick={() => move(i, 1)} disabled={i === content.points.length - 1} aria-label="Move down" className="rounded p-1 hover:bg-paper disabled:opacity-30">
+                      <ArrowDown size={15} />
+                    </button>
+                    <button onClick={() => setPoints(content.points.filter((_, j) => j !== i))} aria-label="Remove point" className="rounded p-1 hover:bg-red-50 hover:text-red-700">
+                      <X size={15} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 rounded-xl border border-line bg-paper/60 p-3 focus-within:border-brand focus-within:ring-4 focus-within:ring-brand/15">
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {KINDS.map((k) => (
+                <button
+                  key={k.key}
+                  onClick={() => setDraftKind(k.key)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${draftKind === k.key ? k.tone : "border-line bg-white text-ink/60 hover:border-ink/30"}`}
+                >
+                  {k.short}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-end gap-2">
+              <textarea
+                id="review-new-point"
+                ref={newPoint}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    addPoint();
+                  }
+                }}
+                rows={1}
+                placeholder={
+                  draftKind === "concern" ? "e.g. Ankle swelling and breathlessness while on trastuzumab"
+                    : draftKind === "question" ? "e.g. Repeat echo before the next cycle?"
+                    : "e.g. Echo 12 Mar: LVEF 48%, was 60% in Jan"
+                }
+                className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] outline-none placeholder:text-muted/70"
+              />
+              <Button onClick={addPoint} disabled={!draft.trim()} className="px-4 py-2.5">
+                <Plus size={17} /> Add
+              </Button>
+            </div>
+            <div className="mt-1 px-1 text-xs text-muted">Enter adds the point · Shift+Enter for a new line</div>
+          </div>
+          {fromRitu > 0 && (
+            <p className="mt-3 flex items-center gap-1.5 text-sm text-brand">
+              <Sparkles size={14} /> {fromRitu} point{fromRitu === 1 ? "" : "s"} added from Ritu. Edit the wording if needed.
+            </p>
+          )}
         </Card>
 
         <Card className="p-5 sm:p-6">

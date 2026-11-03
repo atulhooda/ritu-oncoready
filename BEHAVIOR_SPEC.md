@@ -288,10 +288,13 @@ access in `backend/app/auth/access.py`.
   Doctors (with each doctor's open count); `POST /hospital/patients/{id}/assign` can still move a
   patient by hand until the summary is sent.
 - **The summary.** Structured (`case_reviews.content`): points ticked from the patient's latest
-  pre-visit report (intake fact ids, each shown with its details and the patient's words) and three
-  optional notes from the junior: from the records and conversation, concerns, for the senior. The
-  draft ticks current symptoms, the patient's questions and urgent signs; nothing is written for
-  the junior. Unknown fact ids or an empty summary are refused (409). A live preview shows exactly
+  pre-visit report (intake fact ids, each shown with its details and the patient's words) and the
+  junior's own points, each a concern, a finding (from the records and conversation) or a question
+  for the senior, optionally with its source. Points are added one at a time (Enter adds), edited,
+  reordered or removed; under each records-assistant answer, "Add to summary" adds the answer's text
+  as a finding with its cited sources (only while the assigned junior is editing). The senior reads
+  them grouped: concerns, findings, questions. The draft ticks current symptoms, the patient's
+  questions and urgent signs; nothing is written for the junior. Unknown fact ids or an empty summary are refused (409). A live preview shows exactly
   what the senior will read; a plain-text copy is built in code (`case_reviews.summary`). Save keeps
   a draft; Send saves and sends to the chosen senior. After sending nobody can change it.
 - **Who sees which patient.** The hospital: every sent patient through the API (read-only). A junior: the

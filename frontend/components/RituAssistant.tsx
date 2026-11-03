@@ -1,9 +1,10 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, FileText, Info, MessageSquare, Mic, MicOff, Pause, Play, Send, Sparkles, Square, Trash2, Volume2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, FileText, Info, MessageSquare, Mic, MicOff, Pause, Play, Plus, Send, Sparkles, Square, Trash2, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
+import { useSummaryTarget } from "@/lib/summaryPoints";
 import { canRecognize, checkMicrophone, listen, pauseSpeech, resumeSpeech, speak, stopSpeech, type PlayState, type VoiceEngine } from "@/lib/speech";
 import type { AssistantAnswer, AssistantSource } from "@/lib/types";
 
@@ -39,8 +40,23 @@ function speechText(a: AssistantAnswer): string {
   return [a.conflict, ...a.lines.map((l) => l.text)].filter(Boolean).join(" ");
 }
 
+/** "echo.pdf p.1, 2, 3; conversation turn 5": where an answer's points come from. */
+function sourceText(a: AssistantAnswer): string | null {
+  const pages = new Map<string, number[]>();
+  const turns: number[] = [];
+  for (const { source: s } of a.sources) {
+    if (s.type === "document") pages.set(s.filename, [...(pages.get(s.filename) ?? []), s.page_number]);
+    else turns.push(s.turn_index);
+  }
+  const parts = [...pages].map(([file, ps]) => `${file} p.${[...new Set(ps)].sort((x, y) => x - y).join(", ")}`);
+  if (turns.length) parts.push(`conversation turn${turns.length > 1 ? "s" : ""} ${[...new Set(turns)].join(", ")}`);
+  return parts.length ? parts.join("; ") : null;
+}
+
 function AnswerView({ answer, onOpenSource, compact }: { answer: AssistantAnswer; onOpenSource: (s: AssistantSource) => void; compact?: boolean }) {
   const [reading, setReading] = useState<PlayState>("stopped");
+  const addToSummary = useSummaryTarget();
+  const [added, setAdded] = useState(false);
   const bySource = new Map(answer.sources.map((s) => [s.n, s]));
   const open = (n: number) => {
     const s = bySource.get(n);
@@ -118,6 +134,18 @@ function AnswerView({ answer, onOpenSource, compact }: { answer: AssistantAnswer
             );
           })}
         </div>
+      )}
+      {addToSummary && answer.status === "answered" && (
+        <button
+          onClick={() => {
+            addToSummary({ text: speechText(answer), source: sourceText(answer) });
+            setAdded(true);
+          }}
+          disabled={added}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-[13px] font-medium text-brand hover:bg-brand/10 disabled:opacity-60"
+        >
+          {added ? <Check size={14} /> : <Plus size={14} />} {added ? "Added to summary" : "Add to summary"}
+        </button>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-ink/50">
         <span>

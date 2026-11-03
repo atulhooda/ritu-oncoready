@@ -63,21 +63,24 @@ def test_hospital_assigns_junior_writes_and_sends_to_senior(client, db, org_a, o
     detail = client.get(f"/doctor/patients/{case_id}", headers=jh).json()
     facts = {f["label"]: f["id"] for sec in detail["summary"]["sections"] for f in sec["facts"]}
     draft = detail["review"]["content"]
-    assert detail["review"]["summary_is_draft"] and draft["findings"] == ""  # nothing written for the junior
+    assert detail["review"]["summary_is_draft"] and draft["points"] == []  # nothing written for the junior
     assert sorted(draft["facts"]) == sorted([facts["Breathlessness on stairs"], facts["Evening ankle swelling"]])  # symptoms ticked
     assert client.post(f"/doctor/patients/{case_id}/assistant", headers=jh, json={"question": "pulse"}).status_code == 200
 
     body = {"facts": [facts["Evening ankle swelling"], facts["Trastuzumab every 3 weeks"]],
-            "findings": "Three echo reports uploaded.", "concerns": "Ankle swelling on trastuzumab.", "questions": ""}
+            "points": [{"kind": "finding", "text": "LVEF 48%, was 60% in Jan.", "source": "echo.pdf, page 1"},
+                       {"kind": "concern", "text": "Ankle swelling on trastuzumab."}]}
     assert client.put(f"/doctor/patients/{case_id}/summary", headers=kh, json=body).status_code == 404
-    for bad_body in ({**body, "facts": [str(uuid.uuid4())]}, {"facts": [], "findings": " "}):  # unknown point; empty
+    for bad_body in ({**body, "facts": [str(uuid.uuid4())]}, {"facts": [], "points": []}):  # unknown point; empty
         assert client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json=bad_body).status_code == 409
     saved = client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json=body).json()
-    assert not saved["summary_is_draft"] and saved["content"]["concerns"] == "Ankle swelling on trastuzumab."
+    assert not saved["summary_is_draft"] and saved["content"]["points"][1] == {"kind": "concern", "text": "Ankle swelling on trastuzumab.", "source": None}
     assert saved["content"]["facts"] == [facts["Evening ankle swelling"], facts["Trastuzumab every 3 weeks"]]
     text = saved["summary"]  # plain-text copy, built in code
     assert "Maria Placeholder" in text and "- Evening ankle swelling" in text and "Breathlessness" not in text
-    assert "Concerns:\nAnkle swelling on trastuzumab." in text
+    assert "Concerns:\n- Ankle swelling on trastuzumab." in text and "- LVEF 48%, was 60% in Jan. (echo.pdf, page 1)" in text
+    bad_kind = {**body, "points": [{"kind": "diagnosis", "text": "x"}]}
+    assert client.put(f"/doctor/patients/{case_id}/summary", headers=jh, json=bad_kind).status_code == 422
     assert client.get("/doctor/seniors", headers=jh).json() == [{"id": other_senior["id"], "name": "Dr Oberoi"},
                                                                 {"id": senior["id"], "name": "Dr Sen"}]
 

@@ -320,12 +320,18 @@ export interface DoctorRef {
   name: string;
 }
 
-/** The junior's summary: points ticked from the patient's report (intake fact ids) and their notes. */
+/** The junior's summary: points ticked from the patient's report (intake fact ids) and their own points. */
 export interface ReviewContent {
   facts: string[];
-  findings: string;
-  concerns: string;
-  questions: string;
+  points: SummaryPoint[];
+}
+
+/** A point the junior adds: a concern, something found, or a question for the senior. */
+export interface SummaryPoint {
+  kind: "concern" | "finding" | "question";
+  text: string;
+  /** Where it came from, e.g. "echo_mar.pdf, page 2". */
+  source: string | null;
 }
 
 export interface CaseReview {
