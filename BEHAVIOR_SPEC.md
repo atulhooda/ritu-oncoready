@@ -115,40 +115,32 @@ not allowed.
 - Each patient has exactly one intake case, created on first use. Their sessions, records and
   summary all hang off it.
 
-### Patient sign-up (clinic link, phone + one-time code)
+### Patient sign-up and log-in
 
-- **One link.** The main page (`/`) is patient sign-in and sign-up for the default clinic
-  (`DEFAULT_CLINIC_CODE`, else the only clinic with sign-up open), with a link underneath for
-  doctors and hospitals to the staff login (clinic code, email, password). Signed-in users go to
-  their own home; patients who sign out return to `/`.
-- **Clinics.** Each clinic (org) has a join code, e.g. `CCC`, and patients can also join at `/join/<code>`.
-  Sign-up is closed until the clinic opens it. Create a clinic and its first doctor with
-  `python -m app.cli create-clinic` (or the `BOOTSTRAP_*` variables on Railway). The synthetic demo
-  org's code is `DEMO`.
-- **Codes.** 6 digits, valid 5 minutes, one use; only an HMAC of the code is stored. A new code
-  replaces the previous one. Limits: 5 codes per number per clinic per hour, and 5 wrong tries per
-  code (after that even the right code is refused). Codes are per clinic.
-- **Numbers.** Indian mobiles (6-9, 10 digits; `+91`, `0` or `91` prefixes accepted) or any
-  E.164 number with another country code, stored as E.164.
-- **Sign-in vs sign-up.** After a correct code, a number that already has a patient account at
-  this clinic is signed in. A new number gets a 15-minute sign-up token (bound to the clinic; not a
-  login token) and gives their full name, date of birth (past, after 1900), sex and preferred
-  language (all required), an email (optional; unique per clinic, stored in lower case), and
-  agrees that this is a pilot with test accounts only. These fill the patient's profile.
-- **Patient ID.** Each new patient gets an OncoReady ID like `OR-7K3F-9Q2D` (8 random characters
-  without I, L, O, U), unique across all clinics, shown on their profile and to doctors.
-- **WhatsApp (free).** When `WHATSAPP_NUMBER` and `WHATSAPP_APP_SECRET` are set, the page offers
-  "Verify on WhatsApp" first. The patient sends `JOIN <clinic code> <6 digits>` (opened ready-made
-  through a wa.me link) from their own WhatsApp. `POST /integrations/whatsapp/webhook` accepts only
-  calls signed with the Meta app secret (`X-Hub-Signature-256`). A message confirms the newest open
-  WhatsApp challenge for the sender's own number at that clinic, if the code matches; same expiry,
-  attempt and hourly limits as SMS codes. The page polls with its challenge id and then continues
-  as after an SMS code. Optional free reply "verified" inside the 24-hour service window. WhatsApp
-  and SMS challenges are separate: a code from one does not work in the other.
-- **SMS.** MSG91 when `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` are set. Otherwise demo mode: no
-  SMS is sent and the code is returned to the page, which shows it labelled as demo. Demo mode is
-  for test accounts only.
-- **Staff** keep signing in with organization, email and password. Phone-only patients cannot.
+- **One link.** The main page (`/`) has two tabs, "Create account" and "Log in", for the default
+  clinic (`DEFAULT_CLINIC_CODE`, else the only clinic with sign-up open), and a link underneath for
+  doctors and hospitals to the staff login (clinic code, email, password). `/join/<code>` shows
+  the same for a given clinic. Signed-in users go to their own home; patients who log out return
+  to `/`.
+- **Create account.** Full name, email (unique per clinic, stored in lower case), mobile number
+  (unique per clinic), password (8+ characters), date of birth (past, after 1900), sex, preferred
+  language, and agreement that this is a pilot with test accounts only. They fill the profile.
+  Each new patient gets an OncoReady ID like `OR-7K3F-9Q2D` (8 random characters without I, L, O,
+  U), unique across clinics.
+- **Phone check (WhatsApp).** When `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` and
+  `WHATSAPP_OTP_TEMPLATE` are set, the number must be verified before the account is created: a
+  6-digit code is sent to the number's WhatsApp as an approved authentication template; the
+  patient types it in, which gives a 30-minute phone token bound to the clinic and the number.
+  Codes: valid 5 minutes, one use, only an HMAC stored, the newest replaces older ones; 5 codes per
+  number per clinic per hour; 5 wrong tries per code. Without WhatsApp set up, the number is saved
+  unverified (`phone_verified_at` empty). A code is never shown on screen.
+- **Older phone-only accounts** (made before email log-in) are completed, keeping their ID, when
+  someone signs up with that number **verified**; otherwise the number is refused as taken.
+- **Log in.** Email and password (patients only; wrong details give one message for both).
+- **Profile.** Patients edit their name and email (`PUT /me/account`; the name doctors see follows)
+  and change their password (`PUT /me/password`, current password required), alongside the
+  medical details.
+- **Staff** keep signing in at `/login` with clinic code, email and password.
 
 ### ABHA (health ID) link
 

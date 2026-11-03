@@ -43,6 +43,7 @@ class User(TenantMixin, Base):
         CheckConstraint("email IS NOT NULL OR phone IS NOT NULL", name="has_login"),
         CheckConstraint("phone IS NULL OR phone ~ '^\\+[1-9][0-9]{7,14}$'", name="phone_e164"),
         CheckConstraint("patient_number IS NULL OR role = 'patient'", name="patient_number_for_patients"),
+        CheckConstraint("phone_verified_at IS NULL OR phone IS NOT NULL", name="verified_phone_present"),
     )
 
     email: Mapped[str | None] = mapped_column(String(320))
@@ -51,5 +52,7 @@ class User(TenantMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(16))  # E.164, e.g. +919812345678
     # The patient's OncoReady ID, unique across all clinics, e.g. OR-7K3F-9Q2D
     patient_number: Mapped[str | None] = mapped_column(String(16))
+    # When the phone was proven with a code sent to it (WhatsApp); NULL if never verified.
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     role: Mapped[str] = mapped_column(String(16))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())

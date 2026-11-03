@@ -79,9 +79,6 @@ export function DetailsForm({
       <section>
         <Label>About you</Label>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
-          <Field label="Full name" hint="From your account">
-            <TextInput value={profile.name} disabled />
-          </Field>
           <Field label={`Date of birth${req}`} hint={age !== null ? `Age ${age}` : undefined}>
             <TextInput type="date" max={today} value={form.date_of_birth} onChange={set("date_of_birth")} />
           </Field>

@@ -268,6 +268,7 @@ export interface PatientProfile {
   name: string;
   email: string | null;
   phone: string | null;
+  phone_verified: boolean;
   patient_number: string | null;
   details: PatientDetails;
   case_id: string;

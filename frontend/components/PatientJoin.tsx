@@ -1,55 +1,71 @@
 "use client";
 
-import { ArrowLeft, MessageCircle, ShieldCheck, Stethoscope } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, ShieldCheck, Stethoscope } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button, Eyebrow, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
-import { rememberClinic } from "@/lib/clinic";
 import { LANGUAGES, SEX_LABELS } from "@/lib/types";
 
-type Clinic = { name: string; code: string; sms: "sms" | "demo"; whatsapp: boolean };
-type Step = "phone" | "code" | "whatsapp" | "name";
-type WhatsAppChallenge = { challenge_id: string; message: string; link: string; to: string };
-type Verified = { access_token?: string; signup_token?: string; waiting?: boolean };
+type Clinic = { name: string; code: string; phone_check: boolean };
+type Tab = "signup" | "login";
 
 const INPUT =
   "w-full rounded-xl border border-line bg-white px-4 py-3.5 text-lg outline-none focus:border-brand focus:ring-4 focus:ring-brand/15";
 
+function PasswordInput({ id, value, onChange, autoComplete }: { id: string; value: string; onChange: (v: string) => void; autoComplete: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative block">
+      <input id={id} type={show ? "text" : "password"} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} className={`${INPUT} pr-14`} required />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        aria-label={show ? "Hide password" : "Show password"}
+        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-muted hover:text-ink"
+      >
+        {show ? <EyeOff size={20} /> : <Eye size={20} />}
+      </button>
+    </span>
+  );
+}
+
 /**
- * Patient sign-up and sign-in: phone, one-time code (or WhatsApp), and for new patients their details.
- * With a clinic code (/join/<code>) it is that clinic; without one (the main page) the server's
- * default clinic. Doctors and hospitals are sent to the staff login from here.
+ * The patient's front door: "Create account" or "Log in". With a clinic code (/join/<code>) it is
+ * that clinic; without one (the main page) the server's default clinic. Doctors and hospitals are
+ * sent to the staff login from here.
  */
 export function PatientJoin({ code }: { code?: string }) {
   const router = useRouter();
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [missing, setMissing] = useState(false);
-  const [step, setStep] = useState<Step>("phone");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [sentTo, setSentTo] = useState("");
-  const [demoCode, setDemoCode] = useState<string | null>(null);
-  const [signupToken, setSignupToken] = useState("");
+  const [tab, setTab] = useState<Tab>("signup");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // sign up
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneToken, setPhoneToken] = useState<string | null>(null);
+  const [verifiedPhone, setVerifiedPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState("");
   const [language, setLanguage] = useState("en-IN");
   const [agree, setAgree] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [wa, setWa] = useState<WhatsAppChallenge | null>(null);
-  const [copied, setCopied] = useState(false);
+
+  // log in
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   useEffect(() => {
     api<Clinic>(code ? `/join/${encodeURIComponent(code)}` : "/join")
-      .then((c) => {
-        setClinic(c);
-        rememberClinic(c.code, c.name);
-      })
+      .then(setClinic)
       .catch(() => setMissing(true));
   }, [code]);
 
@@ -70,86 +86,38 @@ export function PatientJoin({ code }: { code?: string }) {
     router.replace("/patient");
   };
 
-  const afterVerified = (r: Verified) => {
-    if (r.access_token) signedIn(r.access_token);
-    else if (r.signup_token) {
-      setSignupToken(r.signup_token);
-      setStep("name");
-    }
-  };
+  const phoneOk = phone.replace(/\D/g, "").length >= 10;
+  const phoneVerified = !!phoneToken && verifiedPhone === phone;
 
-  const startWhatsApp = (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const sendCode = () =>
     run(async () => {
-      setWa(await api<WhatsAppChallenge>(`/join/${clinic!.code}/whatsapp`, { method: "POST", body: JSON.stringify({ phone }) }));
-      setCopied(false);
-      setStep("whatsapp");
+      const r = await api<{ sent_to: string }>(`/join/${clinic!.code}/phone/send`, { method: "POST", body: JSON.stringify({ phone }) });
+      setCodeSentTo(r.sent_to);
+      setPhoneCode("");
     });
-  };
 
-  // While waiting for the WhatsApp message, ask the server every few seconds.
-  useEffect(() => {
-    if (step !== "whatsapp" || !wa || !clinic) return;
-    let stopped = false;
-    const t = setInterval(async () => {
-      try {
-        const r = await api<Verified>(`/join/${clinic.code}/whatsapp/status`, {
-          method: "POST",
-          body: JSON.stringify({ phone, challenge_id: wa.challenge_id }),
-        });
-        if (!stopped && !r.waiting) {
-          clearInterval(t);
-          afterVerified(r);
-        }
-      } catch (err) {
-        clearInterval(t);
-        if (!stopped) {
-          setError(err instanceof Error ? err.message : "Verification stopped");
-          setStep("phone");
-        }
-      }
-    }, 2500);
-    return () => {
-      stopped = true;
-      clearInterval(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- restart only for a new challenge
-  }, [step, wa, clinic]);
-
-  const sendCode = (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const checkCode = () =>
     run(async () => {
-      const r = await api<{ sent_to: string; demo_code: string | null }>(`/join/${clinic!.code}/otp`, {
+      const r = await api<{ phone_token: string }>(`/join/${clinic!.code}/phone/verify`, {
         method: "POST",
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, code: phoneCode }),
       });
-      setSentTo(r.sent_to);
-      setDemoCode(r.demo_code);
-      setOtp("");
-      setStep("code");
+      setPhoneToken(r.phone_token);
+      setVerifiedPhone(phone);
+      setCodeSentTo(null);
     });
-  };
 
-  const verify = (e: React.FormEvent) => {
+  const signUp = (e: React.FormEvent) => {
     e.preventDefault();
     run(async () => {
-      const r = await api<{ access_token?: string; signup_token?: string }>(`/join/${clinic!.code}/verify`, {
-        method: "POST",
-        body: JSON.stringify({ phone, code: otp }),
-      });
-      afterVerified(r);
-    });
-  };
-
-  const register = (e: React.FormEvent) => {
-    e.preventDefault();
-    run(async () => {
-      const r = await api<{ access_token: string }>(`/join/${clinic!.code}/register`, {
+      const r = await api<{ access_token: string }>(`/join/${clinic!.code}/signup`, {
         method: "POST",
         body: JSON.stringify({
-          signup_token: signupToken,
           full_name: name,
           email,
+          phone,
+          phone_token: phoneVerified ? phoneToken : null,
+          password,
           date_of_birth: dob,
           sex,
           preferred_language: language,
@@ -159,6 +127,20 @@ export function PatientJoin({ code }: { code?: string }) {
       signedIn(r.access_token);
     });
   };
+
+  const logIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    run(async () => {
+      const r = await api<{ access_token: string }>(`/join/${clinic!.code}/login`, {
+        method: "POST",
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      signedIn(r.access_token);
+    });
+  };
+
+  const canSignUp =
+    name.trim().length >= 2 && email.includes("@") && phoneOk && password.length >= 8 && !!dob && !!sex && agree && (!clinic?.phone_check || phoneVerified);
 
   return (
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1fr_1.1fr]">
@@ -200,152 +182,125 @@ export function PatientJoin({ code }: { code?: string }) {
           ) : (
             <>
               <Eyebrow>{clinic.name}</Eyebrow>
-              <h1 className="mt-3 text-5xl font-extrabold tracking-tight">
-                {step === "name" ? (
-                  <>
-                    Nearly <span className="font-serif font-normal italic text-brand">there.</span>
-                  </>
-                ) : (
-                  <>
-                    Sign in or <span className="font-serif font-normal italic text-brand">join.</span>
-                  </>
-                )}
-              </h1>
-              <p className="mt-3 text-[16px] text-muted">
-                {step === "phone" &&
-                  (clinic.whatsapp
-                    ? "Use your mobile number. You'll confirm it by sending us a WhatsApp message; no password needed."
-                    : "Use your mobile number. We'll send you a one-time code; no password needed.")}
-                {step === "whatsapp" && "Send the message below from WhatsApp on this phone. This page continues on its own."}
-                {step === "code" && `Enter the 6-digit code sent to ${sentTo}.`}
-                {step === "name" && "This number is new here. A few details to create your account."}
-              </p>
+              <div role="tablist" className="mt-4 grid grid-cols-2 rounded-xl border border-line bg-white p-1">
+                {(
+                  [
+                    ["signup", "Create account"],
+                    ["login", "Log in"],
+                  ] as const
+                ).map(([t, label]) => (
+                  <button
+                    key={t}
+                    role="tab"
+                    aria-selected={tab === t}
+                    onClick={() => {
+                      setTab(t);
+                      setError(null);
+                    }}
+                    className={`rounded-lg py-2.5 text-[15px] font-semibold transition ${tab === t ? "bg-brand text-white" : "text-muted hover:text-ink"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
               <div className="mt-5 flex gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">
                 <ShieldCheck size={18} className="mt-0.5 shrink-0" />
                 <span>Pilot service: test accounts only. Please do not upload real medical records yet.</span>
               </div>
 
-              {step === "phone" && (
-                <form onSubmit={sendCode} className="mt-7 space-y-5">
+              {tab === "login" ? (
+                <form onSubmit={logIn} className="mt-6 space-y-5">
                   <label className="block">
-                    <Label className="mb-2">Mobile number</Label>
-                    <input
-                      id="phone"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="98123 45678"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className={INPUT}
-                      required
-                    />
+                    <Label className="mb-2">Email</Label>
+                    <input id="login-email" type="email" autoComplete="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className={INPUT} required />
                   </label>
-                  {clinic.whatsapp ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => startWhatsApp()}
-                        disabled={busy || phone.replace(/\D/g, "").length < 10}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1f8f4e] py-3.5 text-[15px] font-semibold text-white hover:bg-[#197a42] disabled:opacity-50"
-                      >
-                        <MessageCircle size={18} /> {busy ? "Starting…" : "Verify on WhatsApp"}
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={busy || phone.replace(/\D/g, "").length < 10}
-                        className="w-full text-center text-sm font-medium text-muted hover:text-ink disabled:opacity-50"
-                      >
-                        {clinic.sms === "sms" ? "Get a code by SMS instead" : "No WhatsApp? Get a code instead"}
-                      </button>
-                    </>
-                  ) : (
-                    <Button disabled={busy || phone.replace(/\D/g, "").length < 10} className="w-full py-3.5">
-                      {busy ? "Sending…" : "Send code"}
-                    </Button>
-                  )}
-                </form>
-              )}
-
-              {step === "whatsapp" && wa && (
-                <div className="mt-7 space-y-5">
-                  <div className="rounded-xl border border-line bg-white p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted">Message to send</div>
-                    <div className="mt-1 font-mono text-2xl font-semibold tracking-wider">{wa.message}</div>
-                    <div className="mt-1 text-sm text-muted">to {wa.to} on WhatsApp</div>
-                  </div>
-                  <a
-                    href={wa.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1f8f4e] py-3.5 text-[15px] font-semibold text-white hover:bg-[#197a42]"
-                  >
-                    <MessageCircle size={18} /> Open WhatsApp
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(wa.message).then(() => setCopied(true), () => setCopied(false));
-                    }}
-                    className="w-full text-center text-sm font-medium text-brand hover:underline"
-                  >
-                    {copied ? "Copied" : "Copy the message"}
-                  </button>
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-                    Waiting for your message…
-                  </div>
-                  <button type="button" onClick={() => setStep("phone")} className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
-                    <ArrowLeft size={14} /> Change number
-                  </button>
-                </div>
-              )}
-
-              {step === "code" && (
-                <form onSubmit={verify} className="mt-7 space-y-5">
-                  {demoCode && (
-                    <p className="rounded-lg bg-line/50 px-3 py-2 text-sm">
-                      Demo mode, no SMS is sent. Your code is <span className="font-mono font-semibold tracking-widest">{demoCode}</span>
-                    </p>
-                  )}
                   <label className="block">
-                    <Label className="mb-2">Code</Label>
-                    <input
-                      id="otp"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                      className={`${INPUT} text-center font-mono text-2xl tracking-[0.5em]`}
-                      autoFocus
-                      required
-                    />
+                    <Label className="mb-2">Password</Label>
+                    <PasswordInput id="login-password" value={loginPassword} onChange={setLoginPassword} autoComplete="current-password" />
                   </label>
-                  <Button disabled={busy || otp.length !== 6} className="w-full py-3.5">
-                    {busy ? "Checking…" : "Continue"}
+                  <Button disabled={busy} className="w-full py-3.5">
+                    {busy ? "Logging in…" : "Log in"}
                   </Button>
-                  <div className="flex items-center justify-between text-sm">
-                    <button type="button" onClick={() => setStep("phone")} className="inline-flex items-center gap-1 text-muted hover:text-ink">
-                      <ArrowLeft size={14} /> Change number
+                  <p className="text-center text-sm text-muted">
+                    New here?{" "}
+                    <button type="button" onClick={() => setTab("signup")} className="font-medium text-brand hover:underline">
+                      Create an account
                     </button>
-                    <button type="button" onClick={() => sendCode()} disabled={busy} className="font-medium text-brand hover:underline">
-                      Send a new code
-                    </button>
-                  </div>
+                  </p>
                 </form>
-              )}
-
-              {step === "name" && (
-                <form onSubmit={register} className="mt-7 space-y-5">
+              ) : (
+                <form onSubmit={signUp} className="mt-6 space-y-5">
                   <label className="block">
                     <Label className="mb-2">Full name</Label>
-                    <input id="full-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={INPUT} autoFocus required minLength={2} />
+                    <input id="full-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={INPUT} required minLength={2} />
                   </label>
                   <label className="block">
-                    <Label className="mb-2">Email (optional)</Label>
-                    <input id="email" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className={INPUT} />
+                    <Label className="mb-2">Email</Label>
+                    <input id="email" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className={INPUT} required />
+                  </label>
+
+                  <div>
+                    <Label className="mb-2">Mobile number (WhatsApp)</Label>
+                    <div className="flex gap-2">
+                      <input
+                        id="phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="98123 45678"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className={`${INPUT} min-w-0 flex-1`}
+                        required
+                      />
+                      {clinic.phone_check && !phoneVerified && (
+                        <button
+                          type="button"
+                          onClick={sendCode}
+                          disabled={busy || !phoneOk}
+                          className="shrink-0 rounded-xl bg-[#1f8f4e] px-4 text-[14px] font-semibold text-white hover:bg-[#197a42] disabled:opacity-50"
+                        >
+                          {codeSentTo ? "Resend" : "Send code"}
+                        </button>
+                      )}
+                    </div>
+                    {phoneVerified && (
+                      <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-green-700">
+                        <CheckCircle2 size={16} /> Number verified
+                      </p>
+                    )}
+                    {clinic.phone_check && codeSentTo && !phoneVerified && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-sm text-muted">We sent a 6-digit code to {codeSentTo} on WhatsApp.</p>
+                        <div className="flex gap-2">
+                          <input
+                            id="phone-code"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            placeholder="6-digit code"
+                            value={phoneCode}
+                            onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, ""))}
+                            className={`${INPUT} min-w-0 flex-1 font-mono tracking-[0.3em]`}
+                          />
+                          <button
+                            type="button"
+                            onClick={checkCode}
+                            disabled={busy || phoneCode.length !== 6}
+                            className="shrink-0 rounded-xl border border-line bg-white px-4 text-[14px] font-semibold hover:border-ink/30 disabled:opacity-50"
+                          >
+                            Verify
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="block">
+                    <Label className="mb-2">Password</Label>
+                    <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" />
+                    <span className="mt-1.5 block text-xs text-muted">At least 8 characters. You&apos;ll use your email and this password to log in.</span>
                   </label>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block">
@@ -380,9 +335,16 @@ export function PatientJoin({ code }: { code?: string }) {
                     <input id="agree" type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--color-brand)]" />
                     <span>I understand this is a pilot with test accounts, and I will not enter real medical records.</span>
                   </label>
-                  <Button disabled={busy || !agree || name.trim().length < 2 || !dob || !sex} className="w-full py-3.5">
-                    {busy ? "Creating…" : "Create my account"}
+                  <Button disabled={busy || !canSignUp} className="w-full py-3.5">
+                    {busy ? "Please wait…" : "Create my account"}
                   </Button>
+                  {clinic.phone_check && !phoneVerified && <p className="text-center text-xs text-muted">Verify your number to create the account.</p>}
+                  <p className="text-center text-sm text-muted">
+                    Already have an account?{" "}
+                    <button type="button" onClick={() => setTab("login")} className="font-medium text-brand hover:underline">
+                      Log in
+                    </button>
+                  </p>
                 </form>
               )}
 

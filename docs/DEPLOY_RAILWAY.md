@@ -35,7 +35,7 @@ adds about half a second to every request.
    ```
    With a custom domain, write it in `PUBLIC_API_URL` instead: `https://your.domain/api`.
 
-Open the address. Patients sign up there; doctors tap "Doctor or hospital? Log in here" and enter
+Open the address. Patients create an account or log in there; doctors tap "Doctor or hospital? Log in here" and enter
 the clinic code, email and password. The API's own pages are at `/api/docs`.
 
 - `BOOTSTRAP_*` creates your clinic and its first doctor on start (safe to repeat). The doctor
@@ -44,8 +44,7 @@ the clinic code, email and password. The API's own pages are at `/api/docs`.
   `https://<your domain>/join/<CODE>`.
 - `OCR_ENGINES=tesseract`: PaddleOCR needs a lot of memory; add it back (`paddleocr,tesseract`) on a
   larger plan.
-- SMS: `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` send real one-time codes. Without them, or WhatsApp
-  (below), the code is shown on screen (demo), which is fine for test accounts only.
+- Phone check: see "WhatsApp phone check" below.
 - `SEED_DEMO=1` loads the synthetic demo org (code `DEMO`), cases, Maria and John.
 
 ## 2. Voice: your existing Ritu (optional)
@@ -66,27 +65,22 @@ aloud in the browser's own voice.
   ```
   Ritu sends finished conversations to `PUBLIC_API_URL` (signed with the secret).
 
-## WhatsApp verification (free)
+## WhatsApp phone check
 
-Patients prove their number by sending `JOIN <clinic code> <code>` from their own WhatsApp. Messages
-a customer sends you, and your replies within 24 hours, are free on the WhatsApp Cloud API.
+New patients get a 6-digit code on WhatsApp to prove their number. Without this the number is
+saved unverified, and sign-up still works.
 
-1. **backend variables:**
+1. **Template.** In WhatsApp Manager → Message templates → Create template → category
+   **Authentication**, with a **Copy code** button. Wait for approval (usually minutes). Note its
+   name and language (for example `oncoready_code`, `en`).
+2. **Variables** (the same app and number your website uses):
    ```
-   WHATSAPP_NUMBER=+91XXXXXXXXXX          # the business number patients message
-   WHATSAPP_APP_SECRET=<Meta app secret>  # Meta App Dashboard → App settings → Basic
-   WHATSAPP_VERIFY_TOKEN=<any string you choose>
-   # optional, for a free "verified" reply:
    WHATSAPP_ACCESS_TOKEN=<permanent system-user token>
-   WHATSAPP_PHONE_NUMBER_ID=<from WhatsApp → API Setup>
+   WHATSAPP_PHONE_NUMBER_ID=<WhatsApp Manager → API Setup → Phone number ID>
+   WHATSAPP_OTP_TEMPLATE=oncoready_code
+   WHATSAPP_OTP_TEMPLATE_LANG=en
    ```
-2. **Webhook.** In the Meta app: WhatsApp → Configuration → Webhook. Callback URL
-   `https://<your domain>/api/integrations/whatsapp/webhook`, verify token as above; subscribe to
-   `messages`.
-3. **If that number's webhook already points at another site** (a Meta app has one webhook URL),
-   either use a separate app/number for OncoReady, or have the other site forward each webhook
-   POST to the URL above **unchanged**: the same raw body and the `X-Hub-Signature-256` header.
-   OncoReady ignores messages that are not `JOIN ...`, so forwarding everything is fine.
+Meta bills authentication messages per message (in India about ₹0.12 each). No webhook is needed.
 
 ## Notes
 

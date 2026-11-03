@@ -44,17 +44,12 @@ class Settings(BaseSettings):
     abdm_cert_url: str = ""  # default: {abdm_abha_url}/v3/profile/public/certificate
     abdm_cm_id: str = "sbx"
 
-    # Patient sign-up by phone (app/auth/signup.py). Without an MSG91 key, codes are not sent: the
-    # API returns them so the page can show them, labelled demo. Never leave it like that with real patients.
-    msg91_auth_key: str = ""
-    msg91_template_id: str = ""
-    # Free alternative to SMS: the patient sends "JOIN <clinic> <code>" from their own WhatsApp to this
-    # number; Meta's signed webhook (POST /integrations/whatsapp/webhook) proves the sender's number.
-    whatsapp_number: str = ""  # the business number patients message, E.164, e.g. +919876543210
-    whatsapp_app_secret: str = ""  # Meta app secret: checks X-Hub-Signature-256 on webhook calls
-    whatsapp_verify_token: str = ""  # any string; the same one goes in Meta's webhook settings
-    whatsapp_access_token: str = ""  # optional: send a free "verified" reply (24-hour service window)
-    whatsapp_phone_number_id: str = ""
+    # Phone check at sign-up: a 6-digit code sent to the patient's WhatsApp as an approved
+    # AUTHENTICATION template (app/auth/whatsapp.py). Without these, the phone is saved unverified.
+    whatsapp_access_token: str = ""  # permanent system-user token
+    whatsapp_phone_number_id: str = ""  # WhatsApp Manager -> API Setup
+    whatsapp_otp_template: str = ""  # the authentication template's name
+    whatsapp_otp_template_lang: str = "en"
     whatsapp_graph_version: str = "v21.0"
     # The clinic the main page (/) signs patients up to. Empty: the only clinic with sign-up open.
     default_clinic_code: str = ""

@@ -6,7 +6,7 @@ from datetime import date
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app import storage
@@ -76,6 +76,18 @@ class DetailsIn(BaseModel):
         return v
 
 
+class AccountIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    full_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+
+
+class PasswordIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
+
+
 class AbhaOtpIn(BaseModel):
     abha_number: str = Field(max_length=20)
 
@@ -106,6 +118,7 @@ def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(
         "name": user.full_name,
         "email": user.email,
         "phone": user.phone,
+        "phone_verified": user.phone_verified_at is not None,
         "patient_number": user.patient_number,
         "details": service.patient_details(db, user.org_id, user.id),
         "case_id": case.id,
@@ -119,6 +132,31 @@ def profile(current: CurrentUser = Depends(patient_only), db: Session = Depends(
         "symptom_course": service.symptom_course(service.session_history(db, user.org_id, case.id)),
         "records": service.records(db, user.org_id, case.id),
     }
+
+
+@router.put("/account")
+def update_account(body: AccountIn, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    """The patient's name and email (the email is also their login)."""
+    user = _user(db, current)
+    email = str(body.email).lower()
+    other = UserRepository(db, current.org_id).get_by_email(email)
+    if other is not None and other.id != user.id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Another account here already uses this email")
+    user.full_name, user.email = body.full_name, email
+    service.profile_case(db, user).title = body.full_name  # the name doctors see
+    db.commit()
+    return {"name": user.full_name, "email": user.email}
+
+
+@router.put("/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(body: PasswordIn, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    from app.auth.security import hash_password, verify_password
+
+    user = _user(db, current)
+    if user.password_hash and not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your current password is not right")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
 
 
 @router.put("/details")

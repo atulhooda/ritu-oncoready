@@ -1,14 +1,17 @@
-"""Patient self sign-up at a clinic: phone + one-time code, unique patient ID, clinic separation."""
+"""Patient accounts at a clinic: sign up (name, email, phone, password, details; phone checked with
+a code sent to WhatsApp when that is set up), log in with email + password, edit the account."""
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.auth import signup, sms
+from app.auth import signup, whatsapp
 from app.config import get_settings
 from app.models import Role
 from app.repositories.users import PhoneOtpRepository, UserRepository
 from tests.conftest import PASSWORD, login
+
+DETAILS = {"date_of_birth": "1975-06-15", "sex": "female", "preferred_language": "hi-IN", "accept_test_terms": True}
 
 
 @pytest.fixture
@@ -18,85 +21,177 @@ def clinic(db, org_a):
     return org_a
 
 
-def code_for(client, phone="98123 45678", clinic_code="CCC"):
-    r = client.post(f"/join/{clinic_code}/otp", json={"phone": phone})
+@pytest.fixture
+def wa(monkeypatch):
+    """WhatsApp set up; codes are captured instead of sent."""
+    s = get_settings()
+    monkeypatch.setattr(s, "whatsapp_access_token", "tok")
+    monkeypatch.setattr(s, "whatsapp_phone_number_id", "123")
+    monkeypatch.setattr(s, "whatsapp_otp_template", "oncoready_code")
+    sent = []
+    monkeypatch.setattr(whatsapp, "send_code", lambda phone, code: sent.append((phone, code)))
+    return sent
+
+
+def form(**over):
+    return {"full_name": "Asha Placeholder", "email": "asha@example.com", "phone": "98123 45678",
+            "password": "asha-secret-1", **DETAILS, **over}
+
+
+def verified_token(client, wa, phone="98123 45678", clinic_code="CCC"):
+    assert client.post(f"/join/{clinic_code}/phone/send", json={"phone": phone}).status_code == 200
+    code = wa[-1][1]
+    r = client.post(f"/join/{clinic_code}/phone/verify", json={"phone": phone, "code": code})
     assert r.status_code == 200, r.text
-    return r.json()
+    return r.json()["phone_token"]
 
 
-def sign_up(client, phone="98123 45678", name="Asha Placeholder"):
-    otp = code_for(client, phone)
-    v = client.post("/join/CCC/verify", json={"phone": phone, "code": otp["demo_code"]}).json()
-    return client.post("/join/CCC/register", json={"signup_token": v["signup_token"], "full_name": name, "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
+def auth(token):
+    return {"Authorization": f"Bearer {token}"}
 
 
-def test_new_patient_signs_up_and_gets_a_patient_id(client, db, clinic):
+def test_sign_up_without_phone_check_then_log_in(client, db, clinic):
     info = client.get("/join/ccc").json()
-    assert info == {"name": clinic.org.name, "code": "CCC", "sms": "demo", "whatsapp": False}
-    otp = code_for(client)
-    assert otp["sent_to"] == "+91 •••••••5678" or otp["sent_to"].endswith("5678")
-    assert len(otp["demo_code"]) == 6  # demo mode: no SMS provider configured
-    r = client.post("/join/CCC/verify", json={"phone": "+91 98123 45678", "code": otp["demo_code"]})
-    token = r.json()["signup_token"]
-    assert "access_token" not in r.json()
-    # the sign-up token is not a login
-    assert client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
-    assert client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": False}).status_code == 422
-    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Asha Placeholder", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
-    assert r.status_code == 201
-    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    me = client.get("/auth/me", headers=h).json()
-    assert me["role"] == "patient" and me["email"] is None and me["phone"] == "+919812345678"
-    assert me["patient_number"] == r.json()["patient_number"]
-    assert me["patient_number"][:3] == "OR-" and len(me["patient_number"]) == 12
-    prof = client.get("/me/profile", headers=h).json()
-    assert prof["patient_number"] == me["patient_number"] and prof["details"]["phone"] == "+919812345678"
+    assert info == {"name": clinic.org.name, "code": "CCC", "phone_check": False}
+    assert client.post("/join/CCC/phone/send", json={"phone": "9812345678"}).status_code == 409  # not set up
+    r = client.post("/join/CCC/signup", json=form())
+    assert r.status_code == 201, r.text
+    assert r.json()["patient_number"].startswith("OR-")
+    prof = client.get("/me/profile", headers=auth(r.json()["access_token"])).json()
+    assert (prof["name"], prof["email"], prof["phone"], prof["phone_verified"]) == ("Asha Placeholder", "asha@example.com", "+919812345678", False)
+    d = prof["details"]
+    assert (d["date_of_birth"], d["sex"], d["preferred_language"], d["phone"]) == ("1975-06-15", "female", "hi-IN", "+919812345678")
+
+    ok = client.post("/join/CCC/login", json={"email": "ASHA@example.com", "password": "asha-secret-1"})
+    assert ok.status_code == 200 and client.get("/auth/me", headers=auth(ok.json()["access_token"])).json()["role"] == "patient"
+    assert client.post("/join/CCC/login", json={"email": "asha@example.com", "password": "wrong-one"}).status_code == 401
+    assert client.post("/join/CCC/login", json={"email": "nobody@example.com", "password": "x"}).status_code == 401
 
 
-def test_returning_patient_signs_in_with_a_code(client, db, clinic):
-    first = sign_up(client).json()
-    otp = code_for(client, "+919812345678")
-    r = client.post("/join/CCC/verify", json={"phone": "98123 45678", "code": otp["demo_code"]}).json()
-    assert "access_token" in r and "signup_token" not in r
-    me = client.get("/auth/me", headers={"Authorization": f"Bearer {r['access_token']}"}).json()
-    assert me["patient_number"] == first["patient_number"]
+def test_phone_is_checked_with_a_whatsapp_code(client, db, clinic, wa):
+    assert client.get("/join/CCC").json()["phone_check"] is True
+    assert client.post("/join/CCC/signup", json=form()).status_code == 422  # must verify first
+    token = verified_token(client, wa)
+    assert wa[-1][0] == "+919812345678" and len(wa[-1][1]) == 6
+    assert client.post("/join/CCC/signup", json=form(phone="9812345679", phone_token=token)).status_code == 422  # other phone
+    r = client.post("/join/CCC/signup", json=form(phone_token=token))
+    assert r.status_code == 201, r.text
+    assert client.get("/me/profile", headers=auth(r.json()["access_token"])).json()["phone_verified"] is True
 
 
-def test_wrong_used_and_expired_codes(client, db, clinic):
-    otp = code_for(client)
-    bad = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": "000000" if otp["demo_code"] != "000000" else "111111"})
+def test_wrong_used_and_expired_codes(client, db, clinic, wa):
+    client.post("/join/CCC/phone/send", json={"phone": "9812345678"})
+    code = wa[-1][1]
+    wrong = "000000" if code != "000000" else "111111"
+    bad = client.post("/join/CCC/phone/verify", json={"phone": "9812345678", "code": wrong})
     assert bad.status_code == 400 and "not right" in bad.json()["detail"]
-    assert client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).status_code == 200
-    again = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]})
-    assert again.status_code == 400  # used once only
-    otp = code_for(client)
-    row = PhoneOtpRepository(db, clinic.org.id).latest_open("+919812345678")
+    assert client.post("/join/CCC/phone/verify", json={"phone": "9812345678", "code": code}).status_code == 200
+    assert client.post("/join/CCC/phone/verify", json={"phone": "9812345678", "code": code}).status_code == 400  # once
+    client.post("/join/CCC/phone/send", json={"phone": "9812345678"})
+    row = PhoneOtpRepository(db, clinic.org.id).latest_open("+919812345678", channel="whatsapp")
     row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
     db.commit()
-    r = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]})
+    r = client.post("/join/CCC/phone/verify", json={"phone": "9812345678", "code": wa[-1][1]})
     assert r.status_code == 400 and "expired" in r.json()["detail"]
 
 
-def test_attempts_and_sending_are_limited(client, db, clinic, monkeypatch):
-    otp = code_for(client)
-    wrong = "123456" if otp["demo_code"] != "123456" else "654321"
+def test_attempts_and_sending_are_limited(client, db, clinic, wa):
+    client.post("/join/CCC/phone/send", json={"phone": "9812345678"})
+    code = wa[-1][1]
+    wrong = "123456" if code != "123456" else "654321"
     for _ in range(get_settings().otp_max_attempts):
-        client.post("/join/CCC/verify", json={"phone": "9812345678", "code": wrong})
-    r = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]})
-    assert r.status_code == 429  # even the right code, after too many wrong ones
+        client.post("/join/CCC/phone/verify", json={"phone": "9812345678", "code": wrong})
+    assert client.post("/join/CCC/phone/verify", json={"phone": "9812345678", "code": code}).status_code == 429
     for _ in range(get_settings().otp_max_per_hour - 1):
-        code_for(client)
-    assert client.post("/join/CCC/otp", json={"phone": "9812345678"}).status_code == 429
+        client.post("/join/CCC/phone/send", json={"phone": "9812345678"})
+    assert client.post("/join/CCC/phone/send", json={"phone": "9812345678"}).status_code == 429
 
 
-def test_a_code_from_one_clinic_does_not_work_at_another(client, db, clinic, org_b):
+def test_codes_and_phone_tokens_belong_to_their_clinic(client, db, clinic, org_b, wa):
     org_b.org.join_code, org_b.org.patient_signup_open = "BBB", True
     db.commit()
-    otp = code_for(client)
-    assert client.post("/join/BBB/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).status_code == 400
-    token = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).json()["signup_token"]
-    r = client.post("/join/BBB/register", json={"signup_token": token, "full_name": "X Y", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
-    assert r.status_code == 401  # a sign-up token is bound to its clinic
+    client.post("/join/CCC/phone/send", json={"phone": "9812345678"})
+    assert client.post("/join/BBB/phone/verify", json={"phone": "9812345678", "code": wa[-1][1]}).status_code == 400
+    token = client.post("/join/CCC/phone/verify", json={"phone": "9812345678", "code": wa[-1][1]}).json()["phone_token"]
+    assert client.post("/join/BBB/signup", json=form(phone_token=token)).status_code == 401
+
+
+def test_whatsapp_failure_is_reported(client, db, clinic, wa, monkeypatch):
+    def down(phone, code):
+        raise whatsapp.WhatsAppError("WhatsApp did not send the code: template not approved")
+    monkeypatch.setattr(whatsapp, "send_code", down)
+    r = client.post("/join/CCC/phone/send", json={"phone": "9812345678"})
+    assert r.status_code == 502 and "template" in r.json()["detail"]
+
+
+def test_the_code_goes_out_as_an_authentication_template(monkeypatch):
+    s = get_settings()
+    monkeypatch.setattr(s, "whatsapp_access_token", "tok")
+    monkeypatch.setattr(s, "whatsapp_phone_number_id", "123")
+    monkeypatch.setattr(s, "whatsapp_otp_template", "oncoready_code")
+    sent = {}
+
+    class Reply:
+        status_code = 200
+
+    monkeypatch.setattr(whatsapp.httpx, "post", lambda url, json, headers, timeout: sent.update(url=url, json=json) or Reply())
+    whatsapp.send_code("+919812345678", "482913")
+    t = sent["json"]["template"]
+    assert sent["url"].endswith("/123/messages") and sent["json"]["to"] == "919812345678"
+    assert t["name"] == "oncoready_code" and t["components"][0]["parameters"][0]["text"] == "482913"
+    assert t["components"][1]["sub_type"] == "url" and t["components"][1]["parameters"][0]["text"] == "482913"
+
+
+@pytest.mark.parametrize("over", [
+    {"date_of_birth": "2999-01-01"}, {"sex": None}, {"email": "not-an-email"}, {"password": "short"},
+    {"accept_test_terms": False}, {"full_name": "A"}, {"phone": "12345"},
+])
+def test_sign_up_form_is_validated(client, db, clinic, over):
+    body = {k: v for k, v in form(**over).items() if v is not None}
+    assert client.post("/join/CCC/signup", json=body).status_code == 422
+
+
+def test_one_account_per_email_and_per_phone(client, db, clinic):
+    assert client.post("/join/CCC/signup", json=form()).status_code == 201
+    r = client.post("/join/CCC/signup", json=form(phone="9812345679"))
+    assert r.status_code == 409 and "email" in r.json()["detail"]
+    r = client.post("/join/CCC/signup", json=form(email="other@example.com"))
+    assert r.status_code == 409 and "phone" in r.json()["detail"]
+
+
+def test_an_older_phone_only_account_is_claimed_only_with_a_verified_phone(client, db, clinic, wa):
+    users = UserRepository(db, clinic.org.id)
+    old = users.add(email=None, password_hash=None, full_name="Old", role=Role.PATIENT.value,
+                    phone="+919812345678", patient_number="OR-OLD0-0001")
+    db.commit()
+    token = verified_token(client, wa)
+    r = client.post("/join/CCC/signup", json=form(phone_token=token))
+    assert r.status_code == 201 and r.json()["patient_number"] == "OR-OLD0-0001"  # same account, completed
+    db.refresh(old)
+    assert old.email == "asha@example.com" and old.password_hash and old.phone_verified_at
+
+
+def test_patients_edit_their_account_and_password(client, db, clinic):
+    h = auth(client.post("/join/CCC/signup", json=form()).json()["access_token"])
+    client.post("/join/CCC/signup", json=form(email="bina@example.com", phone="9812345679"))
+    r = client.put("/me/account", headers=h, json={"full_name": "Asha P. Kumar", "email": "asha.k@example.com"})
+    assert r.status_code == 200 and r.json() == {"name": "Asha P. Kumar", "email": "asha.k@example.com"}
+    assert client.put("/me/account", headers=h, json={"full_name": "Asha", "email": "bina@example.com"}).status_code == 409
+    prof = client.get("/me/profile", headers=h).json()
+    assert prof["name"] == "Asha P. Kumar"
+    assert client.put("/me/password", headers=h, json={"current_password": "wrong", "new_password": "new-secret-2"}).status_code == 400
+    assert client.put("/me/password", headers=h, json={"current_password": "asha-secret-1", "new_password": "new-secret-2"}).status_code == 204
+    assert client.post("/join/CCC/login", json={"email": "asha.k@example.com", "password": "new-secret-2"}).status_code == 200
+    assert client.post("/join/CCC/login", json={"email": "asha.k@example.com", "password": "asha-secret-1"}).status_code == 401
+
+
+def test_main_page_uses_the_clinic_without_a_code(client, db, clinic, org_b, monkeypatch):
+    assert client.get("/join").json()["code"] == "CCC"
+    org_b.org.join_code, org_b.org.patient_signup_open = "BBB", True
+    db.commit()
+    assert client.get("/join").status_code == 404
+    monkeypatch.setattr(get_settings(), "default_clinic_code", "BBB")
+    assert client.get("/join").json()["code"] == "BBB"
 
 
 def test_closed_or_unknown_clinic(client, db, clinic):
@@ -104,70 +199,14 @@ def test_closed_or_unknown_clinic(client, db, clinic):
     clinic.org.patient_signup_open = False
     db.commit()
     assert client.get("/join/CCC").status_code == 404
-    assert client.post("/join/CCC/otp", json={"phone": "9812345678"}).status_code == 404
-
-
-def test_invalid_numbers_are_refused(client, db, clinic):
-    for bad in ("12345", "+91 12345 67890", "phone"):
-        assert client.post("/join/CCC/otp", json={"phone": bad}).status_code == 422
-
-
-def test_sms_provider_sends_the_code_and_never_returns_it(client, db, clinic, monkeypatch):
-    sent = {}
-    monkeypatch.setattr(sms, "enabled", lambda: True)
-    monkeypatch.setattr(sms, "send_otp", lambda phone, code: sent.update(phone=phone, code=code))
-    r = code_for(client)
-    assert r["demo_code"] is None and sent["phone"] == "+919812345678" and len(sent["code"]) == 6
-    assert client.post("/join/CCC/verify", json={"phone": "9812345678", "code": sent["code"]}).status_code == 200
+    assert client.post("/join/CCC/signup", json=form()).status_code == 404
 
 
 def test_patient_numbers_are_unique_and_staff_login_unchanged(client, db, clinic):
     numbers = {signup.new_patient_number() for _ in range(2000)}
     assert len(numbers) == 2000 and all(n[:3] == "OR-" and n[7] == "-" for n in numbers)
-    a = sign_up(client, "9812345678", "Asha P").json()
-    b = sign_up(client, "9812345679", "Bina P").json()
-    assert a["patient_number"] != b["patient_number"]
-    # staff still sign in with email + password; a phone-only patient cannot use that form
     assert login(client, clinic, clinic.faculty)
-    assert client.post("/auth/login", json={"org_slug": clinic.org.slug, "email": "x@example.com", "password": "x"}).status_code == 401
-
-
-def test_same_number_cannot_register_twice(client, db, clinic):
-    sign_up(client)
-    otp = code_for(client)
-    v = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).json()
-    assert "access_token" in v  # it signs in instead
-    token = signup.signup_token(clinic.org, "+919812345678")
-    r = client.post("/join/CCC/register", json={"signup_token": token, "full_name": "Again", "date_of_birth": "1975-06-15", "sex": "female", "accept_test_terms": True})
-    assert r.status_code == 409
-
-
-def test_sign_up_asks_for_the_patients_details(client, db, clinic):
-    otp = code_for(client)
-    token = client.post("/join/CCC/verify", json={"phone": "9812345678", "code": otp["demo_code"]}).json()["signup_token"]
-    body = {"signup_token": token, "full_name": "Asha Placeholder", "email": "Asha@Example.com", "date_of_birth": "1975-06-15",
-            "sex": "female", "preferred_language": "hi-IN", "accept_test_terms": True}
-    assert client.post("/join/CCC/register", json={**body, "date_of_birth": "2999-01-01"}).status_code == 422
-    assert client.post("/join/CCC/register", json={k: v for k, v in body.items() if k != "sex"}).status_code == 422
-    assert client.post("/join/CCC/register", json={**body, "email": "not-an-email"}).status_code == 422
-    r = client.post("/join/CCC/register", json=body)
-    assert r.status_code == 201
-    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    prof = client.get("/me/profile", headers=h).json()
-    assert prof["email"] == "asha@example.com"
-    d = prof["details"]
-    assert (d["date_of_birth"], d["sex"], d["preferred_language"], d["phone"]) == ("1975-06-15", "female", "hi-IN", "+919812345678")
-    # the same email cannot be used for a second account at the clinic
-    otp = code_for(client, "9812345679")
-    token = client.post("/join/CCC/verify", json={"phone": "9812345679", "code": otp["demo_code"]}).json()["signup_token"]
-    r = client.post("/join/CCC/register", json={**body, "signup_token": token, "email": "asha@example.com"})
-    assert r.status_code == 409 and "email" in r.json()["detail"]
-
-
-def test_main_page_uses_the_clinic_without_a_code(client, db, clinic, org_b, monkeypatch):
-    assert client.get("/join").json()["code"] == "CCC"  # the only clinic with sign-up open
-    org_b.org.join_code, org_b.org.patient_signup_open = "BBB", True
+    patient = UserRepository(db, clinic.org.id).create("p@x.example.com", "P", PASSWORD, Role.PATIENT)
     db.commit()
-    assert client.get("/join").status_code == 404  # two open clinics: needs a choice
-    monkeypatch.setattr(get_settings(), "default_clinic_code", "BBB")
-    assert client.get("/join").json()["code"] == "BBB"
+    assert client.post("/join/CCC/login", json={"email": clinic.faculty.email, "password": PASSWORD}).status_code == 401  # staff not here
+    assert client.post("/join/CCC/login", json={"email": patient.email, "password": PASSWORD}).status_code == 200
