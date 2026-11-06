@@ -356,6 +356,19 @@ export interface CaseReview {
   history: ReviewEventOut[];
 }
 
+/** A doctor's request to the patient: a record to upload, or a question to answer. */
+export interface PatientRequestOut {
+  id: string;
+  kind: "record" | "question";
+  text: string;
+  status: "open" | "answered";
+  asked_by: DoctorRef | null;
+  asked_at: string;
+  answer: string | null;
+  answered_at: string | null;
+  document: { id: string; filename: string } | null;
+}
+
 export interface ReviewEventOut {
   action: "assigned" | "saved" | "sent" | "reviewed" | "returned";
   by: DoctorRef | null;
@@ -392,6 +405,7 @@ export interface DoctorPatientDetail {
   /** Before this consult: changes since the last visit, pending, missing or disagreeing, milestones. */
   readiness: Readiness;
   review: CaseReview;
+  requests: PatientRequestOut[];
 }
 
 /** Something the patient told Ritu, in their own words, from one conversation. */
@@ -436,6 +450,11 @@ export interface Readiness {
     patient: { conversations: number; symptoms: PatientWords[]; hospital_visits: PatientWords[]; medicines: PatientWords[] };
   } | null;
   pending_tests: Timeline["pending_tests"];
+  /** Tests advised at the last approved consultation, each checked against the records since. */
+  advised_tests: {
+    date: string;
+    items: { text: string; status: "result_in_records" | "no_result" | "not_matched"; result: { date: string; description: string | null; source: SourceRef } | null }[];
+  } | null;
   inconsistent: (Timeline["discrepancies"][number] & { events: TimelineEvent[] })[];
   missing: MissingItem[];
   milestones: Milestone[];

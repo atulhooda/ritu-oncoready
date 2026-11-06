@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
+
 import { dayMonthYear } from "@/components/CaseViews";
-import { Badge, Card, Label } from "@/components/ui";
-import type { MissingItem, PatientWords, Readiness, SourceRef } from "@/lib/types";
+import { Badge, Button, Card, Label } from "@/components/ui";
+import { api } from "@/lib/api";
+import type { MissingItem, PatientRequestOut, PatientWords, Readiness, SourceRef } from "@/lib/types";
 
 /**
  * Before this consult: what changed since the last visit, what is still pending, what is missing
@@ -20,11 +23,20 @@ export function ReadinessPanel({
   r,
   onSource,
   onWords,
+  caseId,
+  requests,
+  onRequests,
 }: {
   r: Readiness;
   onSource: (s: SourceRef) => void;
   onWords: (w: PatientWords) => void;
+  caseId: string;
+  requests: PatientRequestOut[];
+  onRequests: (rs: PatientRequestOut[]) => void;
 }) {
+  const ask = (kind: PatientRequestOut["kind"], text: string) =>
+    api<PatientRequestOut[]>(`/doctor/patients/${caseId}/requests`, { method: "POST", body: JSON.stringify({ kind, text }) }).then(onRequests);
+  const asked = new Set(requests.map((q) => q.text));
   const c = r.changes;
   const page = (s: SourceRef | null | undefined) =>
     s && (
@@ -140,6 +152,31 @@ export function ReadinessPanel({
             ))}
             {!r.pending_tests.length && <li className="text-muted">None found in the records.</li>}
           </ul>
+          {r.advised_tests && (
+            <div className="mt-5 border-t border-line/70 pt-4">
+              <h3 className="mb-2 text-sm font-semibold text-ink/80">Advised at the last consultation ({day(r.advised_tests.date)})</h3>
+              <ul className="space-y-2">
+                {r.advised_tests.items.map((t, i) => (
+                  <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    {t.status === "result_in_records" ? (
+                      <Badge tone="green">result in records</Badge>
+                    ) : t.status === "no_result" ? (
+                      <Badge tone="amber">no result yet</Badge>
+                    ) : (
+                      <Badge tone="slate">check</Badge>
+                    )}
+                    <span className="font-medium">{t.text}</span>
+                    {t.result && (
+                      <>
+                        <span className="text-sm text-muted">{day(t.result.date)}</span>
+                        {page(t.result.source)}
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Card>
 
         <Card className="p-6 sm:p-7">
@@ -157,13 +194,15 @@ export function ReadinessPanel({
             ))}
             {r.missing.map((m, i) => (
               <li key={i}>
-                <MissingRow m={m} words={words} onSource={onSource} />
+                <MissingRow m={m} words={words} onSource={onSource} ask={ask} asked={asked} />
               </li>
             ))}
             {!r.inconsistent.length && !r.missing.length && <li className="text-muted">Nothing found.</li>}
           </ul>
         </Card>
       </div>
+
+      <AskPatient requests={requests} ask={ask} />
 
       <Card className="p-6 sm:p-7">
         <Label>Care milestones</Label>
@@ -200,38 +239,72 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** What the record request for a "not uploaded" item says to the patient. */
+const recordAsk = (m: Extract<MissingItem, { kind: "record_not_uploaded" }>) =>
+  `Please upload your ${m.tests.map(testName).join(" / ")} report${m.record_date ? ` (${m.record_date})` : ""}${m.facility ? ` from ${m.facility}` : ""}.`;
+
 function MissingRow({
   m,
   words,
   onSource,
+  ask,
+  asked,
 }: {
   m: MissingItem;
   words: (w: PatientWords) => React.ReactNode;
   onSource: (s: SourceRef) => void;
+  ask: (kind: PatientRequestOut["kind"], text: string) => Promise<void>;
+  asked: Set<string>;
 }) {
   switch (m.kind) {
     case "record_not_uploaded":
       return (
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <Badge tone="amber">not uploaded</Badge>
-          <span>
-            Patient mentioned a {m.tests.map(testName).join(" / ")} report
-            {m.record_date ? ` (${m.record_date})` : ""}
-            {m.facility ? ` from ${m.facility}` : ""}; none in the records.
-          </span>
-          {words(m)}
+        <div>
+          <MissingRecord m={m} words={words} />
+          {asked.has(recordAsk(m)) ? (
+            <span className="mt-1 inline-block text-sm text-muted">Asked the patient.</span>
+          ) : (
+            <button onClick={() => ask("record", recordAsk(m))} className="mt-1 text-sm font-medium text-brand hover:underline">
+              Ask the patient to upload it
+            </button>
+          )}
         </div>
       );
     case "medicine_not_in_records":
-      return (
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <Badge tone="amber">only from the patient</Badge>
-          <span>
-            <span className="font-medium">{m.label}</span>: no record names it.
-          </span>
-          {words(m)}
-        </div>
-      );
+      return <MedicineOnlyFromPatient m={m} words={words} />;
+    default:
+      return <OtherMissing m={m} onSource={onSource} />;
+  }
+}
+
+function MissingRecord({ m, words }: { m: Extract<MissingItem, { kind: "record_not_uploaded" }>; words: (w: PatientWords) => React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <Badge tone="amber">not uploaded</Badge>
+      <span>
+        Patient mentioned a {m.tests.map(testName).join(" / ")} report
+        {m.record_date ? ` (${m.record_date})` : ""}
+        {m.facility ? ` from ${m.facility}` : ""}; none in the records.
+      </span>
+      {words(m)}
+    </div>
+  );
+}
+
+function MedicineOnlyFromPatient({ m, words }: { m: Extract<MissingItem, { kind: "medicine_not_in_records" }>; words: (w: PatientWords) => React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <Badge tone="amber">only from the patient</Badge>
+      <span>
+        <span className="font-medium">{m.label}</span>: no record names it.
+      </span>
+      {words(m)}
+    </div>
+  );
+}
+
+function OtherMissing({ m, onSource }: { m: MissingItem; onSource: (s: SourceRef) => void }) {
+  switch (m.kind) {
     case "page_hard_to_read":
       return (
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -264,4 +337,62 @@ function MissingRow({
         </div>
       );
   }
+}
+
+/** Ask the patient for more before the visit; their answers come back here. */
+function AskPatient({ requests, ask }: { requests: PatientRequestOut[]; ask: (kind: PatientRequestOut["kind"], text: string) => Promise<void> }) {
+  const [kind, setKind] = useState<PatientRequestOut["kind"]>("question");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function send() {
+    setBusy(true);
+    setError(null);
+    try {
+      await ask(kind, text);
+      setText("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="p-6 sm:p-7">
+      <Label>Ask the patient</Label>
+      <p className="mb-4 mt-1 text-sm text-muted">The patient sees this on their page and answers there, or uploads the record.</p>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <select value={kind} onChange={(e) => setKind(e.target.value as PatientRequestOut["kind"])} aria-label="What to ask for"
+          className="rounded-xl border border-line bg-white px-3 py-2">
+          <option value="question">A question</option>
+          <option value="record">A record to upload</option>
+        </select>
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={300} aria-label="Your request"
+          placeholder={kind === "question" ? "e.g. How many days did the fever last?" : "e.g. Please upload your last CT report"}
+          className="min-w-0 flex-1 rounded-xl border border-line bg-white px-3 py-2" />
+        <Button disabled={busy || !text.trim()} onClick={send}>{busy ? "Sending…" : "Send"}</Button>
+      </div>
+      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+      {requests.length > 0 && (
+        <ul className="mt-5 space-y-3 border-t border-line/70 pt-4">
+          {requests.map((q) => (
+            <li key={q.id} className="text-sm">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <Badge tone={q.status === "answered" ? "green" : "amber"}>{q.status === "answered" ? "answered" : "waiting"}</Badge>
+                <span className="font-medium">{q.text}</span>
+                <span className="text-muted">
+                  {q.asked_by?.name} · {dayMonthYear(q.asked_at)}
+                </span>
+              </div>
+              {q.status === "answered" && (
+                <p className="mt-1 text-ink/80">
+                  {q.kind === "question" ? `“${q.answer}”` : q.document ? `Uploaded: ${q.document.filename} (in Records & timeline)` : "Uploaded (since removed by the patient)"}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
 }

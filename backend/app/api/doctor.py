@@ -24,7 +24,7 @@ from app.repositories.reviews import CaseReviewRepository
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository
 from app.repositories.users import PractitionerProfileRepository, UserRepository
 from app.voice import client as ritu
-from app.services import readiness, review as reviews, trends
+from app.services import readiness, requests as patient_requests, review as reviews, trends
 from app.services.timeline import build_timeline
 
 router = APIRouter(prefix="/doctor", tags=["doctor"])
@@ -148,6 +148,7 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(viewer), db: 
             db, current.org_id, case.id, timeline=timeline, history=history, records=records, **record_trends,
         ),
         "review": reviews.review_out(db, current.org_id, case, review),
+        "requests": patient_requests.for_case(db, current.org_id, case.id),
     }
 
 
@@ -199,6 +200,23 @@ def send_to_senior(case_id: uuid.UUID, body: SendIn, current: CurrentUser = Depe
     case = visible_case_or_404(db, current, case_id)
     return _review_change(db, current, case, lambda: reviews.send_to_senior(
         db, current.org_id, case, current.id, body.senior_user_id, body.model_dump(mode="json", include={"facts", "points"})))
+
+
+class RequestIn(BaseModel):
+    kind: Literal["record", "question"]
+    text: str = Field(min_length=1, max_length=patient_requests.MAX_TEXT)
+
+
+@router.post("/patients/{case_id}/requests", status_code=status.HTTP_201_CREATED)
+def ask_patient(case_id: uuid.UUID, body: RequestIn, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
+    """Ask the patient for a record they mentioned or a question; they answer from their page."""
+    case = visible_case_or_404(db, current, case_id)
+    try:
+        patient_requests.ask(db, current.org_id, case, current.id, body.kind, body.text)
+    except patient_requests.RequestError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    db.commit()
+    return patient_requests.for_case(db, current.org_id, case.id)
 
 
 class ReturnIn(BaseModel):

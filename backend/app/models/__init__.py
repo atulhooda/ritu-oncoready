@@ -7,6 +7,7 @@ from app.models.org import Org, Role, User
 from app.models.otp import PhoneOtp
 from app.models.practitioner import PractitionerProfile
 from app.models.consultation import Consultation
+from app.models.request import PatientRequest
 from app.models.review import CaseReview, ReviewEvent
 from app.models.scoring import AnswerKey, BriefItemMatch, FacultyReview, ReadinessBrief, RubricItem, Score
 from app.models.timeline import Discrepancy, PendingTest, TimelineEvent
@@ -16,6 +17,7 @@ __all__ = [
     "Base",
     "BriefItemMatch",
     "CaseReview",
+    "PatientRequest",
     "ReviewEvent",
     "Consultation",
     "Discrepancy",

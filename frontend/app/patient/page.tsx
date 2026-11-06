@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { DetailsForm } from "@/components/patient/DetailsForm";
+import { PatientRequests } from "@/components/patient/PatientRequests";
 import { ReadyScreen } from "@/components/patient/ReadyScreen";
 import { RecordsUploader } from "@/components/patient/RecordsUploader";
 import { ReviewStep } from "@/components/patient/ReviewStep";
@@ -84,6 +85,7 @@ export default function CheckInPage() {
             title={showReady ? "All done" : `Hello ${profile.name.split(" ")[0]}, let's get you ready for your visit`}
             subtitle={showReady ? undefined : `${STEPS.length} short steps · about ${total} minutes. You can stop and come back any time.`}
           />
+          <PatientRequests />
           {showReady ? (
             <ReadyScreen
               profile={profile}

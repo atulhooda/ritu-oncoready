@@ -20,7 +20,7 @@ from app.models.patient import LANGUAGES, SEXES, TREATMENT_STATUSES
 from app.repositories.cases import SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.users import UserRepository
-from app.services import review as reviews
+from app.services import requests as patient_requests, review as reviews
 
 router = APIRouter(prefix="/me", tags=["patient"])
 patient_only = require_role(Role.PATIENT)
@@ -351,11 +351,51 @@ def delete_record(document_id: uuid.UUID, current: CurrentUser = Depends(patient
     if doc is None or doc.case_id != case.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Record not found")
     key = doc.storage_key
+    from app.repositories.requests import PatientRequestRepository
+
+    PatientRequestRepository(db, current.org_id).unlink_document(doc.id)  # an answered request stays answered
     docs.delete_where(docs.model.id == doc.id)  # pages, extracted facts and rejections cascade
     run_derive(db, current.org_id, case.id)  # pending tests / discrepancies no longer cite it
     db.commit()
     storage.path(key).unlink(missing_ok=True)
     shutil.rmtree(storage.path(storage.page_image_key(key, 1)).parent, ignore_errors=True)
+
+
+class RequestAnswerIn(BaseModel):
+    text: str = Field(min_length=1, max_length=patient_requests.MAX_ANSWER)
+
+
+class RequestRecordIn(BaseModel):
+    document_id: uuid.UUID
+
+
+@router.get("/requests")
+def my_requests(current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    """What your doctors have asked you for, open ones first."""
+    case = service.profile_case(db, _user(db, current))
+    return patient_requests.for_case(db, current.org_id, case.id)
+
+
+def _request_change(db: Session, current: CurrentUser, change) -> dict[str, Any]:
+    case = service.profile_case(db, _user(db, current))
+    try:
+        r = change(case)
+    except LookupError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e).capitalize())
+    except patient_requests.RequestError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    db.commit()
+    return patient_requests.out(db, current.org_id, r)
+
+
+@router.post("/requests/{request_id}/answer")
+def answer_request(request_id: uuid.UUID, body: RequestAnswerIn, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    return _request_change(db, current, lambda case: patient_requests.answer(db, current.org_id, case, request_id, body.text))
+
+
+@router.post("/requests/{request_id}/record")
+def attach_request_record(request_id: uuid.UUID, body: RequestRecordIn, current: CurrentUser = Depends(patient_only), db: Session = Depends(get_db)):
+    return _request_change(db, current, lambda case: patient_requests.attach_record(db, current.org_id, case, request_id, body.document_id))
 
 
 @router.post("/publish")
