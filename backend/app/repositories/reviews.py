@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Sequence
 
-from app.models import CaseReview
+from app.models import CaseReview, ReviewEvent
 from app.repositories.base import TenantRepository
 
 
@@ -24,3 +24,14 @@ class CaseReviewRepository(TenantRepository[CaseReview]):
 
     def for_senior(self, user_id: uuid.UUID) -> Sequence[CaseReview]:
         return self.list(CaseReview.senior_user_id == user_id, CaseReview.status == "with_senior", limit=1000)
+
+
+class ReviewEventRepository(TenantRepository[ReviewEvent]):
+    """Append-only: events are added and read, never changed."""
+
+    model = ReviewEvent
+
+    def for_case(self, case_id: uuid.UUID) -> Sequence[ReviewEvent]:
+        return self.session.scalars(
+            self.select().where(ReviewEvent.case_id == case_id).order_by(ReviewEvent.seq)
+        ).all()

@@ -347,6 +347,19 @@ export interface CaseReview {
   assigned_at: string | null;
   summary_updated_at: string | null;
   sent_at: string | null;
+  /** The senior's sign-off; cleared if they return it to the junior. */
+  reviewed_at: string | null;
+  reviewed_by: DoctorRef | null;
+  /** Every change, oldest first: who, what, when, the summary as it stood, a return's reason. */
+  history: ReviewEventOut[];
+}
+
+export interface ReviewEventOut {
+  action: "assigned" | "saved" | "sent" | "reviewed" | "returned";
+  by: DoctorRef | null;
+  at: string;
+  note: string | null;
+  summary: string | null;
 }
 
 export interface HospitalDoctor {

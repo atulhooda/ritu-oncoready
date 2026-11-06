@@ -201,6 +201,24 @@ def send_to_senior(case_id: uuid.UUID, body: SendIn, current: CurrentUser = Depe
         db, current.org_id, case, current.id, body.senior_user_id, body.model_dump(mode="json", include={"facts", "points"})))
 
 
+class ReturnIn(BaseModel):
+    note: str = Field(min_length=1, max_length=reviews.MAX_RETURN_NOTE)
+
+
+@router.post("/patients/{case_id}/reviewed")
+def mark_reviewed(case_id: uuid.UUID, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
+    """The senior doctor signs off the junior's summary."""
+    case = visible_case_or_404(db, current, case_id)
+    return _review_change(db, current, case, lambda: reviews.mark_reviewed(db, current.org_id, case, current.id))
+
+
+@router.post("/patients/{case_id}/return")
+def return_to_junior(case_id: uuid.UUID, body: ReturnIn, current: CurrentUser = Depends(doctor_only), db: Session = Depends(get_db)):
+    """The senior doctor sends the summary back to the junior with a reason."""
+    case = visible_case_or_404(db, current, case_id)
+    return _review_change(db, current, case, lambda: reviews.return_to_junior(db, current.org_id, case, current.id, body.note))
+
+
 class AssistantQuestion(BaseModel):
     question: str = Field(min_length=2, max_length=500)
 

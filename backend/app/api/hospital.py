@@ -102,7 +102,7 @@ def assign_patient(
 ):
     case = visible_case_or_404(db, current, case_id)
     try:
-        review = reviews.assign(db, current.org_id, case, body.junior_user_id)
+        review = reviews.assign(db, current.org_id, case, body.junior_user_id, actor=current.id)
     except reviews.ReviewError as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e))
     db.commit()

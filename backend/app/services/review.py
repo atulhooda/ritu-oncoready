@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.intake import service
 from app.models import CaseReview, PatientCase, Role, User
 from app.repositories.cases import CaseRepository
-from app.repositories.reviews import CaseReviewRepository
+from app.repositories.reviews import CaseReviewRepository, ReviewEventRepository
 from app.repositories.users import UserRepository
 
 # The junior's own points, each of one kind, shown to the senior grouped in this order.
@@ -93,6 +93,23 @@ def summary_text(case: PatientCase, details: dict[str, Any], facts: list[dict[st
     return "\n".join(lines)
 
 
+MAX_RETURN_NOTE = 500
+
+
+def _log(db: Session, org_id: uuid.UUID, review: CaseReview, actor: uuid.UUID | None, action: str, note: str | None = None) -> None:
+    """The audit trail: who did what, when, and the summary as it stood after the change."""
+    ReviewEventRepository(db, org_id).add(case_id=review.case_id, actor_user_id=actor, action=action, note=note,
+                                          summary=review.summary)
+
+
+def history(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> list[dict[str, Any]]:
+    return [
+        {"action": e.action, "by": doctor_name(db, org_id, e.actor_user_id), "at": e.created_at, "note": e.note,
+         "summary": e.summary}
+        for e in ReviewEventRepository(db, org_id).for_case(case_id)
+    ]
+
+
 def doctor_name(db: Session, org_id: uuid.UUID, user_id: uuid.UUID | None) -> dict[str, Any] | None:
     user = UserRepository(db, org_id).get(user_id) if user_id else None
     return {"id": user.id, "name": user.full_name} if user else None
@@ -117,6 +134,9 @@ def review_out(db: Session, org_id: uuid.UUID, case: PatientCase, review: CaseRe
         "assigned_at": review.assigned_at if review else None,
         "summary_updated_at": review.summary_updated_at if review else None,
         "sent_at": review.sent_at if review else None,
+        "reviewed_at": review.reviewed_at if review else None,
+        "reviewed_by": doctor_name(db, org_id, review.reviewed_by) if review else None,
+        "history": history(db, org_id, case.id),
     }
 
 
@@ -127,12 +147,13 @@ def _active_doctor(db: Session, org_id: uuid.UUID, user_id: uuid.UUID, seniority
     return user
 
 
-def assign(db: Session, org_id: uuid.UUID, case: PatientCase, junior_user_id: uuid.UUID) -> CaseReview:
+def assign(db: Session, org_id: uuid.UUID, case: PatientCase, junior_user_id: uuid.UUID, actor: uuid.UUID | None = None) -> CaseReview:
     review = CaseReviewRepository(db, org_id).ensure(case.id)
     if review.status == "with_senior":
         raise ReviewError("the summary has already been sent to a senior doctor")
     _active_doctor(db, org_id, junior_user_id, "junior")
     review.junior_user_id, review.status, review.assigned_at = junior_user_id, "with_junior", datetime.now(UTC)
+    _log(db, org_id, review, actor, "assigned")
     db.flush()
     return review
 
@@ -153,6 +174,7 @@ def assign_waiting(db: Session, org_id: uuid.UUID) -> int:
     for review in waiting:
         junior = min(juniors, key=lambda j: (load[j.id], j.full_name))
         review.junior_user_id, review.status, review.assigned_at = junior.id, "with_junior", datetime.now(UTC)
+        _log(db, org_id, review, None, "assigned")
         load[junior.id] += 1
     db.flush()
     return len(waiting)
@@ -190,6 +212,7 @@ def _write(db: Session, org_id: uuid.UUID, case: PatientCase, review: CaseReview
 def save_summary(db: Session, org_id: uuid.UUID, case: PatientCase, user_id: uuid.UUID, content: dict[str, Any]) -> CaseReview:
     review = _editable_by(CaseReviewRepository(db, org_id).for_case(case.id), user_id)
     _write(db, org_id, case, review, user_id, content)
+    _log(db, org_id, review, user_id, "saved")
     db.flush()
     return review
 
@@ -202,5 +225,36 @@ def send_to_senior(
     _active_doctor(db, org_id, senior_user_id, "senior")
     _write(db, org_id, case, review, user_id, content)
     review.senior_user_id, review.status, review.sent_at = senior_user_id, "with_senior", review.summary_updated_at
+    _log(db, org_id, review, user_id, "sent")
+    db.flush()
+    return review
+
+
+def _with_this_senior(review: CaseReview | None, user_id: uuid.UUID) -> CaseReview:
+    if review is None or review.status != "with_senior" or review.senior_user_id != user_id:
+        raise ReviewError("only the senior doctor this summary was sent to can review or return it")
+    return review
+
+
+def mark_reviewed(db: Session, org_id: uuid.UUID, case: PatientCase, user_id: uuid.UUID) -> CaseReview:
+    """The senior's sign-off on the junior's summary, once."""
+    review = _with_this_senior(CaseReviewRepository(db, org_id).for_case(case.id), user_id)
+    if review.reviewed_at is not None:
+        raise ReviewError("this summary is already marked reviewed")
+    review.reviewed_by, review.reviewed_at = user_id, datetime.now(UTC)
+    _log(db, org_id, review, user_id, "reviewed")
+    db.flush()
+    return review
+
+
+def return_to_junior(db: Session, org_id: uuid.UUID, case: PatientCase, user_id: uuid.UUID, note: str) -> CaseReview:
+    """The senior sends the summary back with a reason; the junior edits it and sends it again."""
+    review = _with_this_senior(CaseReviewRepository(db, org_id).for_case(case.id), user_id)
+    note = note.strip()
+    if not note:
+        raise ReviewError("say what the junior should change")
+    review.status, review.senior_user_id, review.sent_at = "with_junior", None, None
+    review.reviewed_by = review.reviewed_at = None
+    _log(db, org_id, review, user_id, "returned", note[:MAX_RETURN_NOTE])
     db.flush()
     return review
