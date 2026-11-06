@@ -32,8 +32,17 @@ docker compose exec backend python /seed/seed.py --intake        # hospital, jun
 - Extraction: LLM returns candidates (page number + span). Spans are aligned to the page OCR text
   with rapidfuzz (>= `span_match_threshold`, 0.85) and the **aligned OCR substring** is stored.
   Anything failing validation goes to `rejected_extractions` with a reason, never the timeline.
-- Dates are parsed in `dates.py` (US MM/DD/YYYY). The LLM only copies date text.
+- Dates are parsed in `dates.py`: slash dates day-first (DD/MM/YYYY, Indian records), unless the
+  document's own slash dates can only be month-first (`slash_order`, over all its pages). The LLM
+  only copies date text.
 - Pending tests, discrepancies, and lab flags (LVEF drop >= 10 points) are code in `derive.py`.
+  The lab flag is a threshold, so it is shown on **training** cases only; doctors see changes as
+  the two values with their dates and sources (`services/readiness.py`).
+- **Before this consult** (`services/readiness.py`, the doctor's first tab): changes since the last
+  visit (last approved consultation, else the latest clinic note in the records), pending tests,
+  what is missing or disagrees (records the patient mentioned but did not upload, medicines only
+  the patient named, pages read with low OCR confidence, undated facts, failed records), and care
+  milestones. Pure code over sourced facts; values are never called better, worse, high or low.
 - Invariant fields (histology, primary site, stage, HER2/ER/PR) are compared across documents
   regardless of date in `invariants.py`. A stage change is excused only by a dated
   `response_assessment` event between the two stages; c/p/y stages are compared within their

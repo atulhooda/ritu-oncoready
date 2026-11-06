@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.assistant.measures import Quantity, normalize_unit, quantity_for_analyte, readings_in, temperature_unit
 from app.intake import service as intake
-from app.pipeline.dates import page_date, parse_date
+from app.pipeline.dates import document_orders, page_date, parse_date
 from app.repositories.cases import DocumentPageRepository, SourceDocumentRepository
 from app.repositories.timeline import PendingTestRepository, TimelineEventRepository
 
@@ -69,6 +69,7 @@ def _doc_source(doc, page, span: str) -> dict[str, Any]:
 def build_corpus(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> Corpus:
     docs = {d.id: d for d in SourceDocumentRepository(db, org_id).for_case(case_id)}
     pages = {p.id: p for p in DocumentPageRepository(db, org_id).for_case(case_id) if p.document_id in docs}
+    orders = document_orders(pages.values())
     corpus = Corpus(case_id=case_id, documents=len(docs), pages=len(pages))
     n = 0
 
@@ -102,7 +103,7 @@ def build_corpus(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> Corpus:
         basis = "document" if e.date_precision == "inferred" else "stated"
         when = e.event_date
         if when is None:  # no date of its own: carry the document's date, labelled as such
-            when, basis = page_date(page.ocr_text), "document"
+            when, basis = page_date(page.ocr_text, orders[page.document_id]), "document"
         add("record_fact", p.get("description") or e.source_text_span, when, basis,
             _doc_source(doc, page, e.source_text_span))
         q = quantity_for_analyte(p.get("analyte"))
@@ -119,12 +120,13 @@ def build_corpus(db: Session, org_id: uuid.UUID, case_id: uuid.UUID) -> Corpus:
     # Raw page lines: anything the extractor or the summary left out.
     for page in sorted(pages.values(), key=lambda p: (docs[p.document_id].filename, p.page_number)):
         doc = docs[page.document_id]
-        doc_date = page_date(page.ocr_text)
+        order = orders[page.document_id]
+        doc_date = page_date(page.ocr_text, order)
         for line in page.ocr_text.splitlines():
             line = line.strip()
             if len(line) < 3:
                 continue
-            stated, precision = parse_date(line)
+            stated, precision = parse_date(line, order)
             when, basis = (stated, "stated") if stated and precision == "exact" else (doc_date, "document")
             add("page_line", line, when, basis, _doc_source(doc, page, line))
             for r in readings_in(line):

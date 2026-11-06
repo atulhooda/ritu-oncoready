@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import type { DoctorPatientRow, Practitioner } from "@/lib/types";
 import { detailsLine } from "@/lib/types";
 
-type Filter = "all" | "urgent" | "flags" | "pending" | "today";
+type Filter = "all" | "urgent" | "discrepancies" | "pending" | "today";
 
 const urgentCheckIn = (r: DoctorPatientRow) => (r.last_check_in?.urgent.length ?? 0) > 0;
 
@@ -37,7 +37,7 @@ export default function DoctorInbox() {
   const today = new Date().toDateString();
   const isToday = (r: DoctorPatientRow) => new Date(r.published_at).toDateString() === today;
   const shown = rows.filter((r) =>
-    filter === "urgent" ? urgentCheckIn(r) : filter === "flags" ? r.flags + r.discrepancies > 0 : filter === "pending" ? r.pending_tests > 0 : filter === "today" ? isToday(r) : true,
+    filter === "urgent" ? urgentCheckIn(r) : filter === "discrepancies" ? r.discrepancies > 0 : filter === "pending" ? r.pending_tests > 0 : filter === "today" ? isToday(r) : true,
   ).sort((a, b) => Number(urgentCheckIn(b)) - Number(urgentCheckIn(a)));
 
   return (
@@ -64,7 +64,7 @@ export default function DoctorInbox() {
       <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
         <div>
           <div className="mb-5 flex flex-wrap gap-2">
-            {([["all", "All"], ["urgent", "Urgent in check-in"], ["today", "Sent today"], ["flags", "Flags or discrepancies"], ["pending", "Pending tests"]] as const).map(([k, label]) => (
+            {([["all", "All"], ["urgent", "Urgent in check-in"], ["today", "Sent today"], ["discrepancies", "Records disagree"], ["pending", "Pending tests"]] as const).map(([k, label]) => (
               <Pill key={k} active={filter === k} onClick={() => setFilter(k)}>
                 {label}
               </Pill>
@@ -118,7 +118,6 @@ export default function DoctorInbox() {
                         {!senior && (r.review.status === "with_senior"
                           ? <Badge tone="green">Sent to {r.review.senior?.name}</Badge>
                           : <Badge tone="amber">Summary to write</Badge>)}
-                        {r.flags > 0 && <Badge tone="red">{r.flags} flag{r.flags === 1 ? "" : "s"}</Badge>}
                         {r.discrepancies > 0 && <Badge tone="blue">{r.discrepancies} discrepanc{r.discrepancies === 1 ? "y" : "ies"}</Badge>}
                         {r.pending_tests > 0 && <Badge tone="amber">{r.pending_tests} pending test{r.pending_tests === 1 ? "" : "s"}</Badge>}
                       </div>
@@ -136,7 +135,6 @@ export default function DoctorInbox() {
               {[
                 ["urgent in check-in", rows.filter(urgentCheckIn).length],
                 ["sent today", rows.filter(isToday).length],
-                ["with flags", rows.filter((r) => r.flags > 0).length],
                 ["with discrepancies", rows.filter((r) => r.discrepancies > 0).length],
                 ["pending tests", rows.filter((r) => r.pending_tests > 0).length],
               ].map(([k, v]) => (

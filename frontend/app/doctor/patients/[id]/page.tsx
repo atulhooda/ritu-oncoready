@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { DocViewer, TimelineView, type Viewer } from "@/components/CaseViews";
 import { HospitalReport } from "@/components/HospitalReport";
+import { ReadinessPanel } from "@/components/ReadinessPanel";
 import { ReviewPanel } from "@/components/ReviewPanel";
 import { ConsultationPanel } from "@/components/scribe/ConsultationPanel";
 import { RituAssistant } from "@/components/RituAssistant";
@@ -18,10 +19,10 @@ import { Shell } from "@/components/Shell";
 import { useMe } from "@/components/useMe";
 import { Card, EmptyState, Label, PageHeader, Pill } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { AssistantSource, DocumentInfo, DoctorPatientDetail, IntakeSummary, Practitioner, SourceRef } from "@/lib/types";
+import type { AssistantSource, DocumentInfo, DoctorPatientDetail, IntakeSummary, PatientWords, Practitioner, SourceRef } from "@/lib/types";
 import { detailsLine, LANGUAGES } from "@/lib/types";
 
-type Tab = "review" | "consultation" | "summary" | "check_ins" | "records";
+type Tab = "ready" | "review" | "consultation" | "summary" | "check_ins" | "records";
 
 const when = (s: IntakeSummary) =>
   s.ended_at ? new Date(s.ended_at).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—";
@@ -32,7 +33,7 @@ export default function DoctorPatientPage() {
   const me = useMe(["doctor", "hospital"]);
   const [p, setP] = useState<DoctorPatientDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("review");
+  const [tab, setTab] = useState<Tab>("ready");
   const [turn, setTurn] = useState<number | null>(null);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -105,6 +106,15 @@ export default function DoctorPatientPage() {
     setViewer({ docId: s.document_id, page: s.page_number, highlight: s.text_span });
     setTimeout(() => document.getElementById("records-viewer")?.scrollIntoView({ behavior: "smooth" }), 50);
   };
+  // From "Before this consult": the record page, or the patient's words in that conversation.
+  const openRecord = (s: SourceRef) => {
+    setTab("records");
+    openSource(s);
+  };
+  const openWords = (w: PatientWords) => {
+    pick(w.session_id);
+    showTurn(w.turn_index);
+  };
   // A source cited by the records assistant: the page in the document viewer, or the conversation turn.
   const openAssistantSource = (s: AssistantSource) => {
     if (s.type === "document") {
@@ -159,6 +169,9 @@ export default function DoctorPatientPage() {
             />
           </div>
           <div className={`mb-5 flex flex-wrap gap-2 ${tab === "consultation" ? "hidden" : ""}`}>
+            <Pill active={tab === "ready"} onClick={() => setTab("ready")}>
+              Before this consult
+            </Pill>
             <Pill active={tab === "review"} onClick={() => setTab("review")}>
               Summary
             </Pill>
@@ -173,11 +186,13 @@ export default function DoctorPatientPage() {
             </Pill>
             <Pill active={tab === "records"} onClick={() => setTab("records")}>
               Records & timeline
-              {p.timeline.flags.length + p.timeline.pending_tests.length > 0 && (
-                <span className="ml-2 rounded-full bg-red-100 px-1.5 text-xs text-red-700">{p.timeline.flags.length + p.timeline.pending_tests.length}</span>
+              {p.timeline.pending_tests.length > 0 && (
+                <span className="ml-2 rounded-full bg-line px-1.5 text-xs text-ink/70">{p.timeline.pending_tests.length}</span>
               )}
             </Pill>
           </div>
+
+          {tab === "ready" && <ReadinessPanel r={p.readiness} onSource={openRecord} onWords={openWords} />}
 
           {tab === "review" && me && <ReviewPanel
               caseId={p.case_id}

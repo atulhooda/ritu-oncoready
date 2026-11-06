@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.measures import quantity_for_analyte
-from app.pipeline.dates import page_date
+from app.pipeline.dates import document_orders, page_date
 from app.repositories.cases import DocumentPageRepository
 from app.services.timeline import build_timeline
 
@@ -77,7 +77,8 @@ def lab_series(timeline: dict[str, Any], page_dates: dict[tuple, Any] | None = N
 
 def record_trends(db: Session, org_id: uuid.UUID, case_id: uuid.UUID, timeline: dict[str, Any] | None = None) -> dict[str, Any]:
     timeline = timeline or build_timeline(db, org_id, case_id)
-    page_dates = {(p.document_id, p.page_number): page_date(p.ocr_text)
-                  for p in DocumentPageRepository(db, org_id).for_case(case_id)}
+    pages = DocumentPageRepository(db, org_id).for_case(case_id)
+    order = document_orders(pages)
+    page_dates = {(p.document_id, p.page_number): page_date(p.ocr_text, order[p.document_id]) for p in pages}
     page_dates = {k: v for k, v in page_dates.items() if v}
     return {"medicines": medicines(timeline, page_dates), "labs": lab_series(timeline, page_dates)}

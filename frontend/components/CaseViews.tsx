@@ -71,7 +71,7 @@ export function DocViewer({
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "2026-01-03" -> "3 Jan 2026" ("Jan 2026" / "2026" when only the month or year is known). */
-function dayMonthYear(iso: string, precision: string = "exact") {
+export function dayMonthYear(iso: string, precision: string = "exact") {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   if (precision === "year") return String(y);
   if (precision === "month") return `${MONTHS[m - 1]} ${y}`;
@@ -115,7 +115,7 @@ function Block({ label, count, children }: { label: string; count?: number; chil
 export function TimelineView({ t, onSource }: { t: Timeline; onSource: (s: SourceRef) => void }) {
   return (
     <Card>
-      {t.flags.length > 0 && (
+      {!!t.flags?.length && (
         <Block label="Flags" count={t.flags.length}>
           <ul className="space-y-2">
             {t.flags.map((f, i) => (
