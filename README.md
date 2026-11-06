@@ -1,6 +1,13 @@
 # Ritu OncoReady
 
-Synthetic oncology case-readiness training. See [CLAUDE.md](CLAUDE.md) for the rules every change must follow.
+Consultation readiness for cancer follow-ups. Before the visit, Ritu takes the patient's history by
+voice in their language and reads their uploaded reports; the doctor opens **Before this consult**:
+what changed since the last visit, what is pending, what is missing or does not agree, and where the
+patient is in their care, each line with its source. A junior prepares the summary, the senior signs
+it off, and every step is kept. Synthetic data only; no diagnosis or advice.
+
+The repo also holds the original resident-training tool (synthetic cases scored against a faculty
+answer key). See [CLAUDE.md](CLAUDE.md) for the rules every change must follow.
 
 ```bash
 cp .env.example .env   # set GEMINI_API_KEY and/or GROQ_API_KEY for extraction
