@@ -13,7 +13,7 @@ from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
 
 from app.pipeline.dates import document_orders, page_date
-from app.pipeline.derive import canonical_tests
+from app.pipeline.derive import ANALYTE_TEST, canonical_tests
 from app.repositories.cases import DocumentPageRepository
 from app.repositories.consultations import ConsultationRepository
 
@@ -125,6 +125,37 @@ def patient_reports(history: list[dict[str, Any]], since: date | None) -> dict[s
         "hospital_visits": pick("recent_care"),
         "medicines": pick("medication") + pick("treatment"),
     }
+
+
+def advised_tests(consultations: list[dict[str, Any]], events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The tests the doctor advised at the last approved consultation, each with whether a result
+    is in the records since that day (with its source). A test whose name the code does not know
+    (CBC, LFT, ...) is "not_matched": listed for the doctor to check, never guessed."""
+    approved = [c for c in consultations if c.get("approved_at") and c.get("tests")]
+    if not approved:
+        return None
+    last = max(approved, key=lambda c: c["approved_at"])
+    since = _day(last["approved_at"])
+    results = []
+    for e in events:
+        p = e["payload"] or {}
+        if e["event_date"] is None or _day(e["event_date"]) < since or p.get("kind") == "test_ordered":
+            continue
+        keys = canonical_tests(p.get("test_name"), e["description"])
+        if p.get("analyte") in ANALYTE_TEST:
+            keys.add(ANALYTE_TEST[p["analyte"]])
+        if keys:
+            results.append((keys, e))
+    items = []
+    for text in last["tests"]:
+        want = canonical_tests(text)
+        if not want:
+            items.append({"text": text, "status": "not_matched", "result": None})
+            continue
+        hit = next((e for keys, e in results if keys & want), None)
+        items.append({"text": text, "status": "result_in_records" if hit else "no_result",
+                      "result": {"date": hit["event_date"], "description": hit["description"], "source": hit["source"]} if hit else None})
+    return {"date": since, "items": items}
 
 
 def _record_tests(events: list[dict[str, Any]], records: list[dict[str, Any]]) -> set[str]:
@@ -254,6 +285,7 @@ def readiness(
             "patient": patient_reports(history, since),
         } if visit else None,
         "pending_tests": timeline["pending_tests"],
+        "advised_tests": advised_tests(consultations, dated),
         "inconsistent": [
             {**d, "events": [by_id[str(i)] for i in d["event_ids"] if str(i) in by_id]} for d in timeline["discrepancies"]
         ],
@@ -287,6 +319,9 @@ def case_readiness(
                 for ln in p.ocr_text.splitlines() if CYCLE.search(ln)
             ],
         })
-    consultations = [{"approved_at": c.approved_at} for c in ConsultationRepository(db, org_id).approved_for_case(case_id)]
+    consultations = [
+        {"approved_at": c.approved_at, "tests": [t.get("text") for t in (c.report or {}).get("tests", []) if t.get("text")]}
+        for c in ConsultationRepository(db, org_id).approved_for_case(case_id)
+    ]
     return readiness(timeline=timeline, medicines=medicines, labs=labs, history=history, records=records,
                      consultations=consultations, pages=pages)

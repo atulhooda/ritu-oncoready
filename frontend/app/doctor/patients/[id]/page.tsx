@@ -192,7 +192,8 @@ export default function DoctorPatientPage() {
             </Pill>
           </div>
 
-          {tab === "ready" && <ReadinessPanel r={p.readiness} onSource={openRecord} onWords={openWords} />}
+          {tab === "ready" && <ReadinessPanel r={p.readiness} onSource={openRecord} onWords={openWords} caseId={p.case_id}
+              requests={p.requests} onRequests={(requests) => setP({ ...p, requests })} />}
 
           {tab === "review" && me && <ReviewPanel
               caseId={p.case_id}

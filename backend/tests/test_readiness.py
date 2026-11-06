@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 
 from tests.test_intake import no_background  # noqa: F401  (autouse: no Celery in tests)
 from app.services.readiness import (
-    last_visit, lab_changes, medicine_changes, milestones, missing, patient_reports, readiness,
+    advised_tests, last_visit, lab_changes, medicine_changes, milestones, missing, patient_reports, readiness,
 )
 
 
@@ -255,3 +255,23 @@ def test_cycle_lines_on_the_page_count_and_a_biopsy_is_not_listed_twice():
     cyc = out[-1]
     assert (cyc["cycle"], cyc["of"], cyc["date"], cyc["source"]["text_span"]) == (6, 6, date(2026, 11, 3), "Cycle 6 of 6. Cisplatin 30 mg/m2 (dose reduced).")
     assert milestones(events)[-1]["cycle"] == 3  # without the page line: the latest fact that states one
+
+
+def test_tests_advised_at_the_last_consultation_are_followed_up_in_the_records():
+    consultations = [
+        {"approved_at": datetime(2026, 8, 1, tzinfo=UTC), "tests": ["MRI brain"]},  # an older consultation
+        {"approved_at": datetime(2026, 10, 1, 9, tzinfo=UTC), "tests": ["Echo before cycle 4", "PET-CT after radiation", "CBC every week"]},
+        {"approved_at": None, "tests": ["CT chest"]},  # a draft: not advised yet
+    ]
+    events = [
+        ev(1, date(2026, 9, 20), "imaging", "Echocardiogram, LVEF 60%", kind="test_result", test_name="echo"),  # before: does not count
+        ev(2, date(2026, 10, 20), "imaging", "LVEF 55%", kind="test_result", analyte="lvef", value=55),  # an echo result, by analyte
+        ev(3, date(2026, 10, 21), "imaging", "PET-CT requested", kind="test_ordered", test_name="PET-CT"),  # an order is not a result
+    ]
+    out = advised_tests(consultations, events)
+    assert out["date"] == date(2026, 10, 1)
+    assert [(i["text"], i["status"]) for i in out["items"]] == [
+        ("Echo before cycle 4", "result_in_records"), ("PET-CT after radiation", "no_result"), ("CBC every week", "not_matched")]
+    assert out["items"][0]["result"]["date"] == date(2026, 10, 20) and out["items"][0]["result"]["source"]["text_span"] == "LVEF 55%"
+    assert advised_tests([{"approved_at": None, "tests": ["CT"]}], events) is None
+    assert advised_tests([{"approved_at": datetime(2026, 10, 1, tzinfo=UTC), "tests": []}], events) is None
