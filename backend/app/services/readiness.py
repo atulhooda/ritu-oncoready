@@ -189,11 +189,12 @@ def _event(e: dict[str, Any], label: str, **extra: Any) -> dict[str, Any]:
     return {"label": label, "date": e["event_date"], "description": e["description"], "source": e["source"], **extra}
 
 
-def milestones(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def milestones(events: list[dict[str, Any]], page_lines: list[dict[str, Any]] = ()) -> list[dict[str, Any]]:
     """Where the patient is in their care, as the records state it: first pathology report, first
     and latest treatment (with the cycle number when the record writes one), procedures, and the
     latest imaging and response assessment. Oldest first. The cycle number is read from treatment
-    lines and clinic notes."""
+    lines, clinic notes and the record pages' own lines that state one (page_lines: dated, with
+    their source), since the extractor can leave "Cycle 6 of 6." out."""
     # an order is not a milestone: "CT chest ordered" is not a scan that was done
     dated = sorted((e for e in events if e["event_date"] is not None and (e["payload"] or {}).get("kind") != "test_ordered"),
                    key=lambda e: _day(e["event_date"]))
@@ -209,12 +210,16 @@ def milestones(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         noted = by(lambda e: e in treat or e["category"] == "consult")
         cycles = [(e, CYCLE.search(f"{e['description'] or ''} {e['source']['text_span']}")) for e in noted]
         cycles = [(e, m) for e, m in cycles if m]
+        cycles += [(ln, CYCLE.search(ln["description"])) for ln in page_lines if ln["event_date"] is not None]
         if cycles:
-            e, m = cycles[-1]
+            # the latest date; on one date, the highest cycle written
+            e, m = max(cycles, key=lambda c: (_day(c[0]["event_date"]), int(c[1]["n"] or c[1]["c"])))
             out.append(_event(e, "Latest cycle", cycle=int(m["n"] or m["c"]), of=int(m["of"]) if m["of"] else None))
         elif treat[-1] is not treat[0]:
             out.append(_event(treat[-1], "Latest treatment"))
     for e in by(lambda e: e["category"] == "procedure"):
+        if path and _day(e["event_date"]) == _day(path[0]["event_date"]):
+            continue  # the biopsy behind the first pathology report: already listed
         out.append(_event(e, "Procedure"))
     for label, pred in (("Latest imaging", lambda e: e["category"] == "imaging"),
                         ("Latest response assessment", lambda e: (e["payload"] or {}).get("kind") == "response_assessment")):
@@ -253,7 +258,10 @@ def readiness(
             {**d, "events": [by_id[str(i)] for i in d["event_ids"] if str(i) in by_id]} for d in timeline["discrepancies"]
         ],
         "missing": missing(history, events, undated, records, medicines, pages),
-        "milestones": milestones(dated),
+        "milestones": milestones(dated, [
+            {"event_date": p["date"], "description": s["text_span"], "source": s}
+            for p in pages if p.get("date") for s in p.get("cycle_sources", [])
+        ]),
     }
 
 
@@ -273,6 +281,11 @@ def case_readiness(
             "confidence": p.confidence, "date": page_date(p.ocr_text, order[p.document_id]),
             "visit_source": {"document_id": p.document_id, "filename": names.get(p.document_id), "page_number": p.page_number,
                              "page_url": link, "image_url": f"{link}/image", "text_span": line.group(0).strip()} if line else None,
+            "cycle_sources": [
+                {"document_id": p.document_id, "filename": names.get(p.document_id), "page_number": p.page_number,
+                 "page_url": link, "image_url": f"{link}/image", "text_span": ln.strip()}
+                for ln in p.ocr_text.splitlines() if CYCLE.search(ln)
+            ],
         })
     consultations = [{"approved_at": c.approved_at} for c in ConsultationRepository(db, org_id).approved_for_case(case_id)]
     return readiness(timeline=timeline, medicines=medicines, labs=labs, history=history, records=records,

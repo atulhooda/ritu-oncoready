@@ -237,3 +237,21 @@ def test_a_page_that_states_its_visit_date_is_a_visit_and_its_facts_take_that_da
     assert [m for m in out["missing"] if m["kind"] == "facts_without_date"] == [{"kind": "facts_without_date", "count": 1}]
     # an approved consultation still wins over any record
     assert last_visit([{"approved_at": NOV2}], [], [opd])["basis"] == "consultation"
+
+
+def test_cycle_lines_on_the_page_count_and_a_biopsy_is_not_listed_twice():
+    events = [
+        ev(1, date(2026, 6, 18), "pathology", "Squamous cell carcinoma"),
+        ev(2, date(2026, 6, 18), "procedure", "Incision biopsy"),  # the specimen behind that report
+        ev(3, date(2026, 7, 10), "procedure", "Wide local excision"),
+        ev(4, date(2026, 10, 8), "treatment", "Cisplatin weekly, cycle 3", kind="treatment"),
+        ev(5, date(2026, 11, 3), "treatment", "Cisplatin 30 mg/m2", kind="treatment"),  # no cycle in the fact
+    ]
+    page = [{"event_date": date(2026, 11, 3), "description": "Cycle 6 of 6. Cisplatin 30 mg/m2 (dose reduced).",
+             "source": src(doc="chemo", span="Cycle 6 of 6. Cisplatin 30 mg/m2 (dose reduced).")},
+            {"event_date": date(2026, 11, 3), "description": "Cycle 5 of 6 was on 27/10/2026.", "source": src(doc="chemo")}]
+    out = milestones(events, page)
+    assert [m["label"] for m in out] == ["First pathology report", "Procedure", "First treatment in the records", "Latest cycle"]
+    cyc = out[-1]
+    assert (cyc["cycle"], cyc["of"], cyc["date"], cyc["source"]["text_span"]) == (6, 6, date(2026, 11, 3), "Cycle 6 of 6. Cisplatin 30 mg/m2 (dose reduced).")
+    assert milestones(events)[-1]["cycle"] == 3  # without the page line: the latest fact that states one
