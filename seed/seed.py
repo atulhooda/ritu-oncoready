@@ -204,6 +204,8 @@ def main() -> None:
         org.join_code, org.patient_signup_open = "DEMO", True  # patients can sign up at /join/DEMO
         users = UserRepository(db, org.id)
         for role in Role:
+            if role is Role.DOCTOR:
+                continue  # doctors need a seniority: --intake adds the junior and the senior
             email = f"{role.value}@demo.example.com"
             if users.get_by_email(email) is None:
                 users.create(email, f"Demo {role.value.title()}", DEMO_PASSWORD, role)
