@@ -24,7 +24,7 @@ from app.config import get_settings
 from app.llm import client as llm
 from app.models import DocumentPage
 from app.models.timeline import EVENT_CATEGORIES
-from app.pipeline.dates import RELATIVE, resolve_event_date
+from app.pipeline.dates import RELATIVE, resolve_event_date, slash_order
 from app.pipeline.derive import canonical_analyte
 from app.pipeline.invariants import canonical_attribute
 from app.repositories.cases import DocumentPageRepository, SourceDocumentRepository
@@ -147,7 +147,8 @@ def validate_candidate(raw: dict[str, Any], pages: dict[int, DocumentPage], thre
         date_score, _ = align_span(date_text, page.ocr_text)
         if date_score < threshold:
             date_text = None
-    event_date, precision = resolve_event_date(date_text, page.ocr_text)
+    order = slash_order("\n".join(p.ocr_text for p in pages.values()))  # one style per document
+    event_date, precision = resolve_event_date(date_text, page.ocr_text, order)
 
     return "accept", {
         "category": c.category,

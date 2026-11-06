@@ -18,14 +18,13 @@ from app import storage
 from app.db import get_db
 from app.intake import service
 from app.models import Role
-from app.pipeline.derive import facts_for_case, lab_flags
 from app.repositories.cases import CaseRepository, SourceDocumentRepository
 from app.repositories.intake import IntakeSessionRepository
 from app.repositories.reviews import CaseReviewRepository
 from app.repositories.timeline import DiscrepancyRepository, PendingTestRepository
 from app.repositories.users import PractitionerProfileRepository, UserRepository
 from app.voice import client as ritu
-from app.services import review as reviews, trends
+from app.services import readiness, review as reviews, trends
 from app.services.timeline import build_timeline
 
 router = APIRouter(prefix="/doctor", tags=["doctor"])
@@ -109,7 +108,6 @@ def patient_row(db: Session, org_id: uuid.UUID, case) -> dict[str, Any]:
         "records": len(SourceDocumentRepository(db, org_id).for_case(case.id)),
         "pending_tests": len(PendingTestRepository(db, org_id).for_case(case.id)),
         "discrepancies": len(DiscrepancyRepository(db, org_id).for_case(case.id)),
-        "flags": len(lab_flags(facts_for_case(db, org_id, case.id))),
         "review": {
             "status": review.status if review else "unassigned",
             "junior": reviews.doctor_name(db, org_id, review.junior_user_id) if review else None,
@@ -131,6 +129,9 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(viewer), db: 
     history = service.session_history(db, current.org_id, case.id)
     review = CaseReviewRepository(db, current.org_id).for_case(case.id)
     timeline = build_timeline(db, current.org_id, case.id)
+    timeline.pop("flags")  # a threshold on a lab value is a clinical judgement; changes are shown as values
+    records = service.records(db, current.org_id, case.id)
+    record_trends = trends.record_trends(db, current.org_id, case.id, timeline)
     return {
         "case_id": case.id,
         "name": case.title,
@@ -140,9 +141,12 @@ def get_patient(case_id: uuid.UUID, current: CurrentUser = Depends(viewer), db: 
         "summary": service.build_summary(db, current.org_id, case.id),
         "sessions": history,
         "symptom_course": service.symptom_course(history),
-        "records": service.records(db, current.org_id, case.id),
+        "records": records,
         "timeline": timeline,
-        **trends.record_trends(db, current.org_id, case.id, timeline),
+        **record_trends,
+        "readiness": readiness.case_readiness(
+            db, current.org_id, case.id, timeline=timeline, history=history, records=records, **record_trends,
+        ),
         "review": reviews.review_out(db, current.org_id, case, review),
     }
 

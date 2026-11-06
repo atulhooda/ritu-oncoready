@@ -78,7 +78,7 @@ export interface Timeline {
   date_unclear: { label: string; events: TimelineEvent[] };
   pending_tests: { id: string; test_name: string; ordered_date: string | null; source: SourceRef }[];
   discrepancies: { id: string; field: string; description: string }[];
-  flags: { rule: string; message: string }[];
+  flags?: { rule: string; message: string }[]; // training cases only; not on the doctor view
 }
 
 export interface ScoreSummary {
@@ -311,7 +311,6 @@ export interface DoctorPatientRow {
   records: number;
   pending_tests: number;
   discrepancies: number;
-  flags: number;
   review: { status: ReviewStatus; junior: DoctorRef | null; senior: DoctorRef | null; sent_at: string | null };
 }
 
@@ -375,7 +374,56 @@ export interface DoctorPatientDetail {
   medicines: Medicine[];
   /** Measured values in the records (LVEF, hemoglobin, ...), dated, oldest first. */
   labs: LabSeries[];
+  /** Before this consult: changes since the last visit, pending, missing or disagreeing, milestones. */
+  readiness: Readiness;
   review: CaseReview;
+}
+
+/** Something the patient told Ritu, in their own words, from one conversation. */
+export interface PatientWords {
+  label: string;
+  quote: string;
+  urgent: boolean;
+  details: Record<string, string>;
+  session_id: string;
+  turn_index: number;
+  ended_at: string | null;
+}
+
+type Dose = Medicine["entries"][number];
+type Point = LabSeries["points"][number];
+
+export type MissingItem =
+  | ({ kind: "record_not_uploaded"; tests: string[]; record_date: string | null; facility: string | null } & PatientWords)
+  | ({ kind: "medicine_not_in_records" } & PatientWords)
+  | { kind: "page_hard_to_read"; filename: string | null; document_id: string; page_number: number; confidence: number }
+  | { kind: "facts_without_date"; count: number }
+  | { kind: "record_failed"; filename: string; document_id: string; error: string | null };
+
+export interface Milestone {
+  label: string;
+  date: string;
+  description: string | null;
+  source: SourceRef;
+  cycle?: number;
+  of?: number | null;
+}
+
+export interface Readiness {
+  /** basis "consultation": the last approved consultation here; "record": the latest clinic note in the records. */
+  last_visit: { date: string; basis: "consultation" | "record"; source: SourceRef | null } | null;
+  /** null when there is no earlier visit to compare with. */
+  changes: {
+    new_records: RecordInfo[];
+    events: TimelineEvent[];
+    labs: { label: string; unit: string | null; before: Point | null; after: Point; readings_since: number }[];
+    medicines: { drug: string; change: "new" | "dose"; before: Dose | null; after: Dose }[];
+    patient: { conversations: number; symptoms: PatientWords[]; hospital_visits: PatientWords[]; medicines: PatientWords[] };
+  } | null;
+  pending_tests: Timeline["pending_tests"];
+  inconsistent: (Timeline["discrepancies"][number] & { events: TimelineEvent[] })[];
+  missing: MissingItem[];
+  milestones: Milestone[];
 }
 
 export interface Medicine {
