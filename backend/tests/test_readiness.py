@@ -183,7 +183,7 @@ def test_doctor_sees_readiness_built_from_the_records_and_the_patient(client, db
         DocumentPageRepository(db, org_a.org.id).add(document_id=doc.id, page_number=n, ocr_text=text, confidence=0.9 if n == 1 else 0.5)
     e = lambda page, span, **kw: {"page_number": page, "source_text_span": span, "description": span, **kw}  # noqa: E731
     run_extraction(db, org_a.org.id, doc.id, extract=fake_llm([
-        e(1, "Clinic visit, cycle 3 of 6 given.", category="consult", kind="other", date_text="05/10/2026"),
+        e(1, "Clinic visit, cycle 3 of 6 given.", category="treatment", kind="treatment"),  # undated; the page says "Visit date"
         e(1, "Hb 11.2 g/dL on 03/10/2026", category="lab", kind="test_result", date_text="03/10/2026", analyte="hemoglobin", value=11.2, unit="g/dL"),
         e(1, "Capecitabine 1000 mg twice daily", category="treatment", kind="treatment", date_text="05/10/2026", drug="Capecitabine", dose=1000, dose_unit="mg"),
         e(1, "CT chest ordered", category="imaging", kind="test_ordered", date_text="05/10/2026", test_name="CT chest"),
@@ -209,3 +209,31 @@ def test_doctor_sees_readiness_built_from_the_records_and_the_patient(client, db
     cyc = next(m for m in r["milestones"] if m["label"] == "Latest cycle")
     assert (cyc["cycle"], cyc["of"]) == (3, 6)
     assert "flags" not in client.get(f"/doctor/patients/{case_id}", headers=doctor_headers(client, org_a, junior["email"])).json()["timeline"]
+
+
+def test_a_page_that_states_its_visit_date_is_a_visit_and_its_facts_take_that_date():
+    # The extractor called the OPD note's facts "treatment" and gave the medicine lines no date.
+    opd = {"document_id": "opd", "filename": "opd.pdf", "page_number": 1, "confidence": 0.9, "date": date(2026, 10, 5),
+           "visit_source": {**src(doc="opd"), "text_span": "Visit date: 05/10/2026"}}
+    daycare = {"document_id": "dc", "filename": "dc.pdf", "page_number": 1, "confidence": 0.9, "date": date(2026, 11, 2),
+               "visit_source": None}  # "Date of service": dated, but not a visit note
+    scrap = {"document_id": "scrap", "filename": "scrap.pdf", "page_number": 1, "confidence": 0.9, "date": None, "visit_source": None}
+    on = lambda doc, e: {**e, "source": src(doc=doc, span=e["description"])}  # noqa: E731
+    timeline = {
+        "events": [on("opd", ev(1, date(2026, 10, 5), "treatment", "Cycle 3 of 6 given", kind="treatment"))],
+        "date_unclear": {"events": [
+            on("dc", ev(2, None, "imaging", "CT chest planned")),
+            on("opd", ev(3, None, "pathology", "Biopsy: invasive ductal carcinoma")),
+            on("scrap", ev(4, None, "other", "Note with no date anywhere")),
+        ]},
+        "pending_tests": [], "discrepancies": [],
+    }
+    out = readiness(timeline=timeline, medicines=[], labs=[], history=[], records=[], consultations=[],
+                    pages=[opd, daycare, scrap])
+    assert out["last_visit"] == {"date": date(2026, 10, 5), "basis": "record", "source": opd["visit_source"]}
+    new = out["changes"]["events"]
+    assert [(e["description"], e["event_date"], e["date_basis"]) for e in new] == [("CT chest planned", date(2026, 11, 2), "document")]
+    assert ("First pathology report", date(2026, 10, 5)) in [(m["label"], m["date"]) for m in out["milestones"]]
+    assert [m for m in out["missing"] if m["kind"] == "facts_without_date"] == [{"kind": "facts_without_date", "count": 1}]
+    # an approved consultation still wins over any record
+    assert last_visit([{"approved_at": NOV2}], [], [opd])["basis"] == "consultation"

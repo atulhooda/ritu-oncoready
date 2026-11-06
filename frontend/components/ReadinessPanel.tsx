@@ -111,7 +111,10 @@ export function ReadinessPanel({
                 ))}
                 {c.events.map((e) => (
                   <li key={e.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="font-mono text-xs text-muted">{day(e.event_date)}</span>
+                    <span className="font-mono text-xs text-muted">
+                      {day(e.event_date)}
+                      {e.date_basis === "document" ? " (page date)" : ""}
+                    </span>
                     <span>{e.description}</span>
                     {page(e.source)}
                   </li>
