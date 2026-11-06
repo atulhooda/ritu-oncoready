@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { setSummaryTarget } from "@/lib/summaryPoints";
 import { buildSeries, TrendsGrid } from "@/components/Trends";
 import { narrative } from "@/lib/narrative";
-import type { CaseReview, DoctorRef, IntakeFact, IntakeSummary, LabSeries, Me, Medicine, PatientDetails, ReviewContent, SummaryPoint, SymptomCourse } from "@/lib/types";
+import type { CaseReview, DoctorRef, ReviewEventOut, IntakeFact, IntakeSummary, LabSeries, Me, Medicine, PatientDetails, ReviewContent, SummaryPoint, SymptomCourse } from "@/lib/types";
 import { detailsLine } from "@/lib/types";
 
 const at = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "");
@@ -186,17 +186,29 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
   }
 
   if (!editable) {
+    const isSenior = me.role === "doctor" && review.status === "with_senior" && review.senior?.id === me.id;
     return (
-      <Card className="max-w-3xl p-6 sm:p-8">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <Label>Summary for the senior doctor</Label>
-          {review.status === "with_senior" ? <Badge tone="green">Sent</Badge> : <Badge tone="amber">Being prepared by {review.junior?.name}</Badge>}
-        </div>
-        <SummaryCard patient={patient} facts={facts} content={content} review={review} />
-        <p className="mt-6 border-t border-line/70 pt-4 text-sm text-muted">The full report, check-ins, records and recording are in the tabs above.</p>
-      </Card>
+      <div className="max-w-3xl space-y-6">
+        <Card className="p-6 sm:p-8">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <Label>Summary for the senior doctor</Label>
+            {review.reviewed_at ? (
+              <Badge tone="green">Reviewed by {review.reviewed_by?.name} · {at(review.reviewed_at)}</Badge>
+            ) : review.status === "with_senior" ? (
+              <Badge tone="green">Sent</Badge>
+            ) : (
+              <Badge tone="amber">Being prepared by {review.junior?.name}</Badge>
+            )}
+          </div>
+          <SummaryCard patient={patient} facts={facts} content={content} review={review} />
+          {isSenior && <SeniorActions caseId={caseId} review={review} onChange={onChange} />}
+          <p className="mt-6 border-t border-line/70 pt-4 text-sm text-muted">The full report, check-ins, records and recording are in the tabs above.</p>
+        </Card>
+        <History events={review.history} />
+      </div>
     );
   }
+  const returned = review.history.at(-1)?.action === "returned" ? review.history.at(-1) : null;
 
   const edit = (next: ReviewContent) => {
     setContent(next);
@@ -242,6 +254,14 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
       <div className="space-y-6">
+        {returned && (
+          <Card className="border-amber-300 bg-amber-50 p-5">
+            <p className="text-sm font-semibold text-amber-900">
+              Returned by {returned.by?.name} · {at(returned.at)}
+            </p>
+            <p className="mt-1 text-ink">{returned.note}</p>
+          </Card>
+        )}
         <Card className="p-6 sm:p-7">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <Label>1 · What the patient reported</Label>
@@ -418,5 +438,86 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** The senior doctor's sign-off, or the summary back to the junior with a reason. */
+function SeniorActions({ caseId, review, onChange }: { caseId: string; review: CaseReview; onChange: (r: CaseReview) => void }) {
+  const [returning, setReturning] = useState(false);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function act(path: "reviewed" | "return") {
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await api<CaseReview>(`/doctor/patients/${caseId}/${path}`, {
+        method: "POST", body: path === "return" ? JSON.stringify({ note }) : undefined,
+      }));
+      setReturning(false);
+      setNote("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-6 border-t border-line/70 pt-5">
+      {returning ? (
+        <div className="space-y-3">
+          <label className="block text-sm font-medium" htmlFor="return-note">What should the junior change?</label>
+          <textarea id="return-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3}
+            className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm" />
+          <div className="flex flex-wrap gap-3">
+            <Button disabled={busy || !note.trim()} onClick={() => act("return")}>{busy ? "Returning…" : "Return to junior"}</Button>
+            <Button variant="secondary" disabled={busy} onClick={() => setReturning(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          {!review.reviewed_at && (
+            <Button disabled={busy} onClick={() => act("reviewed")}>
+              <Check size={17} /> {busy ? "Saving…" : "Mark reviewed"}
+            </Button>
+          )}
+          <Button variant="secondary" disabled={busy} onClick={() => setReturning(true)}>Return to junior…</Button>
+        </div>
+      )}
+      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+const ACTIONS: Record<ReviewEventOut["action"], string> = {
+  assigned: "Assigned to the junior", saved: "Summary saved", sent: "Sent to the senior", reviewed: "Reviewed", returned: "Returned to the junior",
+};
+
+/** Who did what and when; each step keeps the summary as it stood then. */
+function History({ events }: { events: ReviewEventOut[] }) {
+  const [open, setOpen] = useState<number | null>(null);
+  if (!events.length) return null;
+  return (
+    <Card className="p-6 sm:p-7">
+      <Label>History</Label>
+      <ol className="mt-4 space-y-3">
+        {events.map((e, i) => (
+          <li key={i} className="text-sm">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-mono text-xs text-muted">{at(e.at)}</span>
+              <span className="font-medium">{ACTIONS[e.action]}</span>
+              <span className="text-muted">{e.by ? `by ${e.by.name}` : "automatically"}</span>
+              {e.summary && (e.action === "saved" || e.action === "sent") && (
+                <button onClick={() => setOpen(open === i ? null : i)} className="text-brand hover:underline">
+                  {open === i ? "Hide summary" : "Summary at this step"}
+                </button>
+              )}
+            </div>
+            {e.note && <p className="mt-1 text-ink/80">“{e.note}”</p>}
+            {open === i && <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-paper p-3 font-sans text-xs text-ink/80">{e.summary}</pre>}
+          </li>
+        ))}
+      </ol>
+    </Card>
   );
 }
