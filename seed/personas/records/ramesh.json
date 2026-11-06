@@ -1,0 +1,70 @@
+{
+  "_notice": "SYNTHETIC demo persona for the Health-a-thon (consultation readiness). Not a real patient; fictional facilities.",
+  "documents": [
+    {
+      "filename": "ramesh_biopsy_2026-06-18.pdf",
+      "source": "outside",
+      "facility": "Synthetic District Hospital Laboratory",
+      "pages": [
+        [
+          "HISTOPATHOLOGY REPORT",
+          "Patient: Ramesh Placeholder        UHID: SYN-2207",
+          "Report date: 18/06/2026",
+          "",
+          "Specimen: incision biopsy, left buccal mucosa.",
+          "Diagnosis: squamous cell carcinoma, moderately differentiated."
+        ]
+      ]
+    },
+    {
+      "filename": "ramesh_discharge_2026-07-20.pdf",
+      "source": "internal",
+      "facility": "Synthetic Cancer Centre, Pune - Head and Neck Surgery",
+      "pages": [
+        [
+          "DISCHARGE SUMMARY",
+          "Patient: Ramesh Placeholder        UHID: SYN-2207",
+          "Date of discharge: 20/07/2026",
+          "",
+          "Wide local excision with left neck dissection done on 10/07/2026.",
+          "Final pathology stage: pT2 N1.",
+          "Plan: adjuvant chemoradiation, 6 weeks, with weekly cisplatin."
+        ]
+      ]
+    },
+    {
+      "filename": "ramesh_rt_review_2026-10-08.pdf",
+      "source": "internal",
+      "facility": "Synthetic Cancer Centre, Pune - Radiation Oncology",
+      "pages": [
+        [
+          "RADIATION ONCOLOGY OPD NOTE",
+          "Patient: Ramesh Placeholder        UHID: SYN-2207",
+          "Visit date: 08/10/2026",
+          "",
+          "Week 3 of 6 chemoradiation. Cisplatin 40 mg/m2 weekly, cycle 3.",
+          "Creatinine 0.9 mg/dL on 07/10/2026.",
+          "Weight 61 kg on 08/10/2026.",
+          "Stage: pT3 N1.",
+          "PET-CT ordered for 3 months after radiation."
+        ]
+      ]
+    },
+    {
+      "filename": "ramesh_chemo_2026-11-03.pdf",
+      "source": "internal",
+      "facility": "Synthetic Cancer Centre, Pune - Day Care",
+      "pages": [
+        [
+          "CHEMOTHERAPY DAY CARE RECORD",
+          "Patient: Ramesh Placeholder        UHID: SYN-2207",
+          "Date of service: 03/11/2026",
+          "",
+          "Cycle 6 of 6. Cisplatin 30 mg/m2 (dose reduced).",
+          "Creatinine 1.4 mg/dL on 02/11/2026.",
+          "Weight 56 kg on 03/11/2026."
+        ]
+      ]
+    }
+  ]
+}

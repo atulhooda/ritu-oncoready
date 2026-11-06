@@ -1,0 +1,61 @@
+{
+  "_notice": "SYNTHETIC demo persona for the Health-a-thon (consultation readiness). Not a real patient; fictional facilities.",
+  "documents": [
+    {
+      "filename": "asha_pathology_2026-03-14.pdf",
+      "source": "outside",
+      "facility": "Synthetic Path Lab, Pune",
+      "pages": [
+        [
+          "HISTOPATHOLOGY REPORT",
+          "Patient: Asha Placeholder        UHID: SYN-1101",
+          "Report date: 14/03/2026",
+          "",
+          "Specimen: core biopsy, left breast.",
+          "Diagnosis: invasive ductal carcinoma, grade 2.",
+          "ER positive, PR negative, HER2 3+ positive."
+        ]
+      ]
+    },
+    {
+      "filename": "asha_opd_2026-10-05.pdf",
+      "source": "internal",
+      "facility": "Synthetic Cancer Centre, Pune - Medical Oncology",
+      "pages": [
+        [
+          "MEDICAL ONCOLOGY OPD NOTE",
+          "Patient: Asha Placeholder        UHID: SYN-1101",
+          "Visit date: 05/10/2026",
+          "",
+          "Cycle 3 of 6 docetaxel and trastuzumab given today.",
+          "Hemoglobin 11.2 g/dL on 03/10/2026.",
+          "Platelet count 2.1 lakh per microlitre on 03/10/2026.",
+          "LVEF 62% on echocardiogram 28/09/2026.",
+          "Trastuzumab 8 mg/kg loading dose.",
+          "Pantoprazole 40 mg once daily.",
+          "CT chest ordered.",
+          "Review after cycle 4."
+        ]
+      ]
+    },
+    {
+      "filename": "asha_daycare_2026-11-02.pdf",
+      "source": "internal",
+      "facility": "Synthetic Cancer Centre, Pune - Day Care",
+      "pages": [
+        [
+          "DAY CARE CHEMOTHERAPY RECORD",
+          "Patient: Asha Placeholder        UHID: SYN-1101",
+          "Date of service: 02/11/2026",
+          "",
+          "Cycle 4 of 6 given.",
+          "Hemoglobin 9.8 g/dL on 01/11/2026.",
+          "Platelet count 1.8 lakh per microlitre on 01/11/2026.",
+          "Trastuzumab 6 mg/kg every 3 weeks.",
+          "Ondansetron 8 mg before chemotherapy.",
+          "Pantoprazole 40 mg once daily."
+        ]
+      ]
+    }
+  ]
+}
