@@ -12,6 +12,7 @@ from typing import Any
 from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
 
+from app.pipeline.dates import document_orders, page_date
 from app.pipeline.derive import canonical_tests
 from app.repositories.cases import DocumentPageRepository
 from app.repositories.consultations import ConsultationRepository
@@ -21,6 +22,8 @@ LOW_OCR_CONFIDENCE = 0.6
 # How closely a medicine the patient names must match one in the records (rapidfuzz partial ratio).
 DRUG_MATCH = 85
 # "cycle 4", "cycle 4 of 6", "cycle #4/6", and the C4D1 (cycle 4, day 1) shorthand.
+# A page that states a visit date is a clinic visit, whatever the extractor called its facts.
+VISIT_LINE = re.compile(r"^\s*(?:visit date|date of visit|opd date)\s*[:\-].*$", re.I | re.M)
 CYCLE = re.compile(r"\bcycle\s*#?\s*(?P<n>\d{1,2})(?:\s*(?:of|/)\s*(?P<of>\d{1,2}))?\b|\bC(?P<c>\d{1,2})\s*D\d{1,2}\b", re.I)
 
 
@@ -34,18 +37,36 @@ def _day(value: Any) -> date | None:
     return date.fromisoformat(str(value)[:10])
 
 
-def last_visit(consultations: list[dict[str, Any]], events: list[dict[str, Any]]) -> dict[str, Any] | None:
+def last_visit(
+    consultations: list[dict[str, Any]], events: list[dict[str, Any]], pages: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     """The point "since last visit" is measured from: the latest approved consultation recorded in
-    OncoReady, else the latest dated clinic visit note in the records. None: no earlier visit."""
+    OncoReady, else the latest clinic visit in the records (a dated consult entry, or a page that
+    states its visit date). None: no earlier visit."""
     approved = [c for c in consultations if c.get("approved_at")]
     if approved:
         c = max(approved, key=lambda c: c["approved_at"])
         return {"date": _day(c["approved_at"]), "basis": "consultation", "source": None}
-    visits = [e for e in events if e["category"] == "consult" and e["event_date"] is not None]
+    visits = [(_day(e["event_date"]), e["source"]) for e in events if e["category"] == "consult" and e["event_date"] is not None]
+    visits += [(_day(p["date"]), p["visit_source"]) for p in pages or [] if p.get("visit_source") and p.get("date")]
     if visits:
-        e = max(visits, key=lambda e: _day(e["event_date"]))
-        return {"date": _day(e["event_date"]), "basis": "record", "source": e["source"]}
+        when, source = max(visits, key=lambda v: v[0])
+        return {"date": when, "basis": "record", "source": source}
     return None
+
+
+def with_page_dates(undated: list[dict[str, Any]], pages: list[dict[str, Any]]) -> tuple[list, list]:
+    """Facts with no date of their own take their page's date (a medicine line in a dated clinic
+    note), marked date_basis "document". Returns (now dated, still undated)."""
+    when = {(str(p["document_id"]), p["page_number"]): p.get("date") for p in pages}
+    dated, still = [], []
+    for e in undated:
+        d = when.get((str(e["source"]["document_id"]), e["source"]["page_number"]))
+        if d:
+            dated.append({**e, "event_date": d, "date_basis": "document"})
+        else:
+            still.append(e)
+    return dated, still
 
 
 def _after(d: Any, since: date | None) -> bool:
@@ -155,8 +176,9 @@ def missing(
         if p["confidence"] is not None and p["confidence"] < LOW_OCR_CONFIDENCE:
             out.append({"kind": "page_hard_to_read", "filename": p["filename"], "document_id": p["document_id"],
                         "page_number": p["page_number"], "confidence": round(p["confidence"], 2)})
-    if undated:
-        out.append({"kind": "facts_without_date", "count": len(undated)})
+    _, no_date = with_page_dates(undated, pages)  # a fact on a dated page has that date
+    if no_date:
+        out.append({"kind": "facts_without_date", "count": len(no_date)})
     for r in records:
         if r["status"] == "failed":
             out.append({"kind": "record_failed", "filename": r["filename"], "document_id": r["id"], "error": r["error"]})
@@ -209,7 +231,9 @@ def readiness(
     pages: list[dict[str, Any]],
 ) -> dict[str, Any]:
     events, undated = timeline["events"], timeline["date_unclear"]["events"]
-    visit = last_visit(consultations, events)
+    page_dated, _ = with_page_dates(undated, pages)
+    dated = sorted(events + page_dated, key=lambda e: _day(e["event_date"]))
+    visit = last_visit(consultations, dated, pages)
     since = visit["date"] if visit else None
     by_id = {str(e["id"]): e for e in events + undated}
     return {
@@ -218,7 +242,7 @@ def readiness(
         "changes": {
             "new_records": [r for r in records if _after(r["uploaded_at"], since)],
             # measured values and medicines have their own lists (before -> after)
-            "events": [e for e in reversed(events) if _after(e["event_date"], since)
+            "events": [e for e in reversed(dated) if _after(e["event_date"], since)
                        and (e["payload"] or {}).get("value") is None and not (e["payload"] or {}).get("drug")],
             "labs": lab_changes(labs, since),
             "medicines": medicine_changes(medicines, since),
@@ -229,7 +253,7 @@ def readiness(
             {**d, "events": [by_id[str(i)] for i in d["event_ids"] if str(i) in by_id]} for d in timeline["discrepancies"]
         ],
         "missing": missing(history, events, undated, records, medicines, pages),
-        "milestones": milestones(events),
+        "milestones": milestones(dated),
     }
 
 
@@ -238,11 +262,18 @@ def case_readiness(
     labs: list[dict[str, Any]], history: list[dict[str, Any]], records: list[dict[str, Any]],
 ) -> dict[str, Any]:
     names = {r["id"]: r["filename"] for r in records}
-    pages = [
-        {"document_id": p.document_id, "filename": names.get(p.document_id), "page_number": p.page_number,
-         "confidence": p.confidence}
-        for p in DocumentPageRepository(db, org_id).for_case(case_id)
-    ]
+    rows = DocumentPageRepository(db, org_id).for_case(case_id)
+    order = document_orders(rows)
+    pages = []
+    for p in rows:
+        line = VISIT_LINE.search(p.ocr_text)
+        link = f"/documents/{p.document_id}/pages/{p.page_number}"
+        pages.append({
+            "document_id": p.document_id, "filename": names.get(p.document_id), "page_number": p.page_number,
+            "confidence": p.confidence, "date": page_date(p.ocr_text, order[p.document_id]),
+            "visit_source": {"document_id": p.document_id, "filename": names.get(p.document_id), "page_number": p.page_number,
+                             "page_url": link, "image_url": f"{link}/image", "text_span": line.group(0).strip()} if line else None,
+        })
     consultations = [{"approved_at": c.approved_at} for c in ConsultationRepository(db, org_id).approved_for_case(case_id)]
     return readiness(timeline=timeline, medicines=medicines, labs=labs, history=history, records=records,
                      consultations=consultations, pages=pages)

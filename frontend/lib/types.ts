@@ -71,6 +71,8 @@ export interface TimelineEvent {
   category: string;
   description: string | null;
   source: SourceRef;
+  /** "document": no date of its own; this is the date its record page states. */
+  date_basis?: "document";
 }
 
 export interface Timeline {
