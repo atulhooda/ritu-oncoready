@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "backend", Path("/app")):
+for candidate in (HERE.parent / "backend", Path("/app/backend"), Path("/app")):  # repo, one-image deploy, old image
     if (candidate / "app").is_dir():
         sys.path.insert(0, str(candidate))
         break
