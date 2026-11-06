@@ -1,0 +1,71 @@
+{
+  "_notice": "SYNTHETIC demo persona for the Health-a-thon (consultation readiness). Not a real patient; fictional facilities.",
+  "name": "Asha Placeholder",
+  "email": "asha@demo.example.com",
+  "records": [
+    "personas/records/asha_pathology_2026-03-14.pdf",
+    "personas/records/asha_opd_2026-10-05.pdf",
+    "personas/records/asha_daycare_2026-11-02.pdf"
+  ],
+  "publish": true,
+  "transcript": [
+    {
+      "role": "ritu",
+      "text": "What problems or symptoms are you having right now?"
+    },
+    {
+      "role": "patient",
+      "text": "For two weeks I feel very tired and I get breathless climbing the stairs. Last week I had fever two times, around 100."
+    },
+    {
+      "role": "ritu",
+      "text": "Anything else since your last treatment?"
+    },
+    {
+      "role": "patient",
+      "text": "The fever went with paracetamol. I also have small sores in my mouth since the last cycle."
+    },
+    {
+      "role": "ritu",
+      "text": "Which medicines do you take now? Tell me the dose if you know."
+    },
+    {
+      "role": "patient",
+      "text": "Trastuzumab injection every three weeks in day care, pantoprazole 40 in the morning, and ashwagandha powder at night that my sister gave me."
+    },
+    {
+      "role": "ritu",
+      "text": "Has anyone in your family had cancer?"
+    },
+    {
+      "role": "patient",
+      "text": "My mother had breast cancer when she was around 60."
+    },
+    {
+      "role": "ritu",
+      "text": "Do you have earlier reports, scans or discharge papers?"
+    },
+    {
+      "role": "patient",
+      "text": "I uploaded my biopsy and the chemo papers. I also did a PET CT at City Imaging Centre in September, that report is at home."
+    },
+    {
+      "role": "ritu",
+      "text": "Thank you. Please upload that report too, and I will share all this with your doctor."
+    }
+  ],
+  "details": {
+    "date_of_birth": "1974-05-12",
+    "sex": "female",
+    "phone": "+91 98200 33333",
+    "preferred_language": "mr-IN",
+    "cancer_type": "Breast cancer (HER2 positive)",
+    "diagnosed_on": "2026-03-14",
+    "stage_reported": "Stage 2",
+    "treatment_status": "on_treatment",
+    "current_treatment": "Docetaxel with trastuzumab, 6 cycles planned",
+    "treating_hospital": "Synthetic Cancer Centre, Pune",
+    "treating_doctor": "Dr. Demo Oncologist",
+    "other_conditions": "Hypothyroid"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "_notice": "SYNTHETIC demo persona for the Health-a-thon (consultation readiness). Not a real patient; fictional facilities.",
+  "name": "Ramesh Placeholder",
+  "email": "ramesh@demo.example.com",
+  "records": [
+    "personas/records/ramesh_biopsy_2026-06-18.pdf",
+    "personas/records/ramesh_discharge_2026-07-20.pdf",
+    "personas/records/ramesh_rt_review_2026-10-08.pdf",
+    "personas/records/ramesh_chemo_2026-11-03.pdf"
+  ],
+  "publish": true,
+  "transcript": [
+    {
+      "role": "ritu",
+      "text": "What problems or symptoms are you having right now?"
+    },
+    {
+      "role": "patient",
+      "text": "Swallowing is very painful, I can take only dal water and juice. My weight has gone down a lot."
+    },
+    {
+      "role": "ritu",
+      "text": "Since when, and how bad is the pain out of ten?"
+    },
+    {
+      "role": "patient",
+      "text": "Since the fourth week of radiation. The pain is 7 out of 10 when I swallow."
+    },
+    {
+      "role": "ritu",
+      "text": "Which medicines do you take now?"
+    },
+    {
+      "role": "patient",
+      "text": "Tramadol at night for the pain, and homeopathy drops my neighbour suggested."
+    },
+    {
+      "role": "ritu",
+      "text": "Do you use or have you used tobacco or alcohol?"
+    },
+    {
+      "role": "patient",
+      "text": "I chewed gutka for twenty years. I stopped last year when the ulcer came."
+    },
+    {
+      "role": "ritu",
+      "text": "Do you have earlier reports or scans?"
+    },
+    {
+      "role": "patient",
+      "text": "I did an MRI at the district hospital in August. I don't have that report with me."
+    },
+    {
+      "role": "ritu",
+      "text": "Thank you. I will share this with your doctor."
+    }
+  ],
+  "details": {
+    "date_of_birth": "1968-01-09",
+    "sex": "male",
+    "phone": "+91 98200 44444",
+    "preferred_language": "hi-IN",
+    "cancer_type": "Oral cavity cancer (left buccal mucosa)",
+    "diagnosed_on": "2026-06-18",
+    "stage_reported": null,
+    "treatment_status": "on_treatment",
+    "current_treatment": "Chemoradiation after surgery",
+    "treating_hospital": "Synthetic Cancer Centre, Pune",
+    "treating_doctor": "Dr. Demo Oncologist",
+    "other_conditions": "Diabetes"
+  }
+}
