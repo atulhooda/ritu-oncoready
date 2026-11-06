@@ -8,7 +8,7 @@ const serif = Instrument_Serif({ variable: "--font-instrument", subsets: ["latin
 
 export const metadata: Metadata = {
   title: "Ritu OncoReady",
-  description: "Synthetic oncology case-readiness training",
+  description: "Consultation readiness for cancer care: the patient's journey, before every follow-up",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

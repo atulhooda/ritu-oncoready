@@ -53,16 +53,16 @@ export default function LoginPage() {
         <div>
           <div className="font-mono text-xs uppercase tracking-[0.25em] text-white/50">Case readiness</div>
           <h2 className="mt-4 text-5xl font-extrabold leading-tight tracking-tight">
-            Read the chart.
+            Every follow-up,
             <br />
-            Write the <span className="font-serif font-normal italic text-[#8e9bff]">brief.</span>
+            <span className="font-serif font-normal italic text-[#8e9bff]">ready.</span>
           </h2>
           <p className="mt-4 max-w-md text-white/60">
-            Residents prepare on synthetic oncology cases; faculty see exactly what was caught and what was missed.
+            Ritu gathers the patient&apos;s reports and their own words before the visit. The doctor sees what changed, what is pending and what is missing, each line with its source.
           </p>
         </div>
         <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.25em] text-white/45">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Synthetic cases · not for clinical use
+          <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Synthetic demo data · not for clinical use
         </div>
       </section>
       <section className="flex items-center justify-center px-4 py-12">
