@@ -18,7 +18,13 @@ URGENT = [
 ]
 
 
+RESOLVED = "resolved"  # details.trend when the patient says the problem has gone
+
+
 def is_urgent(label: str, details: dict[str, Any] | None = None) -> bool:
+    """On the list, and not a problem the patient says has gone ("the fever went away" is no alarm)."""
+    if (details or {}).get("trend") == RESOLVED:
+        return False
     values = [v for k, v in (details or {}).items() if k != "evidence" and isinstance(v, str)]
     text = " ".join([label, *values])
     return any(p.search(text) for p in URGENT)

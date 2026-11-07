@@ -108,6 +108,7 @@ export function ReadinessPanel({
                 {[...c.patient.symptoms, ...c.patient.hospital_visits, ...c.patient.medicines].map((w, i) => (
                   <li key={`${w.session_id}-${i}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     {w.urgent && <Badge tone="red">urgent sign</Badge>}
+                    {w.details?.trend === "resolved" && <Badge tone="green">gone now</Badge>}
                     <span className="font-medium">{w.label}</span>
                     {words(w)}
                   </li>

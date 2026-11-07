@@ -64,16 +64,18 @@ into that one fact, even when it was said across several turns. Each fact:
 - quote: the patient's words copied EXACTLY from that turn (keep the original language).
 - evidence: other PATIENT turns about the same problem, as {{"turn_index": n, "quote": exact words}}.
 - details: optional, only what the patient said, as SHORT ENGLISH phrases (translate if needed):
-  {list(DETAIL_KEYS)}. score = a 0-10 rating as "7/10"; trend = "worsening", "improving" or "same";
+  {list(DETAIL_KEYS)}. score = a 0-10 rating as "7/10"; trend = "worsening", "improving", "same", or
+  "resolved" when they say it has gone or stopped;
   onset = when it started ("3 weeks ago"); location = body site in plain English.
 Only use what the patient said. Do not add diagnoses, causes, interpretations, or advice.
-Do not record the absence of something ("no bleeding", "no missed doses", "nothing new") as a fact.
+Do not record the absence of something ("no bleeding", "no missed doses", "nothing new") as a fact,
+except a problem they had before that has now gone: record that one with details.trend = "resolved".
 Return {{"facts": []}} if there is nothing."""
 
 # Check-ins follow up earlier problems; the same label lets the care team see each one over time.
 KNOWN_LABELS = """
 The patient reported these problems before. When they talk about the same problem, use exactly
-the same label (and put better / same / worse in details.trend): {labels}"""
+the same label (and put better / same / worse / gone in details.trend): {labels}"""
 
 
 def instructions_for(known_labels: list[str]) -> str:
