@@ -85,12 +85,12 @@ function formatDate(e: TimelineEvent) {
 
 function EventRow({ e, onSource }: { e: TimelineEvent; onSource: (s: SourceRef) => void }) {
   return (
-    <li className="grid grid-cols-[110px_1fr] gap-4 py-3">
+    <li className="grid gap-1 py-3 sm:grid-cols-[110px_minmax(0,1fr)] sm:gap-4">
       <span className="pt-0.5 font-mono text-xs text-muted">{formatDate(e)}</span>
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{e.category}</Badge>
-          <span>{e.description}</span>
+          <span className="min-w-0 flex-1">{e.description}</span>
         </div>
         <button onClick={() => onSource(e.source)} className="mt-1 text-sm text-brand hover:underline">
           {e.source.filename} · p.{e.source.page_number}
@@ -105,7 +105,7 @@ function Block({ label, count, children }: { label: string; count?: number; chil
     <div className="border-t border-line/70 px-6 py-5 first:border-t-0">
       <div className="flex items-center justify-between">
         <Label>{label}</Label>
-        {count !== undefined && <span className="font-semibold">{count}</span>}
+        {count !== undefined && <span className="rounded-full bg-paper px-2 py-0.5 text-xs font-semibold tabular-nums text-ink/70">{count}</span>}
       </div>
       <div className="mt-3">{children}</div>
     </div>

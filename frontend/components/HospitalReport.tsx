@@ -147,27 +147,27 @@ export function HospitalReport({
 
   const row = (k: string, v: string | null | undefined) => (
     <div className="flex gap-3 py-1">
-      <dt className="w-40 shrink-0 text-ink/60">{k}</dt>
-      <dd className="font-medium">{v || <span className="font-normal text-ink/40">not stated</span>}</dd>
+      <dt className="w-28 shrink-0 text-ink/60 sm:w-40">{k}</dt>
+      <dd className="min-w-0 font-medium">{v || <span className="font-normal text-ink/40">not stated</span>}</dd>
     </div>
   );
 
   return (
     <article className="print-report rounded-2xl border border-line/70 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       {/* Letterhead */}
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink px-8 pb-5 pt-7">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink px-5 pb-5 pt-7 sm:px-8">
         <div>
           <div className="text-lg font-bold tracking-tight">{clinic}</div>
           <div className="text-sm text-ink/60">Department of Medical Oncology · {checkIn ? "Between-visit follow-up" : "Pre-visit service"}</div>
         </div>
-        <div className="text-right text-sm">
+        <div className="text-left text-sm sm:text-right">
           <div className="font-semibold">{checkIn ? "Between-visit check-in" : "Pre-visit patient history"}</div>
           <div className="text-ink/60">{date ? date.toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" }) : "—"}</div>
           <div className="text-ink/60">Ref. {checkIn ? "CI" : "PV"}-{String(summary.session_id).slice(0, 8).toUpperCase()}</div>
         </div>
       </header>
 
-      <div className="space-y-7 px-8 py-7">
+      <div className="space-y-7 px-5 py-7 sm:px-8">
         {/* Patient particulars */}
         <section className="grid gap-x-10 text-[15px] sm:grid-cols-2">
           <dl>
@@ -222,7 +222,7 @@ export function HospitalReport({
       </div>
 
       {doctor && (
-        <section className="border-t border-line px-8 py-5 text-[14px]">
+        <section className="border-t border-line px-5 py-5 text-[14px] sm:px-8">
           <div className="text-xs uppercase tracking-[0.12em] text-ink/60">Prepared for</div>
           <div className="mt-1 font-semibold">
             {doctor.name}
@@ -239,7 +239,7 @@ export function HospitalReport({
           </div>
         </section>
       )}
-      <footer className="flex flex-wrap items-end justify-between gap-4 border-t border-line px-8 py-5 text-xs leading-relaxed text-ink/60">
+      <footer className="flex flex-wrap items-end justify-between gap-4 border-t border-line px-5 py-5 text-xs sm:px-8 leading-relaxed text-ink/60">
         <p className="max-w-2xl">
           Compiled from the patient&apos;s own words during an automated {checkIn ? "between-visit check-in" : "pre-visit conversation"} with Ritu
           {lang ? ` (${lang})` : ""}. Not clinically verified; nothing has been interpreted. Numbers in brackets show the patient&apos;s words.

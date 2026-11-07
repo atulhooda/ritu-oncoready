@@ -65,8 +65,17 @@ export default function LoginPage() {
           <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Synthetic demo data · not for clinical use
         </div>
       </section>
-      <section className="flex items-center justify-center px-4 py-12">
+      <section className="flex items-start justify-center px-4 pb-12 pt-8 lg:items-center lg:py-12">
         <form onSubmit={submit} className="w-full max-w-md">
+          <div className="mb-8 lg:hidden">
+            <div className="flex items-center gap-2.5">
+              <Logo />
+              <span className="text-lg font-bold tracking-tight">OncoReady</span>
+            </div>
+            <p className="mt-4 text-[22px] font-extrabold leading-snug tracking-tight">
+              Every follow-up, <span className="font-serif font-normal italic text-brand">ready.</span>
+            </p>
+          </div>
           <Eyebrow>Hospital &amp; its doctors</Eyebrow>
           <h1 className="mt-3 text-5xl font-extrabold tracking-tight">
             Hospital <span className="font-serif font-normal italic text-brand">login.</span>

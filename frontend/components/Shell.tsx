@@ -175,14 +175,17 @@ export function Shell({ me, actions, children }: { me: Me | null; actions?: Reac
       <div className={me ? "lg:pl-[260px]" : ""}>
         <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-8">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               {me && !patient && (
-                <button className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu">
+                <button className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg hover:bg-black/5 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu">
                   {open ? <X size={20} /> : <Menu size={20} />}
                 </button>
               )}
               {patient ? (
-                <span className="font-semibold lg:hidden">{me?.org_name ?? "OncoReady"}</span>
+                <span className="flex min-w-0 items-center gap-2 lg:hidden">
+                  <Logo size={28} />
+                  <span className="truncate text-[15px] font-semibold">{me?.org_name ?? "OncoReady"}</span>
+                </span>
               ) : null}
               <span className={patient ? "hidden lg:block" : ""}>
                 <Clock />
@@ -196,7 +199,7 @@ export function Shell({ me, actions, children }: { me: Me | null; actions?: Reac
                     setToken(null);
                     router.replace("/");
                   }}
-                  className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink lg:hidden"
+                  className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-medium text-muted hover:text-ink lg:hidden"
                 >
                   <LogOut size={16} strokeWidth={1.75} /> Log out
                 </button>
@@ -204,7 +207,7 @@ export function Shell({ me, actions, children }: { me: Me | null; actions?: Reac
             </div>
           </div>
         </header>
-        <main className={`px-4 py-8 sm:px-8 sm:py-10 ${patient ? "pb-28 lg:pb-10" : ""}`}>
+        <main className={`min-w-0 overflow-x-clip px-4 pt-8 pb-28 sm:px-8 sm:pt-10 ${patient ? "lg:pb-10" : "lg:pb-24"}`}>
           {me ? children : <p className="text-muted">Loading…</p>}
           {patient && (
             <p className="mx-auto mt-12 max-w-4xl text-center text-xs text-muted">

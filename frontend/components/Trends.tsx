@@ -75,8 +75,11 @@ export function TrendChart({ s, domain, onSource }: { s: Series; domain: [number
           {last && hover === null && (
             <text
               x={x(last.t) > W - 60 ? x(last.t) - 8 : x(last.t) + 8}
-              y={y(last.value) < PAD.t + 14 ? y(last.value) + 14 : y(last.value) - 8}
+              y={y(last.value) < PAD.t + 14 ? y(last.value) + 14 : y(last.value) - 10}
               textAnchor={x(last.t) > W - 60 ? "end" : "start"}
+              stroke="white"
+              strokeWidth={3}
+              paintOrder="stroke"
               className="fill-ink text-[11px] font-semibold"
             >
               {fmtNum(last.value)}

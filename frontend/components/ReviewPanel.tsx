@@ -81,7 +81,7 @@ function SummaryCard({ patient, facts, content, review, preview }: { patient: Pa
             {n.points.map((p, i) => (
               <li key={i}>
                 <span className="whitespace-pre-wrap">{p.text}</span>
-                {p.source && <span className="ml-1.5 text-sm text-muted">· {p.source}</span>}
+                {p.source && <span className="ml-1.5 rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[11px] text-muted">· {p.source}</span>}
               </li>
             ))}
           </ul>
@@ -252,7 +252,7 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] [&>*]:min-w-0">
       <div className="space-y-6">
         {returned && (
           <Card className="border-amber-300 bg-amber-50 p-5">
@@ -275,13 +275,13 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
             <div className="mt-4 space-y-5">
               {sections.map((g) => (
                 <div key={g.label}>
-                  <div className="mb-1.5 text-sm font-semibold text-ink/70">{g.label}</div>
+                  <div className="mb-2 text-[15px] font-semibold text-ink">{g.label}</div>
                   <ul className="divide-y divide-line/60 rounded-xl border border-line/80">
                     {g.facts.map((f) => {
                       const on = content.facts.includes(f.id);
                       return (
                         <li key={f.id}>
-                          <label className={`flex cursor-pointer gap-3 px-4 py-3 transition ${on ? "bg-brand/[0.04]" : "hover:bg-paper"}`}>
+                          <label className={`flex cursor-pointer gap-3 px-4 py-3 transition ${on ? "bg-brand/[0.06] shadow-[inset_3px_0_0_#3a4fe0]" : "hover:bg-paper"}`}>
                             <input type="checkbox" checked={on} onChange={() => toggle(f.id)} className="mt-1 h-4 w-4 shrink-0 accent-[#3a4fe0]" />
                             <span className="min-w-0">
                               <span className="flex flex-wrap items-center gap-2">
@@ -289,7 +289,7 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
                                 {detailText(f) && <span className="text-sm text-muted">{detailText(f)}</span>}
                                 {f.urgent && <Badge tone="red">Urgent sign</Badge>}
                               </span>
-                              <span className="mt-0.5 block truncate text-sm italic text-muted">“{f.quote}”</span>
+                              <span className="mt-0.5 block line-clamp-2 text-sm italic text-muted">“{f.quote}”</span>
                             </span>
                           </label>
                         </li>
@@ -405,7 +405,7 @@ export function ReviewPanel({ caseId, me, review, report, patient, onChange }: {
               id="review-senior"
               value={senior}
               onChange={(e) => setSenior(e.target.value)}
-              className="min-w-[220px] flex-1 rounded-xl border border-line bg-white px-4 py-3 text-[15px] outline-none focus:border-brand sm:flex-none"
+              className="w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] outline-none focus:border-brand sm:w-auto sm:min-w-[220px] sm:flex-none"
             >
               <option value="">Choose a senior doctor…</option>
               {seniors.map((s) => (

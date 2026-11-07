@@ -79,7 +79,7 @@ export default function DoctorPatientPage() {
     setTurn(null);
   };
   const conversation = (s: IntakeSummary) => (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] [&>*]:min-w-0">
       <HospitalReport summary={s} details={p!.details} patientName={p!.name} patientNumber={p!.patient_number} clinic={me?.org_name ?? "Clinic"} doctor={doctor} onTurn={showTurn} />
       <div className="space-y-6 xl:sticky xl:top-24 xl:h-fit">
         {s.has_recording && <SessionRecording key={s.session_id} caseId={p!.case_id} sessionId={s.session_id} />}
@@ -168,7 +168,7 @@ export default function DoctorPatientPage() {
               }
             />
           </div>
-          <div className={`mb-5 flex flex-wrap gap-2 ${tab === "consultation" ? "hidden" : ""}`}>
+          <div className={`-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 ${tab === "consultation" ? "hidden" : ""}`}>
             <Pill active={tab === "ready"} onClick={() => setTab("ready")}>
               Before this consult
             </Pill>
