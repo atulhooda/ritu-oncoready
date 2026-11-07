@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Button, Eyebrow, Label } from "@/components/ui";
+import { Button, Eyebrow } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
 import { LANGUAGES, SEX_LABELS } from "@/lib/types";
 import { Logo } from "@/components/Logo";
@@ -14,7 +14,9 @@ type Clinic = { name: string; code: string; phone_check: boolean };
 type Tab = "signup" | "login";
 
 const INPUT =
-  "w-full rounded-xl border border-line bg-white px-4 py-3.5 text-lg outline-none focus:border-brand focus:ring-4 focus:ring-brand/15";
+  "w-full rounded-xl border border-line bg-white px-4 py-3.5 text-lg outline-none focus:border-brand focus:ring-4 focus:ring-brand/15 h-14";
+
+const FL = "mb-1.5 block text-[15px] font-medium text-ink/85";
 
 function PasswordInput({ id, value, onChange, autoComplete }: { id: string; value: string; onChange: (v: string) => void; autoComplete: string }) {
   const [show, setShow] = useState(false);
@@ -168,8 +170,17 @@ export function PatientJoin({ code }: { code?: string }) {
         </div>
       </section>
 
-      <section className="flex items-center justify-center px-4 py-12">
+      <section className="flex items-start justify-center px-4 pb-12 pt-8 lg:items-center lg:py-12">
         <div className="w-full max-w-md">
+          <div className="mb-8 lg:hidden">
+            <div className="flex items-center gap-2.5">
+              <Logo />
+              <span className="text-lg font-bold tracking-tight">OncoReady</span>
+            </div>
+            <p className="mt-4 text-[22px] font-extrabold leading-snug tracking-tight">
+              Tell us how you are. Your doctor will <span className="font-serif font-normal italic text-brand">know.</span>
+            </p>
+          </div>
           {missing ? (
             <>
               <Eyebrow>Patients</Eyebrow>
@@ -215,11 +226,11 @@ export function PatientJoin({ code }: { code?: string }) {
               {tab === "login" ? (
                 <form onSubmit={logIn} className="mt-6 space-y-5">
                   <label className="block">
-                    <Label className="mb-2">Email</Label>
+                    <span className={FL}>Email</span>
                     <input id="login-email" type="email" autoComplete="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className={INPUT} required />
                   </label>
                   <label className="block">
-                    <Label className="mb-2">Password</Label>
+                    <span className={FL}>Password</span>
                     <PasswordInput id="login-password" value={loginPassword} onChange={setLoginPassword} autoComplete="current-password" />
                   </label>
                   <Button disabled={busy} className="w-full py-3.5">
@@ -235,16 +246,16 @@ export function PatientJoin({ code }: { code?: string }) {
               ) : (
                 <form onSubmit={signUp} className="mt-6 space-y-5">
                   <label className="block">
-                    <Label className="mb-2">Full name</Label>
+                    <span className={FL}>Full name</span>
                     <input id="full-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={INPUT} required minLength={2} />
                   </label>
                   <label className="block">
-                    <Label className="mb-2">Email</Label>
+                    <span className={FL}>Email</span>
                     <input id="email" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className={INPUT} required />
                   </label>
 
                   <div>
-                    <Label className="mb-2">Mobile number (WhatsApp)</Label>
+                    <span className={FL}>Mobile number (WhatsApp)</span>
                     <div className="flex gap-2">
                       <input
                         id="phone"
@@ -301,18 +312,18 @@ export function PatientJoin({ code }: { code?: string }) {
                   </div>
 
                   <label className="block">
-                    <Label className="mb-2">Password</Label>
+                    <span className={FL}>Password</span>
                     <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" />
                     <span className="mt-1.5 block text-xs text-muted">At least 8 characters. You&apos;ll use your email and this password to log in.</span>
                   </label>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block">
-                      <Label className="mb-2">Date of birth</Label>
+                      <span className={FL}>Date of birth</span>
                       <input id="dob" type="date" autoComplete="bday" max={new Date().toISOString().slice(0, 10)} value={dob} onChange={(e) => setDob(e.target.value)} className={INPUT} required />
                     </label>
                     <label className="block">
-                      <Label className="mb-2">Sex</Label>
-                      <select id="sex" value={sex} onChange={(e) => setSex(e.target.value)} className={INPUT} required>
+                      <span className={FL}>Sex</span>
+                      <select id="sex" value={sex} onChange={(e) => setSex(e.target.value)} className={`${INPUT} appearance-none bg-[url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2720%27%20height=%2720%27%20fill=%27none%27%20stroke=%27%236b6a66%27%20stroke-width=%272%27%3E%3Cpath%20d=%27M5%208l5%205%205-5%27/%3E%3C/svg%3E")] bg-[position:right_1rem_center] bg-no-repeat pr-11`} required>
                         <option value="" disabled>
                           Choose…
                         </option>
@@ -325,12 +336,12 @@ export function PatientJoin({ code }: { code?: string }) {
                     </label>
                   </div>
                   <label className="block">
-                    <Label className="mb-2">Where you live</Label>
+                    <span className={FL}>Where you live</span>
                     <input id="location" autoComplete="address-level2" placeholder="Town or city, state (e.g. Pune, Maharashtra)" value={location} onChange={(e) => setLocation(e.target.value)} className={INPUT} />
                   </label>
                   <label className="block">
-                    <Label className="mb-2">Language you&apos;re most comfortable in</Label>
-                    <select id="language" value={language} onChange={(e) => setLanguage(e.target.value)} className={INPUT}>
+                    <span className={FL}>Language you&apos;re most comfortable in</span>
+                    <select id="language" value={language} onChange={(e) => setLanguage(e.target.value)} className={`${INPUT} appearance-none bg-[url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2720%27%20height=%2720%27%20fill=%27none%27%20stroke=%27%236b6a66%27%20stroke-width=%272%27%3E%3Cpath%20d=%27M5%208l5%205%205-5%27/%3E%3C/svg%3E")] bg-[position:right_1rem_center] bg-no-repeat pr-11`}>
                       {Object.entries(LANGUAGES).map(([k, v]) => (
                         <option key={k} value={k}>
                           {v}

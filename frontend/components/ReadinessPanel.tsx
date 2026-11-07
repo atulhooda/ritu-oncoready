@@ -40,7 +40,7 @@ export function ReadinessPanel({
   const c = r.changes;
   const page = (s: SourceRef | null | undefined) =>
     s && (
-      <button onClick={() => onSource(s)} className="whitespace-nowrap text-sm text-brand hover:underline">
+      <button onClick={() => onSource(s)} title={s.filename} className="inline-flex max-w-full items-center truncate rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[11px] text-muted hover:border-brand/40 hover:text-brand">
         {s.filename} p.{s.page_number}
       </button>
     );
@@ -71,13 +71,13 @@ export function ReadinessPanel({
         ) : changeCount === 0 && c.patient.medicines.length === 0 ? (
           <p className="text-muted">Nothing new in the records or from the patient since then.</p>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 lg:grid-cols-2">
             {c.labs.length > 0 && (
               <Section title="Values in the records">
                 {c.labs.map((l) => (
                   <li key={l.label} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <span className="font-medium">{capital(l.label)}</span>
-                    <span className="font-mono text-sm">
+                    <span className="text-sm tabular-nums text-ink/80">
                       {l.before ? `${l.before.value} (${day(l.before.date)}) → ` : ""}
                       {l.after.value}
                       {l.unit ? ` ${l.unit}` : ""} ({day(l.after.date)})
@@ -94,23 +94,11 @@ export function ReadinessPanel({
                   <li key={m.drug} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <Badge tone={m.change === "new" ? "blue" : "slate"}>{m.change === "new" ? "first recorded" : "dose written differently"}</Badge>
                     <span className="font-medium">{m.drug}</span>
-                    <span className="font-mono text-sm">
+                    <span className="text-sm tabular-nums text-ink/80">
                       {m.before ? `${m.before.dose ?? "?"} ${m.before.unit ?? ""} → ` : ""}
                       {m.after.dose ?? ""} {m.after.unit ?? ""} ({day(m.after.date)})
                     </span>
                     {page(m.after.source)}
-                  </li>
-                ))}
-              </Section>
-            )}
-            {(c.patient.symptoms.length > 0 || c.patient.hospital_visits.length > 0 || c.patient.medicines.length > 0) && (
-              <Section title={`What the patient told Ritu (${c.patient.conversations} conversation${c.patient.conversations === 1 ? "" : "s"})`}>
-                {[...c.patient.symptoms, ...c.patient.hospital_visits, ...c.patient.medicines].map((w, i) => (
-                  <li key={`${w.session_id}-${i}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    {w.urgent && <Badge tone="red">urgent sign</Badge>}
-                    {w.details?.trend === "resolved" && <Badge tone="green">gone now</Badge>}
-                    <span className="font-medium">{w.label}</span>
-                    {words(w)}
                   </li>
                 ))}
               </Section>
@@ -134,11 +122,31 @@ export function ReadinessPanel({
                 ))}
               </Section>
             )}
+            {(c.patient.symptoms.length > 0 || c.patient.hospital_visits.length > 0 || c.patient.medicines.length > 0) && (
+              <div className="border-t border-line/70 pt-5 lg:col-span-2">
+                <Section
+                  title={`What the patient told Ritu (${c.patient.conversations} conversation${c.patient.conversations === 1 ? "" : "s"})`}
+                  listClassName="space-y-2 sm:columns-2 sm:gap-8 [&>li]:mb-2 [&>li]:break-inside-avoid"
+                >
+                  {[...c.patient.symptoms, ...c.patient.hospital_visits, ...c.patient.medicines].map((w, i) => (
+                    <li
+                      key={`${w.session_id}-${i}`}
+                      className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 ${w.urgent ? "-mx-2 rounded-lg bg-red-50 px-2 py-1" : ""}`}
+                    >
+                      {w.urgent && <Badge tone="red">urgent sign</Badge>}
+                      {w.details?.trend === "resolved" && <Badge tone="green">gone now</Badge>}
+                      <span className="font-medium">{w.label}</span>
+                      {words(w)}
+                    </li>
+                  ))}
+                </Section>
+              </div>
+            )}
           </div>
         )}
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <Card className="p-6 sm:p-7">
           <Label>Pending investigations</Label>
           <p className="mb-3 mt-1 text-sm text-muted">Ordered in the records, with no result on or after the order.</p>
@@ -231,11 +239,11 @@ export function ReadinessPanel({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, listClassName = "space-y-2" }: { title: string; children: React.ReactNode; listClassName?: string }) {
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold text-ink/80">{title}</h3>
-      <ul className="space-y-2">{children}</ul>
+      <ul className={listClassName}>{children}</ul>
     </div>
   );
 }
@@ -364,14 +372,14 @@ function AskPatient({ requests, ask }: { requests: PatientRequestOut[]; ask: (ki
       <p className="mb-4 mt-1 text-sm text-muted">The patient sees this on their page and answers there, or uploads the record.</p>
       <div className="flex flex-col gap-3 sm:flex-row">
         <select value={kind} onChange={(e) => setKind(e.target.value as PatientRequestOut["kind"])} aria-label="What to ask for"
-          className="rounded-xl border border-line bg-white px-3 py-2">
+          className="h-12 rounded-xl border border-line bg-white px-3 text-[15px] focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
           <option value="question">A question</option>
           <option value="record">A record to upload</option>
         </select>
         <input value={text} onChange={(e) => setText(e.target.value)} maxLength={300} aria-label="Your request"
           placeholder={kind === "question" ? "e.g. How many days did the fever last?" : "e.g. Please upload your last CT report"}
-          className="min-w-0 flex-1 rounded-xl border border-line bg-white px-3 py-2" />
-        <Button disabled={busy || !text.trim()} onClick={send}>{busy ? "Sending…" : "Send"}</Button>
+          className="min-w-0 flex-1 h-12 rounded-xl border border-line bg-white px-3 text-[15px] focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
+        <Button className="h-12" disabled={busy || !text.trim()} onClick={send}>{busy ? "Sending…" : "Send"}</Button>
       </div>
       {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
       {requests.length > 0 && (

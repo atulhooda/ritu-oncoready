@@ -20,13 +20,13 @@ export function Badge({ tone = "slate", children }: { tone?: Tone; children: Rea
 
 /** Mono, letter-spaced section label: "QUEUE", "RECENT", ... */
 export function Label({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`font-mono text-[11px] uppercase tracking-[0.22em] text-muted ${className}`}>{children}</div>;
+  return <div className={`font-mono text-[11.5px] font-medium uppercase tracking-[0.14em] text-ink/65 ${className}`}>{children}</div>;
 }
 
 export function Eyebrow({ children, dot = "brand" }: { children: React.ReactNode; dot?: "brand" | "green" }) {
   return (
-    <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.22em] text-muted">
-      <span className={`h-1.5 w-1.5 rounded-full ${dot === "green" ? "bg-green-600" : "bg-brand"}`} />
+    <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.14em] text-muted sm:tracking-[0.2em]">
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot === "green" ? "bg-green-600" : "bg-brand"}`} />
       {children}
     </div>
   );
@@ -66,7 +66,7 @@ export function PageHeader({
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         <Eyebrow dot={live ? "green" : "brand"}>{eyebrow}</Eyebrow>
-        <h1 className="mt-3 text-4xl font-extrabold tracking-tight sm:text-6xl">
+        <h1 className="mt-3 text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
           {title}
           {accent ? (
             <>
@@ -112,7 +112,7 @@ export function Pill({ active, onClick, children }: { active?: boolean; onClick?
   return (
     <button
       onClick={onClick}
-      className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+      className={`shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition ${
         active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink/80 hover:border-ink/30"
       }`}
     >
@@ -134,7 +134,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold transition disabled:opacity-50 ${BUTTON[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold transition disabled:cursor-not-allowed disabled:bg-ink/10 disabled:text-ink/40 disabled:shadow-none ${BUTTON[variant]} ${className}`}
     />
   );
 }
