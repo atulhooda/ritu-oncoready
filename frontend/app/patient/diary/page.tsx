@@ -12,7 +12,7 @@ import { Button, Card, Label, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { IntakeFact, IntakeSession, IntakeSummary, PatientProfile } from "@/lib/types";
 
-const TREND_WORD: Record<string, string> = { worsening: "worse", improving: "better", same: "about the same" };
+const TREND_WORD: Record<string, string> = { worsening: "worse", improving: "better", same: "about the same", resolved: "gone" };
 
 /** "7/10, worse, since yesterday" — only what the patient said. */
 function detail(f: IntakeFact): string {

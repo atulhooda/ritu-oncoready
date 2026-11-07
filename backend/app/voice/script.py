@@ -336,10 +336,11 @@ MAX_FOLLOW_UPS = 4
 
 
 def follow_up_step(previous: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Ask about each problem the patient reported before: better, same or worse, and how bad now."""
-    if not previous:
+    """Ask about each problem the patient reported before: better, same or worse, and how bad now.
+    A problem they said has gone is not asked about again."""
+    items = [p for p in previous if (p.get("details") or {}).get("trend") != "resolved"][:MAX_FOLLOW_UPS]
+    if not items:
         return None
-    items = previous[:MAX_FOLLOW_UPS]
     labels = "; ".join(p["label"] for p in items)
     return {
         "id": "follow_up",

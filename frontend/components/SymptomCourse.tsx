@@ -6,6 +6,7 @@ const TREND: Record<string, { mark: string; word: string; tone: string }> = {
   worsening: { mark: "↑", word: "worse", tone: "text-red-700" },
   improving: { mark: "↓", word: "better", tone: "text-green-700" },
   same: { mark: "→", word: "same", tone: "text-ink/60" },
+  resolved: { mark: "✓", word: "gone", tone: "text-green-700" },
 };
 
 function CellView({ c }: { c: Cell }) {
@@ -13,7 +14,7 @@ function CellView({ c }: { c: Cell }) {
   const t = c.trend ? TREND[c.trend] : null;
   return (
     <span className={`whitespace-nowrap ${c.urgent ? "font-semibold text-red-700" : ""}`}>
-      {c.score !== null ? `${c.score}/10` : c.severity || "reported"}
+      {c.score !== null ? `${c.score}/10` : c.trend === "resolved" ? "gone" : c.severity || "reported"}
       {t && (
         <span className={`ml-1 ${t.tone}`} title={t.word}>
           {t.mark}
@@ -77,7 +78,7 @@ export function SymptomCourse({
         </tbody>
       </table>
       <p className="mt-3 text-xs text-muted">
-        Scores are 0–10 ratings as told to Ritu. ↑ worse · ↓ better · → same. A dash means it was not mentioned that time.
+        Scores are 0–10 ratings as told to Ritu. ↑ worse · ↓ better · → same · ✓ gone, as the patient said. A dash means it was not mentioned that time.
       </p>
     </div>
   );

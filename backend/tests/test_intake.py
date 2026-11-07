@@ -662,6 +662,44 @@ def test_check_in_is_its_own_conversation(client, db, org_a, monkeypatch):
     assert breath[0] is None and breath[1]["score"] is None and breath[2]["score"] == 7 and breath[2]["trend"] == "worsening"
 
 
+def test_a_problem_the_patient_says_has_gone_is_no_alarm():
+    assert is_urgent("Fever", {"trend": "resolved"}) is False
+    assert is_urgent("Fever", {"trend": "improving"}) is True  # better is not gone
+    assert is_urgent("Fever", {"trend": "worsening"}) is True
+    previous = [{"label": "Fever", "details": {"trend": "resolved"}}, {"label": "Back pain", "details": {"score": "4/10"}}]
+    follow_up = build_check_in_script({"treatment_status": "completed"}, previous)["steps"][1]
+    assert follow_up["id"] == "follow_up" and "Fever" not in follow_up["goal"] and "Back pain" in follow_up["goal"]
+    gone = build_check_in_script({"treatment_status": "completed"}, previous[:1])
+    assert [st["id"] for st in gone["steps"]] == ["how_now", "warning_signs", "anything_else"]  # nothing left to follow up
+
+
+def test_fever_gone_at_a_check_in_shows_gone_not_urgent(client, db, org_a):
+    """Live 2026-11-07: "बुखार तो चला गया है" came back as Fever improving, flagged urgent, under a red box."""
+    patient = person(db, org_a, Role.PATIENT, "Gone Fever")
+    doctor = person(db, org_a, Role.HOSPITAL, "Doctor Gone")
+    h = as_user(client, org_a, patient)
+    finished_session(client, db, org_a, patient)
+    first, _ = check_in(client, db, org_a, h)  # breathlessness worse, fever last night
+    gone_turns = [{"role": "ritu", "text": "Last time you had a fever. How is it now?"},
+                  {"role": "patient", "text": "हाँ बुखार तो चला गया है।"}]
+    gone_facts = [{"section": "current_symptom", "label": "Fever last night", "turn_index": 1,
+                   "quote": "बुखार तो चला गया है", "details": {"trend": "resolved"}}]
+    second, instructions = check_in(client, db, org_a, h, turns=gone_turns, facts=gone_facts)
+    assert '"resolved"' in instructions and "has now gone" in instructions
+
+    client.post("/me/publish", headers=h)
+    hd = as_user(client, org_a, doctor)
+    row = client.get("/doctor/patients", headers=hd).json()[0]
+    assert row["last_check_in"]["urgent"] == []  # the newest check-in raises no alarm
+    detail = client.get(f"/doctor/patients/{row['case_id']}", headers=hd).json()
+    fever = {r["label"]: r for r in detail["symptom_course"]["rows"]}["Fever last night"]["cells"]
+    assert fever[-2]["urgent"] is True and fever[-1] == {**fever[-1], "trend": "resolved", "urgent": False}
+    # the next check-in does not ask about the fever again
+    script = client.get("/me/intake-script?kind=check_in", headers=h).json()
+    follow = next(st for st in script["steps"] if st["id"] == "follow_up")
+    assert "Fever last night" not in follow["goal"] and "Breathlessness on stairs" in follow["goal"]
+
+
 def test_ritu_gets_the_check_in_script(client, db, org_a, monkeypatch):
     sent = {}
     monkeypatch.setattr(ritu, "enabled", lambda: True)

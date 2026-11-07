@@ -22,7 +22,7 @@ function clinicalDetail(f: IntakeFact): string {
   const s = painScore(f);
   if (s !== null) parts.push(`${s >= 7 ? "severe" : s >= 4 ? "moderate" : "mild"} (${s}/10)`);
   else if (d.severity) parts.push(d.severity);
-  if (d.trend) parts.push(d.trend === "same" ? "unchanged" : d.trend);
+  if (d.trend) parts.push(d.trend === "same" ? "unchanged" : d.trend === "resolved" ? "gone now, as the patient said" : d.trend);
   if (d.onset) parts.push(`since ${d.onset.replace(/^since\s+/i, "")}`);
   if (d.duration) parts.push(`for ${d.duration.replace(/^for\s+/i, "")}`);
   if (d.location && !f.label.toLowerCase().includes(d.location.toLowerCase())) parts.push(`site: ${d.location}`);
